@@ -40,3 +40,9 @@ The expected development target at project creation is the trial org ending in `
 ## Local authentication
 
 Local mock authentication exists only to make UI and API development possible without copying BTP tokens. It must fail closed in production. Integration and deployment tests use real AppRouter/XSUAA authentication.
+
+## BTP authentication compatibility
+
+SAP AppRouter 23 enables PKCE for its OAuth authorization-code flow by default. The current trial subaccount's XSUAA-to-SAP-ID flow returns an identity-provider configuration error when those PKCE parameters are present. The MTA therefore sets `PKCE_ENABLED` to `"false"` for the AppRouter while leaving OAuth state/CSRF protection enabled.
+
+Treat this as a compatibility setting, not a permanent security assumption. Re-test with PKCE enabled when the trial landscape or authentication configuration changes, and require a complete real-user redirect-and-callback smoke test before every release that changes authentication dependencies.

@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.0
+version: 0.1.1
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -52,6 +52,10 @@ modules:
       memory: 256M
       disk-quota: 512M
       buildpack: nodejs_buildpack
+    properties:
+      # AppRouter 23 enables PKCE by default. The trial XSUAA/SAP ID trust
+      # currently rejects that provider flow; OAuth state protection remains on.
+      PKCE_ENABLED: "false"
     requires:
       - name: flowpilot-auth
       - name: flowpilot-logs

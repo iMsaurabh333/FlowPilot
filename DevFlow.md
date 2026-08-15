@@ -160,6 +160,7 @@ The first slice should normally include the user entry point, authentication, ba
 - Ask it to state the files it expects to touch and the verification it will run.
 - Use mocks only at boundaries that cannot yet be reached; clearly mark them.
 - Test the deployed path, not only local functions.
+- For authentication changes, test the complete provider redirect and callback with a real user; an initial login redirect alone is not proof of a working flow.
 
 ### Gate
 
@@ -388,8 +389,8 @@ A task is done only when:
 | 0. Frame             | Complete                | Product scope, users, constraints, MVP boundary, and success criteria are in `docs/product.md`.                                        |
 | 1. Discover          | In progress             | BTP Cloud Foundry target and core trial services verified; target API authentication, model access, and the first OpenAPI YAML remain. |
 | 2. Decide            | Complete for foundation | Architecture and initial XSUAA decisions are recorded in ADRs 0001 and 0002.                                                           |
-| 3. Foundation        | In progress             | GitHub remote, modules, locked dependencies, MTA build, and CI workflow established; initial commit and push pending.                  |
-| 4. Vertical slice    | In progress             | MTA 0.1.0 deployed; health, API rejection, and login redirect verified. Role assignment and authenticated browser smoke test remain.   |
+| 3. Foundation        | Complete for foundation | GitHub remote, modules, locked dependencies, MTA build, CI workflow, initial commit, and push are established.                         |
+| 4. Vertical slice    | In progress             | MTA 0.1.1 deployed; health, API rejection, and state-protected XSUAA redirect verified. Authenticated browser callback remains.        |
 | 5. Iterate           | Not started             | Begin after the first deployed vertical slice.                                                                                         |
 | 6. Harden            | Not started             | Threat model and production checks pending.                                                                                            |
 | 7. Release           | Not started             | Release process pending.                                                                                                               |
