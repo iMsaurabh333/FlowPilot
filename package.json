@@ -1,0 +1,24 @@
+{
+  "name": "flowpilot",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "install:all": "npm install --prefix apps/api && npm install --prefix apps/web && npm install --prefix apps/approuter",
+    "ci:install": "npm ci --prefix apps/api && npm ci --prefix apps/web && npm ci --prefix apps/approuter",
+    "dev:api": "npm run dev --prefix apps/api",
+    "dev:web": "npm run dev --prefix apps/web",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web",
+    "test": "npm test --prefix apps/api && npm test --prefix apps/web",
+    "build": "npm run build --prefix apps/api && npm run build --prefix apps/web",
+    "mta:build": "mbt build --strict=true"
+  },
+  "devDependencies": {
+    "mbt": "^1.2.49",
+    "prettier": "^3.9.6"
+  }
+}

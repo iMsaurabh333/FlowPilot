@@ -1,0 +1,57 @@
+{
+  "xsappname": "flowpilot",
+  "tenant-mode": "dedicated",
+  "description": "FlowPilot application security",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.ChatUser",
+      "description": "Use FlowPilot chat and permitted read-only tools"
+    },
+    {
+      "name": "$XSAPPNAME.ToolOperator",
+      "description": "Invoke approved operational tools"
+    },
+    {
+      "name": "$XSAPPNAME.ChatAdmin",
+      "description": "Administer FlowPilot runtime configuration"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "ChatUser",
+      "description": "FlowPilot chat user",
+      "scope-references": ["$XSAPPNAME.ChatUser"]
+    },
+    {
+      "name": "ToolOperator",
+      "description": "FlowPilot tool operator",
+      "scope-references": ["$XSAPPNAME.ChatUser", "$XSAPPNAME.ToolOperator"]
+    },
+    {
+      "name": "ChatAdmin",
+      "description": "FlowPilot administrator",
+      "scope-references": [
+        "$XSAPPNAME.ChatUser",
+        "$XSAPPNAME.ToolOperator",
+        "$XSAPPNAME.ChatAdmin"
+      ]
+    }
+  ],
+  "role-collections": [
+    {
+      "name": "FlowPilotUsers",
+      "description": "Users allowed to access FlowPilot chat",
+      "role-template-references": ["$XSAPPNAME.ChatUser"]
+    },
+    {
+      "name": "FlowPilotOperators",
+      "description": "Users allowed to run approved FlowPilot operational tools",
+      "role-template-references": ["$XSAPPNAME.ToolOperator"]
+    },
+    {
+      "name": "FlowPilotAdmins",
+      "description": "FlowPilot administrators",
+      "role-template-references": ["$XSAPPNAME.ChatAdmin"]
+    }
+  ]
+}

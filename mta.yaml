@@ -1,0 +1,91 @@
+_schema-version: "3.3"
+ID: flowpilot
+version: 0.1.0
+description: Secure operational assistant for SAP BTP
+
+parameters:
+  enable-parallel-deployments: true
+
+modules:
+  - name: flowpilot-api
+    type: nodejs
+    path: apps/api
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      buildpack: nodejs_buildpack
+      health-check-type: http
+      health-check-http-endpoint: /health
+    properties:
+      NODE_ENV: production
+      AUTH_MODE: xsuaa
+    provides:
+      - name: flowpilot-api-binding
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: flowpilot-auth
+      - name: flowpilot-destination
+      - name: flowpilot-logs
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-web
+    type: html5
+    path: apps/web
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+      build-result: dist
+      supported-platforms: []
+
+  - name: flowpilot-approuter
+    type: approuter.nodejs
+    path: apps/approuter
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      buildpack: nodejs_buildpack
+    requires:
+      - name: flowpilot-auth
+      - name: flowpilot-logs
+      - name: flowpilot-api-binding
+        group: destinations
+        properties:
+          name: flowpilot-api
+          url: ~{srv-url}
+          forwardAuthToken: true
+          strictSSL: true
+    build-parameters:
+      builder: npm-ci
+      requires:
+        - name: flowpilot-web
+          artifacts:
+            - "*"
+          target-path: resources
+
+resources:
+  - name: flowpilot-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+
+  - name: flowpilot-destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+
+  - name: flowpilot-logs
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: application-logs
+      service-plan: lite
