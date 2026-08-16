@@ -346,6 +346,54 @@ What must not be changed?
 
 This handoff format makes work portable between AI platforms because the project state is written into the repository instead of depending on one assistant's conversation history.
 
+### Maintain a problem-solving audit trail
+
+For every material problem, incident, or blocked implementation, maintain a dated problem record in this file while the work is happening. The record must give the human reviewer a clear window into the observable evidence, alternatives considered, actions taken, and reasons for each decision. It must not depend on access to a particular AI chat or expose credentials, tokens, personal data, or private hidden model reasoning.
+
+Use this structure:
+
+```markdown
+### YYYY-MM-DD — Problem title
+
+- Objective:
+- Initial symptom:
+- Constraints and approval boundary:
+- Evidence collected:
+
+| Sequence | Hypothesis or question | Action or experiment | Result | Decision or next step |
+| -------- | ---------------------- | -------------------- | ------ | --------------------- |
+| 1        |                        |                      |        |                       |
+
+- Root cause:
+- Final change:
+- Verification:
+- Incorrect or incomplete assumptions corrected:
+- Reusable lessons:
+- Remaining risks or follow-up:
+```
+
+Audit-trail rules:
+
+1. Record failed attempts as well as successful ones; do not rewrite history to make the solution appear linear.
+2. Distinguish facts, hypotheses, inferences, and user-provided information.
+3. Record relevant commands, deployment versions, files, and external primary sources when they make the result reproducible.
+4. State when a diagnostic method was invalid or inconclusive and how that was discovered.
+5. Never claim a root cause until the final behavior or a focused experiment supports it.
+6. Keep the record platform-neutral where possible, and move broadly reusable lessons into the lifecycle rules.
+7. Update the record in the background as part of the currently approved task; do not wait until details have been lost.
+
+### Require human approval between phases
+
+Finishing one phase, milestone, or feature does not authorize the AI assistant to begin the next one. At every transition, the assistant must stop and provide:
+
+- what was completed and the evidence;
+- important decisions and corrected assumptions;
+- unresolved questions, risks, and dependencies;
+- the proposed scope and acceptance criteria for the next phase;
+- questions that need human input.
+
+The next codebase phase or feature starts only after explicit human approval. Read-only inspection or discussion requested by the human is allowed, but must not silently expand into implementation. Documentation, verification, and audit-trail updates needed to finish the already approved task remain part of that task.
+
 ## Git working agreement
 
 - Keep the default branch releasable.
@@ -396,14 +444,31 @@ A task is done only when:
 | 7. Release           | Not started             | Release process pending.                                                                                                                                                     |
 | 8. Operate and learn | Not started             | Metrics and milestone retrospectives pending.                                                                                                                                |
 
-### 2026-08-16 — BTP authentication foundation
+### 2026-08-16 — BTP authentication callback failure
 
-- What worked: Testing the complete real-user flow in a browser exposed configuration problems that deployment health checks could not detect.
-- What did not work: Treating an initial authorization redirect as proof of authentication, and parsing an unsupported Cloud Foundry service-parameter response without first checking its error payload.
-- Evidence: MTA 0.1.3 is healthy in Cloud Foundry; SAP ID authentication returns to the AppRouter; the UI reaches its authenticated state only after `/api/me` succeeds.
-- Decision or process change: Authentication work is not complete until the identity provider returns through the registered callback and a protected backend request succeeds.
-- Reusable pattern: Put provider dependencies under an MTA resource's `requires`, but put XSUAA OAuth settings under that resource's `parameters.config`; resolve the exact AppRouter callback through a provided property instead of hard-coding an environment URL.
-- Follow-up owner: Project team — preserve this smoke test when chat persistence and additional roles are introduced.
+- Objective: Complete SAP ID authentication through XSUAA and AppRouter, then prove that the authenticated browser can call the protected `/api/me` endpoint.
+- Initial symptom: After authenticating, the browser displayed `Authorization Request Error` and reported that the OpenID provider could not process the request because of configuration issues.
+- Constraints and approval boundary: Diagnose and fix the deployed authentication foundation in the user's BTP trial space; preserve OAuth security protections; do not begin the chat implementation.
+- Evidence collected: Both Cloud Foundry applications were healthy; direct access to the API's protected endpoint returned `401`; the browser reached XSUAA and SAP ID but initially did not return through the AppRouter callback; the requested callback was `https://7d472741trial-dev-flowpilot-approuter.cfapps.us10-001.hana.ondemand.com/login/callback`.
+
+| Sequence | Hypothesis or question                                                                                 | Action or experiment                                                                                                                                                                                                                                                   | Result                                                                                                                                                                                                                                                      | Decision or next step                                                                  |
+| -------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1        | The deployed applications or route might be unavailable.                                               | Checked Cloud Foundry application health, the API health endpoint, and direct protected API behavior.                                                                                                                                                                  | Both applications were running, health returned `200`, and direct `/api/me` correctly returned `401`.                                                                                                                                                       | Focus on the OAuth/OpenID redirect flow rather than application availability.          |
+| 2        | AppRouter 23's default PKCE parameters might be incompatible with the trial subaccount's SAP ID trust. | Set `PKCE_ENABLED` to `false`, built and deployed MTA 0.1.1, and repeated login.                                                                                                                                                                                       | OAuth state remained present, but the same provider error occurred.                                                                                                                                                                                         | The PKCE hypothesis was not supported; do not accept this as the fix.                  |
+| 3        | PKCE might still be present elsewhere in the provider chain.                                           | Inspected the live authorization URLs in the browser after SAP ID login.                                                                                                                                                                                               | XSUAA independently added a PKCE challenge on its request to SAP ID, and the failure occurred after provider authentication.                                                                                                                                | Restore AppRouter PKCE and investigate provider/client configuration.                  |
+| 4        | The default SAP ID trust or trial control plane might be misconfigured.                                | Compared the behavior with SAP documentation and the trial cockpit; observed a cockpit console message referencing `cf-eu10` while the Cloud Foundry target was `us10-001`.                                                                                            | The region inconsistency was suspicious but did not prove the application login root cause.                                                                                                                                                                 | Record it as inconclusive and continue with application-specific OAuth configuration.  |
+| 5        | XSUAA might be rejecting an unregistered non-local callback URI.                                       | Checked SAP's redirect-URI guidance and found that cloud callbacks must be explicitly registered.                                                                                                                                                                      | `xs-security.json` and the deployed MTA had no explicit AppRouter login callback registration.                                                                                                                                                              | Add an exact callback without hard-coding organization, space, route, or region.       |
+| 6        | An MTA provided property could inject `${default-url}/login/callback` into XSUAA.                      | Added an AppRouter `provides` property and initially placed `oauth2-configuration` under the resource dependency's `requires.parameters`; tried the full `~{flowpilot-approuter-binding/redirect-uri}` reference.                                                      | Deployment could not resolve the expression, so the operation was aborted.                                                                                                                                                                                  | Recheck descriptor structure instead of weakening the callback pattern.                |
+| 7        | A shorter property reference might resolve in that nesting.                                            | Changed the reference to `~{redirect-uri}`, built and deployed MTA 0.1.2, and retried authentication.                                                                                                                                                                  | The authentication error persisted. A later parameter-check script printed a blank URI, but the raw Cloud Foundry response showed that XSUAA does not support fetching instance parameters; the blank output was therefore an invalid diagnostic inference. | Correct the diagnostic record and compare the descriptor with an official SAP example. |
+| 8        | The OAuth configuration was nested at the wrong MTA level.                                             | Compared the descriptor with SAP's official Cloud CAP MTA sample. Moved the provider dependency to the XSUAA resource's `requires` and moved `oauth2-configuration` to the resource's `parameters.config`; restored PKCE; used the fully qualified property reference. | Strict MTA build succeeded and MTA 0.1.3 deployed with both applications healthy.                                                                                                                                                                           | Perform a complete browser callback test before declaring success.                     |
+| 9        | The corrected callback registration should complete the full flow.                                     | Started a fresh authorization request in the authenticated browser and observed the final UI state.                                                                                                                                                                    | SAP ID returned through XSUAA and AppRouter to FlowPilot. The UI displayed the authenticated user; that UI state is reached only after `/api/me` returns successfully.                                                                                      | Accept the callback registration as the supported root cause and final fix.            |
+
+- Root cause: The AppRouter's non-local `/login/callback` URI was not registered in XSUAA. The first dynamic-registration attempts also placed `oauth2-configuration` at the wrong MTA level.
+- Final change: MTA 0.1.3 keeps OAuth state and PKCE enabled, exposes the exact AppRouter callback as a provided property, declares the provider dependency under the XSUAA resource's `requires`, and injects the URI under `parameters.config.oauth2-configuration.redirect-uris`.
+- Verification: Strict MTA build passed; both Cloud Foundry applications reported `1/1` healthy; the real SAP ID redirect and callback completed; the frontend reached its authenticated state after the protected `/api/me` request succeeded; formatting, type-checking, three automated tests, and production builds passed.
+- Incorrect or incomplete assumptions corrected: Disabling AppRouter PKCE was not the fix. A blank value printed after parsing an unsupported service-parameter endpoint was not evidence of the stored XSUAA configuration.
+- Reusable lessons: Test the complete identity-provider callback, not only the initial redirect. Check an API response for errors before reading expected fields. For MTA resources, keep dependencies under `requires` and service configuration under `parameters.config`. Compare unusual platform configuration with a current primary-source sample before deploying another variation.
+- Remaining risks or follow-up: Preserve the real-user authentication smoke test when adding chat persistence and roles. User-to-user chat-history isolation still needs dedicated persistence and authorization tests in a later, explicitly approved phase.
 
 ## How to maintain this document
 
