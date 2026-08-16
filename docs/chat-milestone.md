@@ -82,16 +82,16 @@ Rules:
 - [x] Model-provider decision.
 - [x] Persistence and isolation decision.
 - [x] Secure LLM configuration guide.
-- [ ] Human review and approval.
+- [x] Human review and approval.
 
 ### Checkpoint 2 — Backend and persistence
 
-- [ ] PostgreSQL service and schema migrations.
-- [ ] Conversation repository and row-level isolation.
-- [ ] Provider-neutral model factory with Groq default.
-- [ ] Minimal LangGraph chat workflow.
-- [ ] Protected conversation endpoints.
-- [ ] Two-identity automated negative tests.
+- [x] PostgreSQL service and schema migrations.
+- [x] Conversation repository and row-level isolation.
+- [x] Provider-neutral model factory with Groq default.
+- [x] Minimal LangGraph chat workflow.
+- [x] Protected conversation endpoints.
+- [x] Two-identity automated negative tests.
 - [ ] Human review and approval.
 
 ### Checkpoint 3 — SAP chat interface

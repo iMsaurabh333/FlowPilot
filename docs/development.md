@@ -41,6 +41,18 @@ The expected development target at project creation is the trial org ending in `
 
 Local mock authentication exists only to make UI and API development possible without copying BTP tokens. It must fail closed in production. Integration and deployment tests use real AppRouter/XSUAA authentication.
 
+## PostgreSQL verification
+
+The PostgreSQL integration suite skips when neither `TEST_DATABASE_URL` nor a Cloud Foundry `VCAP_SERVICES` binding is present. A local PostgreSQL URL can run it directly:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://..."
+npm.cmd test --prefix apps/api -- postgres-isolation.test.ts
+Remove-Item Env:TEST_DATABASE_URL
+```
+
+SAP BTP PostgreSQL trial endpoints can be reachable only from the Cloud Foundry network. In that case, run the same suite as a one-time task in an isolated, no-route runner bound to the service, and remove the runner afterward. Do not print service credentials or raw environment data. The application resolver prefers the certificate-bearing `VCAP_SERVICES` binding over the Node buildpack's generated `DATABASE_URL`, because TLS is enforced by the service.
+
 ## BTP authentication configuration
 
 SAP AppRouter's OAuth state and PKCE protections remain enabled. XSUAA requires the application's login callback to be registered explicitly; in cloud landscapes, only localhost is allowed by default.

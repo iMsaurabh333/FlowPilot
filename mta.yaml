@@ -27,9 +27,14 @@ modules:
       - name: flowpilot-auth
       - name: flowpilot-destination
       - name: flowpilot-logs
+      - name: flowpilot-postgres
     build-parameters:
       builder: custom
       commands:
+        - npm ci --prefix ../../packages/model-adapters
+        - npm ci --prefix ../../packages/agent-core
+        - npm run build --prefix ../../packages/model-adapters
+        - npm run build --prefix ../../packages/agent-core
         - npm ci
         - npm run build
         - npm prune --omit=dev
@@ -99,3 +104,9 @@ resources:
     parameters:
       service: application-logs
       service-plan: lite
+
+  - name: flowpilot-postgres
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: postgresql-db
+      service-plan: trial

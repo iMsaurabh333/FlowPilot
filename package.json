@@ -6,15 +6,17 @@
     "node": "24.x"
   },
   "scripts": {
-    "install:all": "npm install --prefix apps/api && npm install --prefix apps/web && npm install --prefix apps/approuter",
-    "ci:install": "npm ci --prefix apps/api && npm ci --prefix apps/web && npm ci --prefix apps/approuter",
+    "install:packages": "npm install --prefix packages/model-adapters && npm install --prefix packages/agent-core",
+    "build:packages": "npm run build --prefix packages/model-adapters && npm run build --prefix packages/agent-core",
+    "install:all": "npm run install:packages && npm run build:packages && npm install --prefix apps/api && npm install --prefix apps/web && npm install --prefix apps/approuter",
+    "ci:install": "npm ci --prefix packages/model-adapters && npm ci --prefix packages/agent-core && npm run build:packages && npm ci --prefix apps/api && npm ci --prefix apps/web && npm ci --prefix apps/approuter",
     "dev:api": "npm run dev --prefix apps/api",
     "dev:web": "npm run dev --prefix apps/web",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web",
-    "test": "npm test --prefix apps/api && npm test --prefix apps/web",
-    "build": "npm run build --prefix apps/api && npm run build --prefix apps/web",
+    "typecheck": "npm run typecheck --prefix packages/model-adapters && npm run typecheck --prefix packages/agent-core && npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web",
+    "test": "npm run build:packages && npm test --prefix packages/model-adapters && npm test --prefix packages/agent-core && npm test --prefix apps/api && npm test --prefix apps/web",
+    "build": "npm run build:packages && npm run build --prefix apps/api && npm run build --prefix apps/web",
     "mta:build": "mbt build --strict=true"
   },
   "devDependencies": {

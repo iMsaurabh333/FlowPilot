@@ -6,7 +6,7 @@ The project is also a reference implementation of a repeatable, platform-neutral
 
 ## Current milestone
 
-The authentication foundation is deployed and proven. The current milestone is the first useful private-chat slice:
+The authentication foundation is deployed and proven. The private-chat backend and its real BTP PostgreSQL isolation gate are complete and awaiting Checkpoint 2 review; the deployed application remains the authentication-only page. The milestone continues with:
 
 1. Replace the custom page with a standard SAP Horizon chat shell.
 2. Store private conversations in BTP PostgreSQL.
@@ -21,7 +21,7 @@ The work is divided into human-reviewed checkpoints. See the [private chat miles
 
 ```text
 apps/
-  api/          TypeScript backend and future LangGraph runtime
+  api/          TypeScript backend and LangGraph runtime
   approuter/    SAP AppRouter and static UI entry point
   web/          React standalone UI
 docs/
@@ -38,7 +38,7 @@ servers/        Independently deployable MCP servers
 - Cloud MTA Build Tool (`mbt`)
 - GNU Make (required by MBT)
 - Cloud Foundry MultiApps CLI plugin
-- An SAP BTP Cloud Foundry space with XSUAA and Destination service entitlements
+- An SAP BTP Cloud Foundry space with XSUAA, Destination, and PostgreSQL service entitlements
 
 ## Local development
 
@@ -74,7 +74,7 @@ npm run build
 
 ```powershell
 npm run mta:build
-cf deploy mta_archives/flowpilot_0.1.0.mtar
+cf deploy mta_archives/flowpilot_0.1.3.mtar
 ```
 
 Deployment commands will be run only against the explicitly selected Cloud Foundry org and space. Environment-specific credentials and service keys must never be committed.
