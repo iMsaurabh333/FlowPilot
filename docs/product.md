@@ -13,6 +13,7 @@ Operational users need one secure interface for troubleshooting and monitoring t
 ## Initial capabilities
 
 - Standalone browser application deployed to SAP BTP Cloud Foundry.
+- SAP Horizon user experience built with UI5 Web Components.
 - XSUAA authentication and role-based authorization.
 - Per-user conversation and session isolation.
 - Direct calls to SAP and third-party APIs through BTP destinations.
@@ -32,7 +33,7 @@ Operational users need one secure interface for troubleshooting and monitoring t
 
 ## MVP boundary
 
-The MVP includes authenticated chat, PostgreSQL-backed isolated history, one configurable model provider, one Destination-backed read-only SAP API, and one MCP server created from an OpenAPI specification.
+The MVP includes authenticated chat, PostgreSQL-backed isolated history, a Groq-default provider-neutral model runtime, one Destination-backed read-only SAP API, and one MCP server created from an OpenAPI specification.
 
 The MVP excludes end-user registration of arbitrary MCP URLs, state-changing transaction tools, a vector database, cross-subaccount SaaS tenancy, and a production administration console.
 

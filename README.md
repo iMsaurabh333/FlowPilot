@@ -6,16 +6,16 @@ The project is also a reference implementation of a repeatable, platform-neutral
 
 ## Current milestone
 
-The current milestone is the first vertical slice:
+The authentication foundation is deployed and proven. The current milestone is the first useful private-chat slice:
 
-1. Serve a standalone web UI through SAP AppRouter.
-2. Authenticate with XSUAA and BTP role collections.
-3. Forward and validate the user token in the backend.
-4. Return the authenticated user's non-sensitive identity to the UI.
-5. Build the application as a Cloud Foundry MTA.
-6. Deploy it to the authenticated trial `dev` space and run a smoke test.
+1. Replace the custom page with a standard SAP Horizon chat shell.
+2. Store private conversations in BTP PostgreSQL.
+3. Run a minimal LangGraph workflow with Groq as the default provider.
+4. Retrieve the Groq API key securely through SAP Credential Store.
+5. Prove conversation isolation with two-identity automated tests.
+6. Deploy and smoke-test authenticated persistence in the trial space.
 
-LLM, PostgreSQL chat persistence, Destination-backed API calls, and MCP tools follow after this slice is proven.
+The work is divided into human-reviewed checkpoints. See the [private chat milestone](./docs/chat-milestone.md). Destination-backed API calls and MCP tools follow only after this slice is proven.
 
 ## Repository layout
 
@@ -86,4 +86,6 @@ After the first deployment, assign one of the predefined `FlowPilotUsers`, `Flow
 - [Product scope](./docs/product.md)
 - [Architecture](./docs/architecture.md)
 - [Development guide](./docs/development.md)
+- [Private chat milestone](./docs/chat-milestone.md)
+- [Secure LLM provider configuration](./docs/llm-provider-configuration.md)
 - [Architecture decisions](./docs/decisions/README.md)

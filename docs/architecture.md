@@ -35,7 +35,7 @@ The main MTA contains independently scalable Cloud Foundry modules:
 - `flowpilot-api`: stateless backend and future LangGraph runtime.
 - `flowpilot-web`: build-only React artifact copied into AppRouter.
 
-The MTA binds XSUAA and Destination service initially. PostgreSQL and operational services are added when their owning code path is introduced and tested.
+The MTA binds XSUAA and Destination service initially. The private-chat milestone adds BTP PostgreSQL and SAP Credential Store when their owning code paths are introduced and tested. Credential Store supplies server-side model credentials; it is never bound to the browser-facing modules.
 
 MCP servers use the shared server framework but remain independently deployable so a new connector does not require redeploying the chat application.
 
@@ -56,3 +56,13 @@ Local development can use explicit mock identity only when `AUTH_MODE=mock` and 
 - PostgreSQL holds durable application and LangGraph checkpoint state.
 - MCP servers use Streamable HTTP and scale independently.
 - Timeouts and circuit breakers prevent a failing dependency from exhausting application capacity.
+
+## Chat runtime
+
+- The web application uses UI5 Web Components with the standard `sap_horizon` theme.
+- The API derives conversation ownership from validated XSUAA tenant and subject claims.
+- PostgreSQL stores the owned conversation catalog and LangGraph checkpoints.
+- LangGraph depends on a provider-neutral LangChain chat-model interface.
+- Groq is the initial default; Groq, OpenAI, and Anthropic adapters sit behind the same server-side factory.
+- SAP Credential Store holds deployed provider keys.
+- Provider, model, limits, and timeouts are server configuration and cannot be selected by the browser.
