@@ -384,17 +384,26 @@ A task is done only when:
 
 ## BTPApp progress tracker
 
-| Phase                | Status                  | Evidence or next gate                                                                                                                  |
-| -------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 0. Frame             | Complete                | Product scope, users, constraints, MVP boundary, and success criteria are in `docs/product.md`.                                        |
-| 1. Discover          | In progress             | BTP Cloud Foundry target and core trial services verified; target API authentication, model access, and the first OpenAPI YAML remain. |
-| 2. Decide            | Complete for foundation | Architecture and initial XSUAA decisions are recorded in ADRs 0001 and 0002.                                                           |
-| 3. Foundation        | Complete for foundation | GitHub remote, modules, locked dependencies, MTA build, CI workflow, initial commit, and push are established.                         |
-| 4. Vertical slice    | In progress             | MTA 0.1.1 deployed; health, API rejection, and state-protected XSUAA redirect verified. Authenticated browser callback remains.        |
-| 5. Iterate           | Not started             | Begin after the first deployed vertical slice.                                                                                         |
-| 6. Harden            | Not started             | Threat model and production checks pending.                                                                                            |
-| 7. Release           | Not started             | Release process pending.                                                                                                               |
-| 8. Operate and learn | Not started             | Metrics and milestone retrospectives pending.                                                                                          |
+| Phase                | Status                  | Evidence or next gate                                                                                                                                                        |
+| -------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0. Frame             | Complete                | Product scope, users, constraints, MVP boundary, and success criteria are in `docs/product.md`.                                                                              |
+| 1. Discover          | In progress             | BTP Cloud Foundry target and core trial services verified; target API authentication, model access, and the first OpenAPI YAML remain.                                       |
+| 2. Decide            | Complete for foundation | Architecture and initial XSUAA decisions are recorded in ADRs 0001 and 0002.                                                                                                 |
+| 3. Foundation        | Complete for foundation | GitHub remote, modules, locked dependencies, MTA build, CI workflow, initial commit, and push are established.                                                               |
+| 4. Vertical slice    | In progress             | MTA 0.1.3 deployed; health, direct API rejection, full XSUAA/SAP ID callback, and authenticated `/api/me` UI flow verified. Next: first useful chat or integration workflow. |
+| 5. Iterate           | Not started             | Begin after the first deployed vertical slice.                                                                                                                               |
+| 6. Harden            | Not started             | Threat model and production checks pending.                                                                                                                                  |
+| 7. Release           | Not started             | Release process pending.                                                                                                                                                     |
+| 8. Operate and learn | Not started             | Metrics and milestone retrospectives pending.                                                                                                                                |
+
+### 2026-08-16 — BTP authentication foundation
+
+- What worked: Testing the complete real-user flow in a browser exposed configuration problems that deployment health checks could not detect.
+- What did not work: Treating an initial authorization redirect as proof of authentication, and parsing an unsupported Cloud Foundry service-parameter response without first checking its error payload.
+- Evidence: MTA 0.1.3 is healthy in Cloud Foundry; SAP ID authentication returns to the AppRouter; the UI reaches its authenticated state only after `/api/me` succeeds.
+- Decision or process change: Authentication work is not complete until the identity provider returns through the registered callback and a protected backend request succeeds.
+- Reusable pattern: Put provider dependencies under an MTA resource's `requires`, but put XSUAA OAuth settings under that resource's `parameters.config`; resolve the exact AppRouter callback through a provided property instead of hard-coding an environment URL.
+- Follow-up owner: Project team — preserve this smoke test when chat persistence and additional roles are introduced.
 
 ## How to maintain this document
 

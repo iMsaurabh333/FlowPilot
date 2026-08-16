@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.1
+version: 0.1.3
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -52,10 +52,10 @@ modules:
       memory: 256M
       disk-quota: 512M
       buildpack: nodejs_buildpack
-    properties:
-      # AppRouter 23 enables PKCE by default. The trial XSUAA/SAP ID trust
-      # currently rejects that provider flow; OAuth state protection remains on.
-      PKCE_ENABLED: "false"
+    provides:
+      - name: flowpilot-approuter-binding
+        properties:
+          redirect-uri: ${default-url}/login/callback
     requires:
       - name: flowpilot-auth
       - name: flowpilot-logs
@@ -77,10 +77,16 @@ modules:
 resources:
   - name: flowpilot-auth
     type: org.cloudfoundry.managed-service
+    requires:
+      - name: flowpilot-approuter-binding
     parameters:
       service: xsuaa
       service-plan: application
       path: ./xs-security.json
+      config:
+        oauth2-configuration:
+          redirect-uris:
+            - ~{flowpilot-approuter-binding/redirect-uri}
 
   - name: flowpilot-destination
     type: org.cloudfoundry.managed-service

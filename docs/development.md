@@ -41,8 +41,8 @@ The expected development target at project creation is the trial org ending in `
 
 Local mock authentication exists only to make UI and API development possible without copying BTP tokens. It must fail closed in production. Integration and deployment tests use real AppRouter/XSUAA authentication.
 
-## BTP authentication compatibility
+## BTP authentication configuration
 
-SAP AppRouter 23 enables PKCE for its OAuth authorization-code flow by default. The current trial subaccount's XSUAA-to-SAP-ID flow returns an identity-provider configuration error when those PKCE parameters are present. The MTA therefore sets `PKCE_ENABLED` to `"false"` for the AppRouter while leaving OAuth state/CSRF protection enabled.
+SAP AppRouter's OAuth state and PKCE protections remain enabled. XSUAA requires the application's login callback to be registered explicitly; in cloud landscapes, only localhost is allowed by default.
 
-Treat this as a compatibility setting, not a permanent security assumption. Re-test with PKCE enabled when the trial landscape or authentication configuration changes, and require a complete real-user redirect-and-callback smoke test before every release that changes authentication dependencies.
+The MTA exposes `${default-url}/login/callback` from the AppRouter module and injects the resolved URL into the XSUAA service configuration. The provider dependency is declared under the XSUAA resource's `requires`, while `oauth2-configuration` belongs under that resource's `parameters.config`. This keeps the callback exact without hard-coding an organization, space, route, or BTP region. Require a complete real-user redirect-and-callback smoke test before every release that changes authentication dependencies.
