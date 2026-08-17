@@ -92,13 +92,13 @@ Rules:
 - [x] Minimal LangGraph chat workflow.
 - [x] Protected conversation endpoints.
 - [x] Two-identity automated negative tests.
-- [ ] Human review and approval.
+- [x] Human review and approval.
 
 ### Checkpoint 3 — SAP chat interface
 
-- [ ] Replace the custom gradient page with the UI5 Horizon shell.
-- [ ] Add conversation navigation, messages, composer, and states.
-- [ ] Add frontend behavior and accessibility tests.
+- [x] Replace the custom gradient page with the UI5 Horizon shell.
+- [x] Add conversation navigation, messages, composer, and states.
+- [x] Add frontend behavior and accessibility tests.
 - [ ] Human review and approval.
 
 ### Checkpoint 4 — BTP deployment and smoke test

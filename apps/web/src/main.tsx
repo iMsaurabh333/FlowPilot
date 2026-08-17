@@ -1,3 +1,6 @@
+import { ThemeProvider } from "@ui5/webcomponents-react/ThemeProvider";
+import "@ui5/webcomponents/dist/Assets.js";
+import "@ui5/webcomponents-fiori/dist/Assets.js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -10,6 +13,8 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>,
 );

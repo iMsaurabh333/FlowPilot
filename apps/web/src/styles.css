@@ -1,14 +1,7 @@
 :root {
-  color: #e8edf7;
-  background: #08111f;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  color: var(--sapTextColor);
+  background: var(--sapBackgroundColor);
+  font-family: var(--sapFontFamily);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -17,72 +10,349 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
+  background: var(--sapBackgroundColor);
 }
 
-.shell {
+button,
+textarea {
+  font: inherit;
+}
+
+.startup {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+  background: var(--sapBackgroundColor);
+}
+
+.startup h1,
+.startup p {
+  margin: 0;
+}
+
+.startup ui5-message-strip {
+  width: min(38rem, 100%);
+  text-align: start;
+}
+
+.app-shell {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: 2rem;
-  background:
-    radial-gradient(circle at 20% 15%, rgb(35 94 155 / 35%), transparent 34rem),
-    radial-gradient(circle at 85% 85%, rgb(0 181 173 / 18%), transparent 30rem),
-    #08111f;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--sapTextColor);
+  background: var(--sapBackgroundColor);
 }
 
-.hero {
-  width: min(760px, 100%);
+.workspace {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
 }
 
-.eyebrow {
-  margin: 0 0 0.75rem;
-  color: #65e6d7;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.conversation-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-inline-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  background: var(--sapGroup_ContentBackground);
 }
 
-h1 {
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+}
+
+.panel-header h2,
+.panel-header p,
+.chat-header h1,
+.chat-header p,
+.empty-state h2,
+.empty-state p {
   margin: 0;
-  font-size: clamp(3rem, 10vw, 6.5rem);
-  line-height: 0.95;
-  letter-spacing: -0.065em;
 }
 
-.summary {
-  max-width: 610px;
-  margin: 1.5rem 0 2.5rem;
-  color: #aab8cf;
-  font-size: clamp(1.05rem, 2.5vw, 1.35rem);
-  line-height: 1.65;
+.panel-header h2 {
+  font-family: var(--sapFontHeaderFamily);
+  font-size: var(--sapFontHeader5Size);
 }
 
-.status-card {
-  border: 1px solid rgb(145 170 205 / 24%);
-  border-radius: 1.25rem;
-  padding: 1.5rem;
-  background: rgb(16 30 51 / 80%);
-  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 30%);
-  backdrop-filter: blur(16px);
+.panel-header p {
+  margin-block-start: 0.25rem;
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
 }
 
-.status-card p {
-  margin: 0.55rem 0 0;
-  color: #aab8cf;
-  line-height: 1.55;
+.conversation-nav {
+  min-height: 0;
+  overflow: auto;
 }
 
-.status-dot {
-  display: inline-block;
-  width: 0.65rem;
-  height: 0.65rem;
-  margin-right: 0.6rem;
-  border-radius: 999px;
-  background: #65e6d7;
-  box-shadow: 0 0 1rem rgb(101 230 215 / 70%);
+.conversation-nav ui5-list {
+  border: 0;
+}
+
+.list-empty {
+  margin: 0;
+  padding: 1.5rem 1rem;
+  color: var(--sapContent_LabelColor);
+  text-align: center;
+}
+
+.privacy-note {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-block-start: var(--sapList_BorderWidth) solid
+    var(--sapList_BorderColor);
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.privacy-note strong {
+  overflow: hidden;
+  color: var(--sapTextColor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-panel {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background: var(--sapBackgroundColor);
+}
+
+.chat-header {
+  grid-row: 1;
+  min-height: 4.5rem;
+  display: flex;
+  align-items: center;
+  padding: 0.75rem clamp(1rem, 3vw, 2rem);
+  border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  background: var(--sapPageHeader_Background);
+  box-shadow: var(--sapContent_HeaderShadow);
+  z-index: 1;
+}
+
+.section-label {
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.chat-header h1 {
+  max-width: 60rem;
+  overflow: hidden;
+  color: var(--sapPageHeader_TextColor);
+  font-family: var(--sapFontHeaderFamily);
+  font-size: var(--sapFontHeader4Size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-error {
+  grid-row: 2;
+  margin: 0.75rem clamp(1rem, 3vw, 2rem) 0;
+}
+
+.message-region {
+  grid-row: 3;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.loading-detail,
+.assistant-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.loading-detail {
+  flex: 1;
+}
+
+.assistant-progress {
+  justify-content: flex-start;
+  margin-block-start: 1rem;
+  padding: 0.75rem 1rem;
+  border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  background: var(--sapGroup_ContentBackground);
+}
+
+.empty-state {
+  width: min(36rem, 100%);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  gap: 0.75rem;
+  margin: auto;
+  text-align: center;
+}
+
+.empty-state.compact {
+  min-height: auto;
+  padding-block: 2rem;
+}
+
+.empty-state-symbol {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--sapElement_BorderCornerRadius);
+  color: var(--sapContent_ContrastTextColor);
+  background: var(--sapInformativeElementColor);
+  font-family: var(--sapFontBoldFamily);
+}
+
+.empty-state h2 {
+  font-family: var(--sapFontHeaderFamily);
+  font-size: var(--sapFontHeader3Size);
+}
+
+.empty-state p {
+  max-width: 32rem;
+  color: var(--sapContent_LabelColor);
+  line-height: 1.5;
+}
+
+.message-list {
+  width: min(56rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-self: center;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.message {
+  max-width: min(42rem, 88%);
+  padding: 0.75rem 1rem;
+  border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  box-shadow: var(--sapContent_Shadow0);
+}
+
+.message.user {
+  align-self: flex-end;
+  border-color: var(--sapList_SelectionBorderColor);
+  background: var(--sapList_SelectionBackgroundColor);
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: var(--sapGroup_ContentBackground);
+}
+
+.message-author {
+  margin-block-end: 0.375rem;
+  color: var(--sapContent_LabelColor);
+  font-family: var(--sapFontBoldFamily);
+  font-size: var(--sapFontSmallSize);
+}
+
+.message-content {
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer {
+  grid-row: 4;
+  padding: 0.75rem clamp(1rem, 3vw, 2rem) 1rem;
+  border-block-start: var(--sapList_BorderWidth) solid
+    var(--sapList_BorderColor);
+  background: var(--sapGroup_ContentBackground);
+}
+
+.composer-input {
+  width: 100%;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-start: 0.5rem;
+}
+
+.composer-actions span {
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.account-details {
+  min-width: 15rem;
+  display: grid;
+  gap: 0.375rem;
+  padding: 1rem;
+}
+
+.account-details span {
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+@media (max-width: 700px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(11rem, 32vh) minmax(0, 1fr);
+  }
+
+  .conversation-panel {
+    border-inline-end: 0;
+    border-block-end: var(--sapList_BorderWidth) solid
+      var(--sapList_BorderColor);
+  }
+
+  .privacy-note {
+    display: none;
+  }
+
+  .message {
+    max-width: 94%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

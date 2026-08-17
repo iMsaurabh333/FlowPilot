@@ -6,7 +6,7 @@ The project is also a reference implementation of a repeatable, platform-neutral
 
 ## Current milestone
 
-The authentication foundation is deployed and proven. The private-chat backend and its real BTP PostgreSQL isolation gate are complete and awaiting Checkpoint 2 review; the deployed application remains the authentication-only page. The milestone continues with:
+The authentication foundation is deployed and proven. Checkpoint 2's private-chat backend and real BTP PostgreSQL isolation gate are approved. The Checkpoint 3 SAP Horizon chat interface is complete and awaiting human review; the deployed application remains the authentication-only page until Checkpoint 4. The milestone includes:
 
 1. Replace the custom page with a standard SAP Horizon chat shell.
 2. Store private conversations in BTP PostgreSQL.
