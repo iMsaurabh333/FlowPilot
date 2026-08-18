@@ -10,6 +10,8 @@
   },
   "cloudFoundry": {
     "apiEndpoint": "https://api.cf.us10-001.hana.ondemand.com",
+    "environmentInstanceId": "00000000-0000-0000-0000-000000000000",
+    "landscape": "cf-us10-001",
     "organization": "exampletrial",
     "space": "dev"
   }

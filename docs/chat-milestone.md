@@ -107,8 +107,8 @@ Rules:
 - [x] Inventory and verify the required local tools with the human.
 - [x] Install and verify SAP BTP CLI without authenticating.
 - [x] Authenticate with BTP/CF SSO and capture non-secret environment discovery; defer the detailed lesson to the project-close walkthrough.
-- [ ] Add and review Terraform account-prerequisite configuration.
-- [ ] Apply and verify only explicitly approved account-level changes.
+- [x] Add and validate guarded Terraform account-prerequisite configuration and a pinned provider lockfile.
+- [x] Verify that the current account needs no prerequisite apply; preview seven state imports with zero cloud adds, updates, or deletes, and do not apply them.
 - [ ] Build and inspect the MTA without deploying the live application.
 - [ ] Codify role assignment, secure-secret, backup, and restore interfaces.
 - [ ] Assemble and dry-run the guarded cross-platform bootstrap command.

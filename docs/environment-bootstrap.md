@@ -123,7 +123,7 @@ This is an execution-mode exception, not a deletion of the learning objective. T
 | SAP BTP CLI           | Client `2.106.1`; server `2.116.2` at installation verification                    | Ready                                   | Installed from SAP's official Windows AMD64 archive in the documented user-local directory. Login remains a separate Step 3 action.                                              |
 | Cloud Foundry CLI     | `8.18.4`                                                                           | Ready                                   | Meets the MultiApps requirement for CF CLI v8. The user-level CF configuration must be accessible when commands run.                                                             |
 | MultiApps CF plugin   | `3.11.1`                                                                           | Ready                                   | Supplies `cf deploy` and other MTA lifecycle commands. It remains the application deployer.                                                                                      |
-| Terraform             | `1.15.8` on `windows_amd64`                                                        | Ready                                   | Installed from HashiCorp's signed and checksummed Windows AMD64 archive in the documented user-local directory. Provider initialization remains a separate repository step.      |
+| Terraform             | `1.15.8` on `windows_amd64`                                                        | Ready                                   | Installed from HashiCorp's signed archive; SAP/btp `1.25.0` is pinned in the committed dependency lockfile and the live read-only plans pass.                                    |
 | MBT npm wrapper       | `1.2.49` from the root lockfile                                                    | Ready                                   | Repository-local tooling is preferred over an unpinned global launcher.                                                                                                          |
 | MBT native executable | `1.2.47`                                                                           | Ready with version distinction recorded | This is the executable installed by the locked npm wrapper and it already passed FlowPilot's strict MTA build. The preflight must report both wrapper and native versions.       |
 | GNU Make              | `3.81` at `C:\Program Files (x86)\GnuWin32\bin\make.exe`                           | Ready but not on `PATH`                 | MBT already built FlowPilot successfully with this executable. The future orchestrator must discover or receive the path without changing global configuration silently.         |
@@ -165,7 +165,7 @@ The reviewed SAP script downloads the archive, checks SAP's published SHA-1, ext
 - Windows Authenticode status: `Valid`, signer `HashiCorp, Inc.`, certificate thumbprint `65B9DA802B1273FB147374C3C122DB21ABECDFC4`
 - Installed path: `C:\Users\saura\AppData\Local\Programs\terraform\terraform.exe`
 - Persisted configuration: the exact containing directory was added once to the user `PATH`.
-- Provider and state status after verification: no provider selections, no initialization, and no Terraform state.
+- Provider and state status after installation verification: no provider selections, initialization, or Terraform state. The later repository step initialized SAP/btp `1.25.0` and committed its lockfile without creating state.
 - Temporary verification and extraction directories: removed after successful installation.
 
 The installer used a temporary GPG home so it did not alter the user's normal keyring. Removal consists of deleting only the exact user-local Terraform directory and removing only its exact user `PATH` entry. Provider downloads, `.terraform` directories, lockfiles, and state are separate repository concerns and were not created by this installation.
@@ -176,7 +176,7 @@ The installer used a temporary GPG home so it did not alter the user's normal ke
 
 The current trial has one discoverable subaccount named `trial` in region `us10`. Its Cloud Foundry environment is targeted at `https://api.cf.us10-001.hana.ondemand.com`, organization `7d472741trial`, and space `dev`. The BTP global-account target and the CF organization resolve to the same trial landscape.
 
-The account UUIDs are stored only in `config/environments/btp.local.json`, which is ignored by Git. The committed `config/environments/btp.example.json` documents the schema with placeholders. Neither file may contain passwords, SSO tokens, service keys, database credentials, LLM API keys, or Terraform state.
+The account and Cloud Foundry environment-instance UUIDs are stored only in `config/environments/btp.local.json`, which is ignored by Git. The committed `config/environments/btp.example.json` documents the schema with placeholders. Neither file may contain passwords, SSO tokens, service keys, database credentials, LLM API keys, or Terraform state.
 
 Create or refresh a profile from supported CLI output:
 
@@ -192,6 +192,32 @@ cf target
 SAP BTP CLI client `2.106.1` does not accept `--format json` for `list accounts/subaccount`; the bootstrap must parse neither presentation text nor an unsupported option. Until a stable machine-readable command is verified, discovery should validate the values against the explicit local profile and fail on ambiguity.
 
 The 2026-08-18 read-only inventory also showed both deployed FlowPilot applications stopped by trial cleanup and all retained managed services healthy. Application startup and live deployment are intentionally outside this discovery step.
+
+## Terraform account-prerequisite configuration
+
+**Last verified:** 2026-08-18 against the current trial through a reused BTP CLI SSO session.
+
+The configuration lives in `infrastructure/btp` and pins Terraform `1.15.x` plus SAP/btp provider `1.25.0`. The committed `.terraform.lock.hcl` records provider checksums. The provider block contains only the non-secret global-account subdomain; local trial authentication sets `USE_BTPCLI_SESSION=true` and reuses `btp login --sso`. This interactive session mode is not supported in CI/CD, so GitHub Actions must remain credential-free for the trial account.
+
+Local state, provider caches, saved plans, variable files, crash logs, overrides, and CLI configuration are ignored. The real input profile is also ignored. No `terraform.tfstate` was created during configuration, initialization, validation, or planning, and both temporary saved plans were removed after their JSON summaries were checked.
+
+The verified prerequisite set is:
+
+| Entitlement                  | Category        | Required amount  | Current result |
+| ---------------------------- | --------------- | ---------------- | -------------- |
+| `APPLICATION_RUNTIME/MEMORY` | Platform        | `4`              | Present        |
+| `cloudfoundry/trial`         | Elastic service | Provider default | Present        |
+| `xsuaa/application`          | Elastic service | Provider default | Present        |
+| `destination/lite`           | Elastic service | Provider default | Present        |
+| `application-logs/lite`      | Elastic service | Provider default | Present        |
+| `postgresql-db/trial`        | Quota service   | `1`              | Present        |
+| `credstore/trial`            | Quota service   | `1`              | Present        |
+
+With `manage_entitlements=false`, the configuration is discovery-only. The final default plan reported zero missing entitlements, a healthy subaccount, a healthy Cloud Foundry environment, zero managed-resource changes, and output-only differences. No apply was needed or authorized.
+
+For a recovered account, a reviewed plan may set `manage_entitlements=true` and supply the keys already found by discovery in `existing_entitlement_keys`. Existing grants become import proposals, while omitted keys become creation proposals. The current-account preview proved this path as **7 imports, 0 adds, 0 updates, and 0 deletes**. It was not applied. Managed entitlement resources use `prevent_destroy=true`; removal is never part of the normal bootstrap.
+
+The Cloud Foundry environment is validated by its discovered environment-instance ID. Terraform does not currently recreate the trial-provided subaccount or environment. If a future account lacks either, stop and review onboarding, region, quota, cost, and identity consequences before adding a creation resource.
 
 ## Intended recovery experience
 
@@ -213,6 +239,7 @@ The bootstrap may accept these non-secret values from a local, ignored environme
 
 - global-account subdomain;
 - subaccount ID or discoverable subaccount name;
+- Cloud Foundry environment-instance ID and landscape;
 - region and Cloud Foundry API endpoint;
 - organization and space names;
 - administrator user name and identity-provider origin;
@@ -234,7 +261,7 @@ Checkpoint 3A is complete when:
 - the bootstrap dry run shows every intended action and refuses live deployment during Checkpoint 3A;
 - all unavoidable manual actions are explicitly listed;
 - the procedure, failures, recoveries, and remaining trial limitations are recorded in `DevFlow.md`;
-- the human has approved every learning step and the overall checkpoint.
+- the human has approved the overall checkpoint, and any deferred teaching topics remain scheduled for the project-close walkthrough.
 
 ## Unavoidable manual actions
 

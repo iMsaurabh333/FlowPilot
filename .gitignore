@@ -11,6 +11,23 @@ default-env.json
 default-services.json
 config/environments/*.local.json
 
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.auto.tfvars
+*.auto.tfvars.json
+terraform.tfvars
+terraform.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
 mta_archives/
 .mta/
 *.mtar

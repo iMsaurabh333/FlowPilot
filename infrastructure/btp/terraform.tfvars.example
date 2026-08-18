@@ -1,0 +1,8 @@
+global_account_subdomain      = "exampletrial-ga"
+subaccount_id                 = "00000000-0000-0000-0000-000000000000"
+subaccount_name               = "trial"
+subaccount_subdomain          = "exampletrial"
+region                        = "us10"
+cloud_foundry_environment_id = "00000000-0000-0000-0000-000000000000"
+manage_entitlements          = false
+existing_entitlement_keys    = []
