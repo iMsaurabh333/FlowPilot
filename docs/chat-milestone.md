@@ -105,6 +105,7 @@ Rules:
 
 - [x] Define infrastructure ownership and the guided-learning protocol.
 - [x] Inventory and verify the required local tools with the human.
+- [x] Install and verify SAP BTP CLI without authenticating.
 - [ ] Teach BTP/CF SSO, targeting, and non-secret environment discovery.
 - [ ] Add and review Terraform account-prerequisite configuration.
 - [ ] Apply and verify only explicitly approved account-level changes.

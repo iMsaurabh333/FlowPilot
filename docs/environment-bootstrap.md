@@ -108,7 +108,7 @@ During the teaching walkthrough:
 | Node.js               | `24.12.0`                                                                          | Ready                                   | Matches the repository's `24.x` engine contract.                                                                                                                                 |
 | npm                   | `11.11.1` through the normal user launcher; `11.6.2` in the base Node installation | Ready                                   | The normal launcher redirects to the user npm prefix. Restricted automation may need an explicitly accessible npm CLI, but the workstation installation does not require repair. |
 | Git                   | `2.52.0.windows.1`                                                                 | Ready                                   | Used for source recovery and checkpoint history; no provider credentials belong in Git.                                                                                          |
-| SAP BTP CLI           | Not installed or not discoverable on `PATH`                                        | Missing                                 | Required before Step 3 for browser SSO, account discovery, and independent verification of Terraform results. Installation requires separate human approval.                     |
+| SAP BTP CLI           | Client `2.106.1`; server `2.116.2` at installation verification                    | Ready                                   | Installed from SAP's official Windows AMD64 archive in the documented user-local directory. Login remains a separate Step 3 action.                                              |
 | Cloud Foundry CLI     | `8.18.4`                                                                           | Ready                                   | Meets the MultiApps requirement for CF CLI v8. The user-level CF configuration must be accessible when commands run.                                                             |
 | MultiApps CF plugin   | `3.11.1`                                                                           | Ready                                   | Supplies `cf deploy` and other MTA lifecycle commands. It remains the application deployer.                                                                                      |
 | Terraform             | Not installed or not discoverable on `PATH`                                        | Missing                                 | Required before the Terraform lesson. Installation and version pinning require separate human approval.                                                                          |
@@ -120,10 +120,25 @@ No installation, upgrade, login, service call, or infrastructure mutation was pe
 
 ### Installation candidates for separate approval
 
-- **SAP BTP CLI:** use the current 64-bit Windows client from SAP's documented installer or Windows Package Manager. The next lesson will inspect the source, install only this CLI, query its actual version, and explain removal before any login. See [Download and Start Using the btp CLI Client](https://help.sap.com/docs/btp/sap-business-technology-platform/download-and-start-using-btp-cli-client?locale=en-us).
+- **SAP BTP CLI — completed 2026-08-18:** client `2.106.1` was installed from SAP's official Windows AMD64 archive after published-checksum and archive-path verification. See [Download and Start Using the btp CLI Client](https://help.sap.com/docs/btp/sap-business-technology-platform/download-and-start-using-btp-cli-client?locale=en-us).
 - **Terraform:** defer installation until the Terraform lesson. HashiCorp currently publishes Terraform `1.15.8` for Windows AMD64 with SHA-256 checksums; the lesson will pin and verify the selected binary instead of installing an unspecified future version. See [Install Terraform](https://developer.hashicorp.com/terraform/install).
 
-These are reviewed candidates, not completed installations. SAP BTP CLI is needed for Step 3; Terraform is not needed until Step 4.
+Terraform remains a reviewed candidate, not a completed installation. SAP BTP CLI is ready for Step 3; Terraform is not needed until Step 4.
+
+### SAP BTP CLI installation record
+
+- Installer source reviewed: `https://cli.btp.cloud.sap/btpcli-install.ps1`
+- Installer-script SHA-256 at review: `6CB6292D779EF6857525115937EAB3AEF4BD86B46A138C6F6370B9BC3714E3AC`
+- Archive source: `https://tools.hana.ondemand.com/additional/btp-cli-windows-amd64-latest.tar.gz`
+- Published and verified archive SHA-1: `85F193EA89A5667B68EB8CF71A17D765AB507AA3`
+- Recorded archive SHA-256: `3EDFBF6C9A0069D1A265CA3E061497ED605CCB6F400CAE3D0708488BDCBB396C`
+- Installed `btp.exe` SHA-256: `F3C1BA51225382E89B3F9B78EE74817E5BDF21D779A1A29D77E9448A5B81B0DD`
+- Installed path: `C:\Users\saura\AppData\Local\Programs\btpcli\btp.exe`
+- Persisted configuration: the exact containing directory was added once to the user `PATH`.
+- Authentication state after verification: not logged in.
+- Temporary installer-review and archive-extraction directories: removed after successful verification.
+
+The reviewed SAP script downloads the archive, checks SAP's published SHA-1, extracts `btp.exe`, and updates user `PATH`. The guided installation used a fail-closed equivalent because the reviewed script reports a checksum mismatch without an explicit terminating statement before extraction. Removal consists of deleting the exact user-local installation directory and removing only its exact user `PATH` entry; perform both through a separately reviewed command.
 
 ## Intended recovery experience
 
