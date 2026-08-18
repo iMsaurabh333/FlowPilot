@@ -123,7 +123,7 @@ This is an execution-mode exception, not a deletion of the learning objective. T
 | SAP BTP CLI           | Client `2.106.1`; server `2.116.2` at installation verification                    | Ready                                   | Installed from SAP's official Windows AMD64 archive in the documented user-local directory. Login remains a separate Step 3 action.                                              |
 | Cloud Foundry CLI     | `8.18.4`                                                                           | Ready                                   | Meets the MultiApps requirement for CF CLI v8. The user-level CF configuration must be accessible when commands run.                                                             |
 | MultiApps CF plugin   | `3.11.1`                                                                           | Ready                                   | Supplies `cf deploy` and other MTA lifecycle commands. It remains the application deployer.                                                                                      |
-| Terraform             | Not installed or not discoverable on `PATH`                                        | Missing                                 | Required before the Terraform lesson. Installation and version pinning require separate human approval.                                                                          |
+| Terraform             | `1.15.8` on `windows_amd64`                                                        | Ready                                   | Installed from HashiCorp's signed and checksummed Windows AMD64 archive in the documented user-local directory. Provider initialization remains a separate repository step.      |
 | MBT npm wrapper       | `1.2.49` from the root lockfile                                                    | Ready                                   | Repository-local tooling is preferred over an unpinned global launcher.                                                                                                          |
 | MBT native executable | `1.2.47`                                                                           | Ready with version distinction recorded | This is the executable installed by the locked npm wrapper and it already passed FlowPilot's strict MTA build. The preflight must report both wrapper and native versions.       |
 | GNU Make              | `3.81` at `C:\Program Files (x86)\GnuWin32\bin\make.exe`                           | Ready but not on `PATH`                 | MBT already built FlowPilot successfully with this executable. The future orchestrator must discover or receive the path without changing global configuration silently.         |
@@ -133,9 +133,9 @@ No installation, upgrade, login, service call, or infrastructure mutation was pe
 ### Installation candidates for separate approval
 
 - **SAP BTP CLI — completed 2026-08-18:** client `2.106.1` was installed from SAP's official Windows AMD64 archive after published-checksum and archive-path verification. See [Download and Start Using the btp CLI Client](https://help.sap.com/docs/btp/sap-business-technology-platform/download-and-start-using-btp-cli-client?locale=en-us).
-- **Terraform:** defer installation until the Terraform lesson. HashiCorp currently publishes Terraform `1.15.8` for Windows AMD64 with SHA-256 checksums; the lesson will pin and verify the selected binary instead of installing an unspecified future version. See [Install Terraform](https://developer.hashicorp.com/terraform/install).
+- **Terraform — completed 2026-08-18:** client `1.15.8` was installed from HashiCorp's official Windows AMD64 archive after PGP signature, SHA-256, archive-path, and Windows Authenticode verification. See [Install Terraform](https://developer.hashicorp.com/terraform/install) and [Verify Terraform binary archives](https://developer.hashicorp.com/terraform/tutorials/cli/verify-archive).
 
-Terraform remains a reviewed candidate, not a completed installation. SAP BTP CLI is ready for Step 3; Terraform is not needed until Step 4.
+SAP BTP CLI and Terraform are now ready. Installing Terraform does not initialize a provider, create state, inspect BTP through Terraform, or authorize an apply.
 
 ### SAP BTP CLI installation record
 
@@ -151,6 +151,24 @@ Terraform remains a reviewed candidate, not a completed installation. SAP BTP CL
 - Temporary installer-review and archive-extraction directories: removed after successful verification.
 
 The reviewed SAP script downloads the archive, checks SAP's published SHA-1, extracts `btp.exe`, and updates user `PATH`. The guided installation used a fail-closed equivalent because the reviewed script reports a checksum mismatch without an explicit terminating statement before extraction. Removal consists of deleting the exact user-local installation directory and removing only its exact user `PATH` entry; perform both through a separately reviewed command.
+
+### Terraform installation record
+
+- Version and platform: Terraform `1.15.8`, `windows_amd64`
+- Archive source: `https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_windows_amd64.zip`
+- Checksum source: `terraform_1.15.8_SHA256SUMS`
+- Checksum signature: `terraform_1.15.8_SHA256SUMS.72D7468F.sig`
+- Verified HashiCorp PGP fingerprint: `C874011F0AB405110D02105534365D9472D7468F`
+- Verified archive SHA-256: `2FF41D2129AFB1982733C132C61A8D6EF038F879F3AEEDE7FC28B8B8B24ACF02`
+- Validated archive entries: `LICENSE.txt`, `terraform.exe`
+- Installed executable SHA-256: `6EB0A1CB89344C97CCF2928DDC2D7A6CB71A1837B7ECCCFD5991466B6D751E03`
+- Windows Authenticode status: `Valid`, signer `HashiCorp, Inc.`, certificate thumbprint `65B9DA802B1273FB147374C3C122DB21ABECDFC4`
+- Installed path: `C:\Users\saura\AppData\Local\Programs\terraform\terraform.exe`
+- Persisted configuration: the exact containing directory was added once to the user `PATH`.
+- Provider and state status after verification: no provider selections, no initialization, and no Terraform state.
+- Temporary verification and extraction directories: removed after successful installation.
+
+The installer used a temporary GPG home so it did not alter the user's normal keyring. Removal consists of deleting only the exact user-local Terraform directory and removing only its exact user `PATH` entry. Provider downloads, `.terraform` directories, lockfiles, and state are separate repository concerns and were not created by this installation.
 
 ## Current BTP and Cloud Foundry target profile
 
