@@ -104,7 +104,7 @@ Rules:
 ### Checkpoint 3A — Environment bootstrap and recovery
 
 - [x] Define infrastructure ownership and the guided-learning protocol.
-- [ ] Inventory and verify the required local tools with the human.
+- [x] Inventory and verify the required local tools with the human.
 - [ ] Teach BTP/CF SSO, targeting, and non-secret environment discovery.
 - [ ] Add and review Terraform account-prerequisite configuration.
 - [ ] Apply and verify only explicitly approved account-level changes.

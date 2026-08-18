@@ -99,6 +99,32 @@ During the teaching walkthrough:
 | 10   | Assemble the proven operations into a cross-platform bootstrap command with dry-run, confirmation, resume, and verification modes. | Local orchestration; live deployment disabled in Checkpoint 3A.  | Review each internal stage and the final dry run.                                  |
 | 11   | Rehearse recovery from a fresh clone against the current trial without replacing or redeploying live resources.                    | Read-only discovery, plan, build, and smoke checks.              | Accept documented limitations that require the next trial account or Checkpoint 4. |
 
+## Current workstation tool inventory
+
+**Last checked:** 2026-08-18 on Windows x64. This records the development workstation used for the guided trial-account walkthrough; the future bootstrap must perform equivalent checks on Windows, macOS, or Linux rather than hard-code these paths.
+
+| Tool                  | Discovered version                                                                 | Status for FlowPilot                    | Lesson or required follow-up                                                                                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js               | `24.12.0`                                                                          | Ready                                   | Matches the repository's `24.x` engine contract.                                                                                                                                 |
+| npm                   | `11.11.1` through the normal user launcher; `11.6.2` in the base Node installation | Ready                                   | The normal launcher redirects to the user npm prefix. Restricted automation may need an explicitly accessible npm CLI, but the workstation installation does not require repair. |
+| Git                   | `2.52.0.windows.1`                                                                 | Ready                                   | Used for source recovery and checkpoint history; no provider credentials belong in Git.                                                                                          |
+| SAP BTP CLI           | Not installed or not discoverable on `PATH`                                        | Missing                                 | Required before Step 3 for browser SSO, account discovery, and independent verification of Terraform results. Installation requires separate human approval.                     |
+| Cloud Foundry CLI     | `8.18.4`                                                                           | Ready                                   | Meets the MultiApps requirement for CF CLI v8. The user-level CF configuration must be accessible when commands run.                                                             |
+| MultiApps CF plugin   | `3.11.1`                                                                           | Ready                                   | Supplies `cf deploy` and other MTA lifecycle commands. It remains the application deployer.                                                                                      |
+| Terraform             | Not installed or not discoverable on `PATH`                                        | Missing                                 | Required before the Terraform lesson. Installation and version pinning require separate human approval.                                                                          |
+| MBT npm wrapper       | `1.2.49` from the root lockfile                                                    | Ready                                   | Repository-local tooling is preferred over an unpinned global launcher.                                                                                                          |
+| MBT native executable | `1.2.47`                                                                           | Ready with version distinction recorded | This is the executable installed by the locked npm wrapper and it already passed FlowPilot's strict MTA build. The preflight must report both wrapper and native versions.       |
+| GNU Make              | `3.81` at `C:\Program Files (x86)\GnuWin32\bin\make.exe`                           | Ready but not on `PATH`                 | MBT already built FlowPilot successfully with this executable. The future orchestrator must discover or receive the path without changing global configuration silently.         |
+
+No installation, upgrade, login, service call, or infrastructure mutation was performed during this inventory.
+
+### Installation candidates for separate approval
+
+- **SAP BTP CLI:** use the current 64-bit Windows client from SAP's documented installer or Windows Package Manager. The next lesson will inspect the source, install only this CLI, query its actual version, and explain removal before any login. See [Download and Start Using the btp CLI Client](https://help.sap.com/docs/btp/sap-business-technology-platform/download-and-start-using-btp-cli-client?locale=en-us).
+- **Terraform:** defer installation until the Terraform lesson. HashiCorp currently publishes Terraform `1.15.8` for Windows AMD64 with SHA-256 checksums; the lesson will pin and verify the selected binary instead of installing an unspecified future version. See [Install Terraform](https://developer.hashicorp.com/terraform/install).
+
+These are reviewed candidates, not completed installations. SAP BTP CLI is needed for Step 3; Terraform is not needed until Step 4.
+
 ## Intended recovery experience
 
 After a new trial has been activated and the repository has been cloned, the final operator experience should be:
