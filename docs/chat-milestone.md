@@ -99,6 +99,19 @@ Rules:
 - [x] Replace the custom gradient page with the UI5 Horizon shell.
 - [x] Add conversation navigation, messages, composer, and states.
 - [x] Add frontend behavior and accessibility tests.
+- [x] Human review and approval.
+
+### Checkpoint 3A — Environment bootstrap and recovery
+
+- [x] Define infrastructure ownership and the guided-learning protocol.
+- [ ] Inventory and verify the required local tools with the human.
+- [ ] Teach BTP/CF SSO, targeting, and non-secret environment discovery.
+- [ ] Add and review Terraform account-prerequisite configuration.
+- [ ] Apply and verify only explicitly approved account-level changes.
+- [ ] Build and inspect the MTA without deploying the live application.
+- [ ] Codify role assignment, secure-secret, backup, and restore interfaces.
+- [ ] Assemble and dry-run the guarded cross-platform bootstrap command.
+- [ ] Rehearse recovery from a fresh clone without replacing live resources.
 - [ ] Human review and approval.
 
 ### Checkpoint 4 — BTP deployment and smoke test

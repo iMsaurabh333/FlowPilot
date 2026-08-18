@@ -6,7 +6,7 @@ The project is also a reference implementation of a repeatable, platform-neutral
 
 ## Current milestone
 
-The authentication foundation is deployed and proven. Checkpoint 2's private-chat backend and real BTP PostgreSQL isolation gate are approved. The Checkpoint 3 SAP Horizon chat interface is complete and awaiting human review; the deployed application remains the authentication-only page until Checkpoint 4. The milestone includes:
+The authentication foundation is deployed and proven. Checkpoint 2's private-chat backend, real BTP PostgreSQL isolation gate, and the Checkpoint 3 SAP Horizon chat interface are approved. Checkpoint 3A is establishing a guided, repeatable BTP environment bootstrap before the first live chat deployment; the deployed application remains the authentication-only page until Checkpoint 4. The milestone includes:
 
 1. Replace the custom page with a standard SAP Horizon chat shell.
 2. Store private conversations in BTP PostgreSQL.
@@ -87,5 +87,6 @@ After the first deployment, assign one of the predefined `FlowPilotUsers`, `Flow
 - [Architecture](./docs/architecture.md)
 - [Development guide](./docs/development.md)
 - [Private chat milestone](./docs/chat-milestone.md)
+- [Environment bootstrap and recovery](./docs/environment-bootstrap.md)
 - [Secure LLM provider configuration](./docs/llm-provider-configuration.md)
 - [Architecture decisions](./docs/decisions/README.md)
