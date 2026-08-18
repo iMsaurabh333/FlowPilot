@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "btp": {
+    "globalAccountId": "00000000-0000-0000-0000-000000000000",
+    "globalAccountSubdomain": "exampletrial-ga",
+    "subaccountId": "00000000-0000-0000-0000-000000000000",
+    "subaccountName": "trial",
+    "subaccountSubdomain": "exampletrial",
+    "region": "us10"
+  },
+  "cloudFoundry": {
+    "apiEndpoint": "https://api.cf.us10-001.hana.ondemand.com",
+    "organization": "exampletrial",
+    "space": "dev"
+  }
+}

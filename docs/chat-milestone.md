@@ -106,7 +106,7 @@ Rules:
 - [x] Define infrastructure ownership and the guided-learning protocol.
 - [x] Inventory and verify the required local tools with the human.
 - [x] Install and verify SAP BTP CLI without authenticating.
-- [ ] Teach BTP/CF SSO, targeting, and non-secret environment discovery.
+- [x] Authenticate with BTP/CF SSO and capture non-secret environment discovery; defer the detailed lesson to the project-close walkthrough.
 - [ ] Add and review Terraform account-prerequisite configuration.
 - [ ] Apply and verify only explicitly approved account-level changes.
 - [ ] Build and inspect the MTA without deploying the live application.
@@ -114,6 +114,8 @@ Rules:
 - [ ] Assemble and dry-run the guarded cross-platform bootstrap command.
 - [ ] Rehearse recovery from a fresh clone without replacing live resources.
 - [ ] Human review and approval.
+
+The human temporarily authorized autonomous execution of the remaining Checkpoint 3A implementation steps on 2026-08-18. Secret entry, destructive changes, Terraform apply, live deployment, and the Checkpoint 4 transition still require explicit approval. The deferred cross-platform learning walkthrough remains a project-close deliverable.
 
 ### Checkpoint 4 — BTP deployment and smoke test
 

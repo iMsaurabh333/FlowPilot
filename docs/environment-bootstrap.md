@@ -83,6 +83,18 @@ During the teaching walkthrough:
 - prefer read-only discovery before creating or changing a resource;
 - make reruns idempotent so an interrupted recovery can continue safely.
 
+### Temporary fast-track execution mode
+
+On 2026-08-18, the human explicitly deferred the detailed teaching walkthrough until the project is complete so implementation can proceed with lower time and token overhead. For the remainder of the current project:
+
+- the assistant may execute the approved Checkpoint 3A steps without a separate lesson or approval between every read-only and reversible substep;
+- every command category, failed attempt, corrected assumption, final result, and reusable lesson must still be recorded in `DevFlow.md`;
+- the source material and command explanations remain in this guide so the deferred walkthrough can replay the real project evidence instead of reconstructing it from memory;
+- browser SSO, MFA, CAPTCHA, secret entry, destructive or replacement actions, paid-resource choices, Terraform apply, and live application deployment retain explicit human gates;
+- the boundary between Checkpoint 3A and Checkpoint 4 remains unchanged. Checkpoint 3A cannot deploy the pending chat runtime.
+
+This is an execution-mode exception, not a deletion of the learning objective. The project-close review must cover the BTP CLI, Cloud Foundry CLI, Terraform, MTA, secret handling, recovery, and GitHub automation using the accumulated audit trail.
+
 ## Learning and implementation sequence
 
 | Step | Lesson and deliverable                                                                                                             | Mutation boundary                                                | Human gate                                                                         |
@@ -139,6 +151,29 @@ Terraform remains a reviewed candidate, not a completed installation. SAP BTP CL
 - Temporary installer-review and archive-extraction directories: removed after successful verification.
 
 The reviewed SAP script downloads the archive, checks SAP's published SHA-1, extracts `btp.exe`, and updates user `PATH`. The guided installation used a fail-closed equivalent because the reviewed script reports a checksum mismatch without an explicit terminating statement before extraction. Removal consists of deleting the exact user-local installation directory and removing only its exact user `PATH` entry; perform both through a separately reviewed command.
+
+## Current BTP and Cloud Foundry target profile
+
+**Last verified:** 2026-08-18 using browser SSO and read-only CLI discovery.
+
+The current trial has one discoverable subaccount named `trial` in region `us10`. Its Cloud Foundry environment is targeted at `https://api.cf.us10-001.hana.ondemand.com`, organization `7d472741trial`, and space `dev`. The BTP global-account target and the CF organization resolve to the same trial landscape.
+
+The account UUIDs are stored only in `config/environments/btp.local.json`, which is ignored by Git. The committed `config/environments/btp.example.json` documents the schema with placeholders. Neither file may contain passwords, SSO tokens, service keys, database credentials, LLM API keys, or Terraform state.
+
+Create or refresh a profile from supported CLI output:
+
+```powershell
+btp login --sso
+btp target
+btp list accounts/subaccount
+cf login --sso -a https://api.cf.us10-001.hana.ondemand.com
+cf target -o 7d472741trial -s dev
+cf target
+```
+
+SAP BTP CLI client `2.106.1` does not accept `--format json` for `list accounts/subaccount`; the bootstrap must parse neither presentation text nor an unsupported option. Until a stable machine-readable command is verified, discovery should validate the values against the explicit local profile and fail on ambiguity.
+
+The 2026-08-18 read-only inventory also showed both deployed FlowPilot applications stopped by trial cleanup and all retained managed services healthy. Application startup and live deployment are intentionally outside this discovery step.
 
 ## Intended recovery experience
 
