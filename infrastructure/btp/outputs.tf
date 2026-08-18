@@ -25,3 +25,13 @@ output "missing_required_entitlements" {
   description = "Prerequisite entitlement keys that discovery could not find; this must be empty before MTA deployment."
   value       = sort(tolist(local.missing_required_entitlements))
 }
+
+output "validated_flowpilot_role_collections" {
+  description = "Post-deployment FlowPilot role collections found by the optional validation gate."
+  value = {
+    for name, collection in data.btp_subaccount_role_collection.flowpilot : name => {
+      description = collection.description
+      read_only   = collection.read_only
+    }
+  }
+}

@@ -6,3 +6,11 @@ region                        = "us10"
 cloud_foundry_environment_id = "00000000-0000-0000-0000-000000000000"
 manage_entitlements          = false
 existing_entitlement_keys    = []
+
+# Post-deployment only. MTA/XSUAA creates these role collections first.
+validate_flowpilot_role_collections   = false
+manage_flowpilot_role_assignments     = false
+assign_current_user_as_flowpilot_admin = false
+current_user_name                       = null
+current_user_identity_provider_origin  = null
+flowpilot_role_assignments              = {}

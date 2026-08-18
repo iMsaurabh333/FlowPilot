@@ -256,6 +256,17 @@ All dependency installs reported zero vulnerabilities. The inspection used built
 
 This command builds only. Checkpoint 3A must reject or omit `cf deploy`; the versioned MTAR cannot be sent to the live target until the separate Checkpoint 4 deployment approval.
 
+## Guarded recovery interfaces
+
+The versioned contract is [FlowPilot recovery interfaces](./recovery-interfaces.md), with placeholders in `config/environments/operations.example.json`. A real `operations.local.json` is ignored and may contain role-assignment identities, but never a provider key, token, service binding, or database URL.
+
+- Terraform validates the three MTA/XSUAA-owned FlowPilot role collections and can preview protected user assignments only after deployment.
+- Provider-secret setup records only Credential Store metadata; the value enters through the protected cockpit form or a future masked direct API client.
+- Portable backup covers both `flowpilot_app` and `flowpilot_graph`, streams into authenticated encryption, and writes ciphertext outside the expiring subaccount.
+- Restore requires a new empty target, verified ciphertext, compatible versions, explicit identity mapping, RLS/isolation tests, and a separately approved binding switch.
+
+The 2026-08-18 live read-only role check found all three role collections. A corrected no-save assignment preview showed one sensitive proposed add and no change or destroy. The default plan remained output-only with no managed action. No apply, plan file, state, role change, secret entry, database operation, or deployment occurred.
+
 ## Intended recovery experience
 
 After a new trial has been activated and the repository has been cloned, the final operator experience should be:
@@ -282,7 +293,7 @@ The bootstrap may accept these non-secret values from a local, ignored environme
 - administrator user name and identity-provider origin;
 - desired non-secret model provider and model name.
 
-Secret inputs must come from interactive secure prompts, approved environment variables, or a managed credential service. The profile, Terraform variables, plan output, GitHub logs, and application logs must not contain secret values.
+Provider secrets must enter SAP Credential Store through its protected cockpit form or a future masked client that writes directly to its API. The bootstrap profile, Terraform variables, CLI arguments, plan output, GitHub logs, and application logs must not contain secret values. Environment variables remain a local-development exception only; they are not the deployed-secret interface.
 
 ## Recovery success criteria
 

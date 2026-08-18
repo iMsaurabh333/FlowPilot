@@ -110,7 +110,7 @@ Rules:
 - [x] Add and validate guarded Terraform account-prerequisite configuration and a pinned provider lockfile.
 - [x] Verify that the current account needs no prerequisite apply; preview seven state imports with zero cloud adds, updates, or deletes, and do not apply them.
 - [x] Build and inspect the MTA without deploying the live application.
-- [ ] Codify role assignment, secure-secret, backup, and restore interfaces.
+- [x] Codify role assignment, secure-secret, backup, and restore interfaces.
 - [ ] Assemble and dry-run the guarded cross-platform bootstrap command.
 - [ ] Rehearse recovery from a fresh clone without replacing live resources.
 - [ ] Human review and approval.

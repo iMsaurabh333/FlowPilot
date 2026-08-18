@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "roleAssignments": {
+    "validateCollections": true,
+    "assignCurrentUserAsAdmin": true,
+    "currentUserName": "operator@example.invalid",
+    "currentUserIdentityProviderOrigin": null,
+    "additional": []
+  },
+  "modelCredential": {
+    "provider": "groq",
+    "serviceInstance": "flowpilot-credentials",
+    "namespace": "flowpilot",
+    "credentialName": "groq-api-key",
+    "credentialType": "password"
+  },
+  "dataProtection": {
+    "databaseServiceInstance": "flowpilot-postgres",
+    "schemas": ["flowpilot_app", "flowpilot_graph"],
+    "backupFormat": "flowpilot-logical-v1",
+    "encryption": "age",
+    "externalOutputDirectory": "<secure-external-directory>",
+    "restoreTargetMustBeEmpty": true,
+    "identityMappingReviewRequired": true
+  }
+}

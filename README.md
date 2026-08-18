@@ -79,7 +79,7 @@ cf deploy mta_archives/flowpilot_0.1.3.mtar
 
 Deployment commands will be run only against the explicitly selected Cloud Foundry org and space. Environment-specific credentials and service keys must never be committed.
 
-After the first deployment, assign one of the predefined `FlowPilotUsers`, `FlowPilotOperators`, or `FlowPilotAdmins` role collections to the appropriate BTP users in the subaccount cockpit.
+After the first deployment, validate and plan assignments for the predefined `FlowPilotUsers`, `FlowPilotOperators`, or `FlowPilotAdmins` role collections through the guarded Terraform interface. Applying an assignment still requires explicit review.
 
 ## Project documentation
 
@@ -88,5 +88,6 @@ After the first deployment, assign one of the predefined `FlowPilotUsers`, `Flow
 - [Development guide](./docs/development.md)
 - [Private chat milestone](./docs/chat-milestone.md)
 - [Environment bootstrap and recovery](./docs/environment-bootstrap.md)
+- [Role, secret, backup, and restore interfaces](./docs/recovery-interfaces.md)
 - [Secure LLM provider configuration](./docs/llm-provider-configuration.md)
 - [Architecture decisions](./docs/decisions/README.md)

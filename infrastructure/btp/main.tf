@@ -36,6 +36,12 @@ locals {
       amount       = null
     }
   }
+
+  flowpilot_role_collection_names = toset([
+    "FlowPilotAdmins",
+    "FlowPilotOperators",
+    "FlowPilotUsers",
+  ])
 }
 
 data "btp_subaccount" "current" {
@@ -119,5 +125,39 @@ import {
     subaccount_id = var.subaccount_id
     service_name  = each.value.service_name
     plan_name     = each.value.plan_name
+  }
+}
+
+data "btp_subaccount_role_collection" "flowpilot" {
+  for_each = var.validate_flowpilot_role_collections || var.manage_flowpilot_role_assignments ? local.flowpilot_role_collection_names : toset([])
+
+  subaccount_id         = data.btp_subaccount.current.id
+  name                  = each.value
+  show_user_assignments = false
+}
+
+resource "btp_subaccount_role_collection_assignment" "current_admin" {
+  count = var.manage_flowpilot_role_assignments && var.assign_current_user_as_flowpilot_admin ? 1 : 0
+
+  subaccount_id        = data.btp_subaccount.current.id
+  role_collection_name = data.btp_subaccount_role_collection.flowpilot["FlowPilotAdmins"].name
+  user_name            = var.current_user_name
+  origin               = var.current_user_identity_provider_origin
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "btp_subaccount_role_collection_assignment" "additional" {
+  for_each = var.manage_flowpilot_role_assignments ? nonsensitive(var.flowpilot_role_assignments) : {}
+
+  subaccount_id        = data.btp_subaccount.current.id
+  role_collection_name = data.btp_subaccount_role_collection.flowpilot[each.value.role_collection_name].name
+  user_name            = sensitive(each.value.user_name)
+  origin               = each.value.origin
+
+  lifecycle {
+    prevent_destroy = true
   }
 }

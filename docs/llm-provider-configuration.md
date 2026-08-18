@@ -69,6 +69,8 @@ Password: <the Groq project API key>
 
 The credential name is safe configuration; the password is not. Never add the password to `mta.yaml`, `.env.example`, GitHub Actions, source files, or documentation.
 
+The environment-recovery contract records only this safe metadata in `config/environments/operations.local.json`; it never records or accepts the password. See [FlowPilot recovery interfaces](./recovery-interfaces.md).
+
 Use the SAP procedure for [creating and updating a credential](https://help.sap.com/docs/credential-store/sap-credential-store/create-edit-and-delete-credential).
 
 ### 4. Configure non-secret model selection
