@@ -219,6 +219,43 @@ For a recovered account, a reviewed plan may set `manage_entitlements=true` and 
 
 The Cloud Foundry environment is validated by its discovered environment-instance ID. Terraform does not currently recreate the trial-provided subaccount or environment. If a future account lacks either, stop and review onboarding, region, quota, cost, and identity consequences before adding a creation resource.
 
+## Verified MTA build and dependency graph
+
+**Last verified:** 2026-08-18 by a strict local build and read-only nested-archive inspection. No deployment ran.
+
+The build uses the repository lockfiles and preserves one owner for each deployment concern:
+
+```text
+model-adapters + agent-core -> API build -> flowpilot-api/data.zip
+web build -> AppRouter resources -> flowpilot-approuter/data.zip
+mta.yaml + xs-security.json + both module payloads -> flowpilot_0.1.3.mtar
+```
+
+Run the existing build from the repository root:
+
+```powershell
+$env:Path = 'C:\Program Files (x86)\GnuWin32\bin;' + $env:Path
+npm run mta:build
+```
+
+The PATH change is process-local. The future cross-platform bootstrap must discover GNU Make or accept its path explicitly; it must not silently edit global PATH configuration.
+
+The verified artifact record is:
+
+| Property                   | Verified value                                                            |
+| -------------------------- | ------------------------------------------------------------------------- |
+| Artifact                   | `mta_archives/flowpilot_0.1.3.mtar`                                       |
+| Size                       | `34,196,737` bytes                                                        |
+| SHA-256                    | `7B0D3EED25A7AB60337D65CDDB5928B3D546C5E68E540FC545806D994E1DBDB1`        |
+| Strict build result        | Exit code `0`; temporary build files cleaned                              |
+| API payload                | `dist/server.js` plus compiled `model-adapters` and `agent-core` packages |
+| AppRouter payload          | `xs-app.json`, `resources/index.html`, and built SAP UI assets            |
+| Prohibited archive entries | Zero `.env`, Terraform state/cache/plan, or real BTP profile matches      |
+
+All dependency installs reported zero vulnerabilities. The inspection used built-in .NET ZIP APIs because `jar.exe` is not installed; a JDK is not a recovery prerequisite. Slow compression and UI dependency installation were observed through one bounded session rather than treated as a failure or restarted.
+
+This command builds only. Checkpoint 3A must reject or omit `cf deploy`; the versioned MTAR cannot be sent to the live target until the separate Checkpoint 4 deployment approval.
+
 ## Intended recovery experience
 
 After a new trial has been activated and the repository has been cloned, the final operator experience should be:
