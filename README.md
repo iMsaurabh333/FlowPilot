@@ -72,6 +72,14 @@ npm run build
 
 ## BTP build and deployment
 
+Preview the complete environment-recovery sequence without executing an external command:
+
+```powershell
+npm run btp:bootstrap
+```
+
+Checkpoint 3A also provides `--mode verify` for read-only tool, target, Terraform, and MTAR checks. Apply, deploy, secret, backup, and restore modes remain disabled until their explicit phase approvals.
+
 ```powershell
 npm run mta:build
 cf deploy mta_archives/flowpilot_0.1.3.mtar

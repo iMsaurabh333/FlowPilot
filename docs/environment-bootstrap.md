@@ -277,7 +277,21 @@ cf login --sso
 npm run btp:bootstrap
 ```
 
-The bootstrap must pause before account mutation and again before live MTA deployment. It must print the target global account, subaccount, Cloud Foundry API, organization, and space before either approval.
+The bootstrap command now exists. During Checkpoint 3A its default is a pure dry run: it validates the two JSON profiles, prints the target and all nine recovery stages, and invokes no external command.
+
+```powershell
+# Pure plan; no subprocess or cloud call
+npm run btp:bootstrap
+
+# Bounded read-only checks of versions, targets, Terraform, and the local MTAR
+npm run btp:bootstrap -- --mode verify
+```
+
+The command is implemented with Node's standard library and shell-free argument arrays, so the same npm syntax works in PowerShell, cmd, Bash, Cursor, Claude-based terminals, and Codex. On Windows it discovers the existing user-local BTP/Terraform clients, CF CLI, GnuWin32 Make, and repository-local MBT without changing global PATH.
+
+The default profile selection prefers ignored `btp.local.json` and `operations.local.json`, falling back to their committed examples when a local file is absent. Output identifies a template but never prints role user names or raw CLI target responses. The `verify` mode checks Node 24, CF CLI 8, BTP CLI 2, exact Terraform `1.15.8`, MBT wrapper/native versions, GNU Make, MultiApps, BTP/CF target matching, provider validation, and local MTAR presence.
+
+Checkpoint 3A rejects `--apply`, `--deploy`, `--execute`, `--secret`, `--backup`, `--restore`, and `--yes` before external execution. Future phases must introduce account mutation and live deployment as separate reviewed modes; the command must pause before each and print the target again.
 
 For the current trial workflow, GitHub Actions remains a credential-free verifier. A future enterprise workflow may call the same Terraform and MTA operations with a technical identity, certificate, or approved workload federation, but GitHub Actions does not become an infrastructure owner.
 

@@ -18,6 +18,14 @@ npm.cmd test
 npm.cmd run build
 ```
 
+Preview the complete BTP recovery flow without invoking an external command:
+
+```powershell
+npm.cmd run btp:bootstrap
+```
+
+After BTP and CF browser SSO, the separate `--mode verify` performs bounded read-only tool, target, Terraform, and local-artifact checks. All account mutation and deployment flags are refused during Checkpoint 3A.
+
 ## Cloud Foundry safety
 
 Before any mutation, confirm the target:

@@ -12,10 +12,12 @@
     "ci:install": "npm ci --prefix packages/model-adapters && npm ci --prefix packages/agent-core && npm run build:packages && npm ci --prefix apps/api && npm ci --prefix apps/web && npm ci --prefix apps/approuter",
     "dev:api": "npm run dev --prefix apps/api",
     "dev:web": "npm run dev --prefix apps/web",
+    "btp:bootstrap": "node scripts/btp-bootstrap.mjs",
+    "test:bootstrap": "node --test scripts/btp-bootstrap.test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --prefix packages/model-adapters && npm run typecheck --prefix packages/agent-core && npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web",
-    "test": "npm run build:packages && npm test --prefix packages/model-adapters && npm test --prefix packages/agent-core && npm test --prefix apps/api && npm test --prefix apps/web",
+    "test": "npm run test:bootstrap && npm run build:packages && npm test --prefix packages/model-adapters && npm test --prefix packages/agent-core && npm test --prefix apps/api && npm test --prefix apps/web",
     "build": "npm run build:packages && npm run build --prefix apps/api && npm run build --prefix apps/web",
     "mta:build": "mbt build --strict=true"
   },
