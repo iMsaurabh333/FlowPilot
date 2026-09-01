@@ -112,7 +112,7 @@ Rules:
 - [x] Build and inspect the MTA without deploying the live application.
 - [x] Codify role assignment, secure-secret, backup, and restore interfaces.
 - [x] Assemble and dry-run the guarded cross-platform bootstrap command.
-- [ ] Rehearse recovery from a fresh clone without replacing live resources.
+- [x] Rehearse recovery from a fresh clone without replacing live resources.
 - [ ] Human review and approval.
 
 The human temporarily authorized autonomous execution of the remaining Checkpoint 3A implementation steps on 2026-08-18. Secret entry, destructive changes, Terraform apply, live deployment, and the Checkpoint 4 transition still require explicit approval. The deferred cross-platform learning walkthrough remains a project-close deliverable.
