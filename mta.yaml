@@ -6,6 +6,12 @@ description: Secure operational assistant for SAP BTP
 parameters:
   enable-parallel-deployments: true
 
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - node scripts/clean-approuter-resources.mjs
+
 modules:
   - name: flowpilot-api
     type: nodejs

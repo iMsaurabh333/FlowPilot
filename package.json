@@ -13,7 +13,7 @@
     "dev:api": "npm run dev --prefix apps/api",
     "dev:web": "npm run dev --prefix apps/web",
     "btp:bootstrap": "node scripts/btp-bootstrap.mjs",
-    "test:bootstrap": "node --test scripts/btp-bootstrap.test.mjs",
+    "test:bootstrap": "node --test scripts/btp-bootstrap.test.mjs scripts/clean-approuter-resources.test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --prefix packages/model-adapters && npm run typecheck --prefix packages/agent-core && npm run typecheck --prefix apps/api && npm run typecheck --prefix apps/web",

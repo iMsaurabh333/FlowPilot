@@ -254,6 +254,10 @@ The verified artifact record is:
 
 All dependency installs reported zero vulnerabilities. The inspection used built-in .NET ZIP APIs because `jar.exe` is not installed; a JDK is not a recovery prerequisite. Slow compression and UI dependency installation were observed through one bounded session rather than treated as a failure or restarted.
 
+MTA `before-all` runs `scripts/clean-approuter-resources.mjs` before the web build. The script validates the exact real, non-symlink `apps/approuter/resources` path, preserves `.gitkeep`, and removes only previously generated children. This prevents obsolete hashed Vite assets from entering later MTARs. `.gitattributes` requires LF text checkout bytes across Windows/Linux while preserving common binary formats.
+
+An MTAR SHA-256 identifies one exact build, including ZIP metadata; it is not by itself proof of cross-workstation reproducibility. Recovery verification must also compare the nested API/AppRouter entry set, required runtime files, prohibited paths, and—when byte equivalence matters—uncompressed per-entry hashes.
+
 This command builds only. Checkpoint 3A must reject or omit `cf deploy`; the versioned MTAR cannot be sent to the live target until the separate Checkpoint 4 deployment approval.
 
 ## Guarded recovery interfaces
@@ -292,6 +296,8 @@ The command is implemented with Node's standard library and shell-free argument 
 The default profile selection prefers ignored `btp.local.json` and `operations.local.json`, falling back to their committed examples when a local file is absent. Output identifies a template but never prints role user names or raw CLI target responses. The `verify` mode checks Node 24, CF CLI 8, BTP CLI 2, exact Terraform `1.15.8`, MBT wrapper/native versions, GNU Make, MultiApps, BTP/CF target matching, provider validation, and local MTAR presence.
 
 Checkpoint 3A rejects `--apply`, `--deploy`, `--execute`, `--secret`, `--backup`, `--restore`, and `--yes` before external execution. Future phases must introduce account mutation and live deployment as separate reviewed modes; the command must pause before each and print the target again.
+
+Fresh Terraform initialization still requires access to `registry.terraform.io` unless an organization provides an approved provider mirror/cache. A local fallback is acceptable only when the provider source, version, lockfile checksums, platform, executable size, and SHA-256 match a previously verified artifact. Never substitute an unreviewed binary after a registry outage, and never copy Terraform state as part of provider recovery.
 
 For the current trial workflow, GitHub Actions remains a credential-free verifier. A future enterprise workflow may call the same Terraform and MTA operations with a technical identity, certificate, or approved workload federation, but GitHub Actions does not become an infrastructure owner.
 
