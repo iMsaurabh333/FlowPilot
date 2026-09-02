@@ -1282,6 +1282,23 @@ Primary operational references: [SAP BTP trial accounts and free tier](https://h
 - Outcome: New-account authentication recovery is complete. The replacement Milestone 4 deployment is ready for normal use. The user may optionally send `Reply with exactly OK.` to capture the end-to-end Groq response in the audit; the latest log slice proves authorization and conversation access but does not contain a message POST.
 - Next gate: Return to the planned **Milestone 5 Checkpoint 5.0 design lock**. Approval is required before selecting the Integration Suite/MPL contract or writing connector/MCP/registry code.
 
+### 2026-09-02 — Milestone 4 GitHub version snapshot published
+
+- Objective: Preserve the exact replacement-account Milestone 4 state in GitHub before beginning Milestone 5.
+- Scope reviewed: The staged snapshot contained the intended application/runtime, Credential Store implementation and tests, MTA model configuration, deployment documentation, and this audit. `config/environments/btp.local.json` remained ignored and was not staged; no secret-bearing file was included.
+
+| Hurdle | Action and result | Reusable decision |
+| ------ | ---------------- | ----------------- |
+| The worktree was detached, while local `main` was already checked out in the primary workspace. | Created local branch `milestone-4-new-account`; verified `origin/main` was an ancestor, then pushed `HEAD:main` as a fast-forward without force-push. | A linked worktree can publish a verified snapshot to remote `main` without disrupting the primary checkout. |
+| Git staging was blocked by a zero-byte worktree `index.lock` left over from an earlier process. | Confirmed the lock was approximately 10 hours old and no Git process was running; removed only that exact stale lock path. | Inspect lock age/process ownership before removing a lock; never delete a live lock or broad repository metadata. |
+| The first full test run stopped because `apps/api/node_modules` had been pruned to production dependencies by the MTAR build, so `vitest` was unavailable. | Ran `npm ci --prefix apps/api` from the committed lockfile, then reran the complete suite; all bootstrap, package, API, and web tests passed (API: 18 passed, 1 expected skip). | MTAR production pruning affects the local test environment; restore dev dependencies from lockfiles before evaluating a release snapshot. |
+
+- Version commit: `2862468` (`chore: snapshot milestone 4 on replacement BTP trial`).
+- Version tag: `v0.1.5` (`FlowPilot Milestone 4 deployed checkpoint`).
+- GitHub verification: `refs/heads/main` and `refs/tags/v0.1.5` were published to `https://github.com/iMsaurabh333/FlowPilot.git`; remote `main` resolves to `28624681b91f04122a0a0e1fcbc8ba0ed4047eb3` and the annotated tag object resolves to `b2fa08782527cc193531a6d3c53248520b41888d`.
+- Outcome: The deployed replacement-account Milestone 4 code is versioned and recoverable from GitHub. The tag identifies the exact code/deployment snapshot; the subsequent audit-only commit records publication details on `main`.
+- Next gate: Begin **Milestone 5 Checkpoint 5.0 design lock** only after explicit approval. No connector, MCP, registry, destination, or Integration Suite changes start automatically.
+
 ## How to maintain this document
 
 - Review it at the beginning and end of each major phase.
