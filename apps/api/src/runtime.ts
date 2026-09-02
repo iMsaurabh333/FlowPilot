@@ -1,14 +1,15 @@
 import { createChatAgent } from "@flowpilot/agent-core";
-import {
-  createChatModel,
-  loadEnvironmentCredentials,
-  loadModelConfig,
-} from "@flowpilot/model-adapters";
+import { createChatModel, loadModelConfig } from "@flowpilot/model-adapters";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
 import { createApp } from "./app.js";
 import { PostgresConversationRepository } from "./conversations/postgres-repository.js";
 import { ConversationService } from "./conversations/service.js";
+import {
+  createLazyCredentialChatModel,
+  createProviderCredentialResolver,
+  modelCredentialsFor,
+} from "./credentials/credential-store.js";
 import { runMigrations } from "./db/migrations.js";
 import { createPostgresPool, resolveDatabaseConfig } from "./db/postgres.js";
 
@@ -27,9 +28,15 @@ export async function createRuntime(
     await checkpointer.setup();
 
     const modelConfig = loadModelConfig(environment);
-    const model = createChatModel(
-      modelConfig,
-      loadEnvironmentCredentials(environment),
+    const credentials = createProviderCredentialResolver(environment);
+    const model = createLazyCredentialChatModel(async () =>
+      createChatModel(
+        modelConfig,
+        modelCredentialsFor(
+          modelConfig.provider,
+          await credentials.resolve(modelConfig.provider),
+        ),
+      ),
     );
     const agent = createChatAgent({
       checkpointer,

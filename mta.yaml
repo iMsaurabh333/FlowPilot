@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.3
+version: 0.1.5
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -25,6 +25,12 @@ modules:
     properties:
       NODE_ENV: production
       AUTH_MODE: xsuaa
+      MODEL_PROVIDER: groq
+      MODEL_NAME: openai/gpt-oss-120b
+      MODEL_TEMPERATURE: "0"
+      MODEL_MAX_OUTPUT_TOKENS: "1024"
+      MODEL_TIMEOUT_MS: "30000"
+      MODEL_MAX_RETRIES: "2"
     provides:
       - name: flowpilot-api-binding
         properties:
@@ -34,6 +40,7 @@ modules:
       - name: flowpilot-destination
       - name: flowpilot-logs
       - name: flowpilot-postgres
+      - name: flowpilot-credentials
     build-parameters:
       builder: custom
       commands:
@@ -115,4 +122,10 @@ resources:
     type: org.cloudfoundry.managed-service
     parameters:
       service: postgresql-db
+      service-plan: trial
+
+  - name: flowpilot-credentials
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: credstore
       service-plan: trial

@@ -436,10 +436,10 @@ A task is done only when:
 | Phase                | Status                  | Evidence or next gate                                                                                                                                                    |
 | -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 0. Frame             | Complete                | Product scope, users, constraints, MVP boundary, and success criteria are in `docs/product.md`.                                                                          |
-| 1. Discover          | In progress             | BTP Cloud Foundry target and core trial services verified; target API authentication, model access, and the first OpenAPI YAML remain.                                   |
+| 1. Discover          | In progress             | BTP Cloud Foundry target, authentication, model access, and core trial services verified; the first reviewed OpenAPI YAML remains.                                        |
 | 2. Decide            | Complete for foundation | Architecture and initial XSUAA decisions are recorded in ADRs 0001 and 0002.                                                                                             |
 | 3. Foundation        | Complete for foundation | GitHub remote, modules, locked dependencies, MTA build, CI workflow, initial commit, and push are established.                                                           |
-| 4. Vertical slice    | In progress             | Checkpoints 1 through 3 are approved. Checkpoint 3A is proceeding under a temporary autonomous fast-track with a full audit trail; live deployment remains Checkpoint 4. |
+| 4. Vertical slice    | Complete                 | MTA 0.1.5 is deployed; authenticated chat, Groq invocation, PostgreSQL persistence, Credential Store retrieval, and browser smoke test succeeded.                         |
 | 5. Iterate           | Not started             | Begin after the first deployed vertical slice.                                                                                                                           |
 | 6. Harden            | Not started             | Threat model and production checks pending.                                                                                                                              |
 | 7. Release           | Not started             | Release process pending.                                                                                                                                                 |
@@ -449,11 +449,11 @@ A task is done only when:
 
 This is the living boot/start procedure for restoring the deployed FlowPilot application after SAP BTP trial-account cleanup or an intentional application stop. Update this section whenever a checkpoint adds, removes, renames, binds, or changes the startup order of a runtime dependency. Do not assume that commands from an earlier checkpoint still describe the deployed system.
 
-**Last verified:** 2026-08-17, against Cloud Foundry organization `7d472741trial`, space `dev`, API endpoint `https://api.cf.us10-001.hana.ondemand.com`.
+**Last verified:** 2026-09-02, against Cloud Foundry organization `7d472741trial`, space `dev`, API endpoint `https://api.cf.us10-001.hana.ondemand.com`.
 
 ### Current deployment boundary
 
-The live deployment is still the authentication-only application from MTA 0.1.3. The completed Checkpoint 2 backend exists in the repository but has not been deployed. Consequently, the live application has two Cloud Foundry runtime applications and does not yet depend on PostgreSQL at runtime.
+The live deployment is MTA 0.1.5: an authenticated UI5 Horizon chat application with a protected Express API, LangGraph workflow, Groq `openai/gpt-oss-120b` model, PostgreSQL conversation/checkpoint persistence, and SAP Credential Store provider-key retrieval. The runtime consists of `flowpilot-api` and `flowpilot-approuter`; PostgreSQL and Credential Store are both API-bound.
 
 ### Daily startup procedure
 
@@ -495,6 +495,8 @@ The live deployment is still the authentication-only application from MTA 0.1.3.
    https://7d472741trial-dev-flowpilot-approuter.cfapps.us10-001.hana.ondemand.com
    ```
 
+7. Perform the minimum smoke test: create or select a conversation, send a short message, confirm an assistant response, then refresh and confirm the conversation remains visible.
+
 The BTP cockpit alternative is **Subaccount -> Cloud Foundry -> Spaces -> dev -> Applications**. Start `flowpilot-api`, then `flowpilot-approuter`, and confirm that each has one running instance.
 
 ### Current resource startup matrix
@@ -507,7 +509,8 @@ The BTP cockpit alternative is **Subaccount -> Cloud Foundry -> Spaces -> dev ->
 | `flowpilot-auth`         | Managed XSUAA service                    | None                           | Managed service instances are not started with `cf start`; verify their broker operation with `cf services` when necessary. |
 | `flowpilot-destination`  | Managed Destination service              | None                           | Managed service; no daily application-start command.                                                                        |
 | `flowpilot-logs`         | Managed Application Logging service      | None                           | Managed service; no daily application-start command.                                                                        |
-| `flowpilot-postgres`     | Retained PostgreSQL trial service        | None at the current checkpoint | It is healthy but unbound, and the live MTA 0.1.3 application does not use it yet.                                          |
+| `flowpilot-postgres`     | PostgreSQL conversation and LangGraph checkpoint store | None                           | It is broker-managed and API-bound; verify `create succeeded` and do not run `cf start`.                                  |
+| `flowpilot-credentials`  | Credential Store for provider keys       | None                           | It is broker-managed and API-bound; verify the instance/binding and manage the Groq credential only in the cockpit.       |
 | `demo-api`, `demo-iflow` | Unrelated Integration Suite resources    | None for FlowPilot             | They are not bound to the current FlowPilot applications and are not part of its boot sequence.                             |
 
 Inspect managed-service provisioning state with:
@@ -517,7 +520,7 @@ cf services
 cf service flowpilot-postgres
 ```
 
-`flowpilot-postgres` should currently report `create succeeded`. There is no `cf start flowpilot-postgres` operation: `cf start` controls Cloud Foundry applications, while PostgreSQL is broker-managed. Once a deployed checkpoint binds the API to PostgreSQL, this runbook must add database-readiness verification before accepting API health.
+`flowpilot-postgres` should currently report `create succeeded`. There is no `cf start flowpilot-postgres` operation: `cf start` controls Cloud Foundry applications, while PostgreSQL is broker-managed. The API performs database migrations and checkpoint setup during startup. A successful `web:1/1` state plus the authenticated conversation smoke test is the minimum database-readiness evidence.
 
 ### Failure triage
 
@@ -969,6 +972,315 @@ Primary operational references: [SAP BTP trial accounts and free tier](https://h
 - Incorrect or incomplete assumptions corrected: An installed Docker CLI does not prove Docker is usable. A package cannot rely on another package's development-only Node types. The esbuild failure was a sandbox traversal restriction, not unresolved application source. A service key and a VCAP binding can expose different nesting. A service key does not imply off-platform network reachability. A valid database URI alone is insufficient when SAP enforces TLS. On CF, buildpack-generated `DATABASE_URL` must not outrank a certificate-bearing service binding. Persisted message content does not guarantee that a framework preserves its optional message ID.
 - Reusable lessons: Test every new package at its own boundary. Separate deterministic model/API tests from billable provider tests. Keep a real database gate for security features that an in-memory implementation cannot prove. Treat platform bindings as structured contracts and inspect field names without printing values. Prefer in-platform tasks for internal services. Verify encryption explicitly and define configuration precedence. Validate identifiers across persistence/reload boundaries, not just content. When a build tool reports access errors outside the workspace, rerun the exact command with authorized filesystem access before changing architecture.
 - Remaining risks or follow-up: Checkpoint 2 needs human review. The FlowPilot application has not been redeployed with this backend, no Groq request has been made, and Credential Store retrieval and the SAP Horizon UI remain later checkpoints. The real two-user BTP test remains unavailable in the trial account and must be performed before production use; current evidence uses two independent validated-identity fixtures.
+
+### 2026-09-01 — Checkpoint 4.2: Credential Store/PostgreSQL/MTA design lock
+
+- Objective: Review the existing deployment boundary before implementing Checkpoint 4, with special attention to PostgreSQL binding, Credential Store ownership, and provider-neutral secret retrieval.
+- Approval boundary: The user approved a short documentation-only design lock. No `mta.yaml` edits, API edits, service creation, secret entry, `cf start`, `cf deploy`, or Terraform apply were authorized or performed.
+
+| Sequence | Question or hurdle | Evidence/action | Decision |
+| -------- | ----------------- | --------------- | -------- |
+| 1 | Is PostgreSQL available and already bound? | Read-only Cloud Foundry inspection found healthy `flowpilot-postgres` (`postgresql-db` / `trial`) but no current binding; the MTA already declares the resource and API requirement. | Keep PostgreSQL ownership in the MTA and bind it only to the API during the approved deployment step. |
+| 2 | Is Credential Store already provisioned? | The trial space has no `flowpilot-credentials` instance. The repository documentation contained a planned resource, but `mta.yaml` and runtime code did not yet implement it. | Add the managed `credstore` / `trial` resource and API-only binding in a later, explicitly approved implementation task. |
+| 3 | Can the current runtime safely use the planned store? | `@flowpilot/model-adapters` currently reads provider keys from environment variables; no Credential Store client or `VCAP_SERVICES` retrieval path exists. | Implement a provider-neutral Credential Store adapter before deploying a real Groq request. |
+| 4 | How should provider switching and rotation remain portable? | Existing adapters already share one LangChain model contract; fixed provider-to-credential references avoid browser-controlled endpoints and names. | Lock `MODEL_PROVIDER` allowlisting, fixed `flowpilot` references, short in-memory caching, fail-closed chat errors, and local-only environment fallback. |
+
+- Outcome: The recovery and packaging foundation is aligned, but Checkpoint 4 is not deployment-ready until the Credential Store binding and retrieval path are implemented.
+- Reusable lesson: A documented secret-management plan is not an implemented security boundary. Verify the service instance, MTA binding, runtime discovery code, and failure behavior independently before a provider key is entered.
+- Next gate: Ask for explicit implementation approval, then change `mta.yaml` and the API in a short, reviewable subtask; build and inspect the MTAR before any cloud deployment.
+
+### 2026-09-01 — Checkpoint 4.3A: MTA Credential Store declaration
+
+- Objective: Add only the deployment-descriptor pieces required for the first secure LLM slice: API-only Credential Store ownership and non-secret Groq defaults.
+- Changes: Bumped the MTA version to `0.1.4`; added `flowpilot-credentials` (`credstore` / `trial`) as an API requirement and managed resource; added `MODEL_PROVIDER`, model, timeout, retry, and output-token properties. No provider key was added.
+
+| Sequence | Hurdle | Action and result | Decision |
+| -------- | ------ | ---------------- | -------- |
+| 1 | The default `mbt build --strict=true` could not find GNU `make`. | Reran with the approved local GNU Make path and clone-local npm cache. | Treat the missing PATH entry as a workstation prerequisite, not an MTA defect. |
+| 2 | The first bounded rerun timed out during API dependency installation. | Retried with a longer bounded timeout; package installation completed and MBT's own MTA validation passed. | Keep dependency installation bounded and report timeouts instead of waiting silently. |
+| 3 | API bundling failed when esbuild traversed the MBT staging directory (`Access is denied`). | Requested authorized filesystem access, then monitored the rerun. The execution host became stale while MBT/make processes remained. | Classify this as the known Windows sandbox/staging limitation; do not change source paths to mask it. |
+| 4 | Timed-out attempts left multiple workspace MBT/make processes. | Verified their executable paths were the workspace MTA build tools and stopped only those explicit process IDs. | Clean up orphaned build processes before a later packaging attempt. |
+
+- Verification: `prettier --check mta.yaml` and `git diff --check` passed. The strict MTAR archive was not accepted as complete evidence because the final build host did not return a result; no cloud mutation occurred.
+- Remaining risk: Re-run the strict build with the clean authorized procedure after the Credential Store runtime adapter is implemented, then inspect the resulting `0.1.4` archive before deployment.
+
+### 2026-09-01 — Checkpoint 4.3B: Credential Store runtime adapter
+
+- Objective: Implement the backend-only provider credential retrieval path, keeping Groq as the default while preserving the OpenAI/Anthropic adapter seam.
+- Approval boundary: The user approved API implementation and tests only. No service instance creation, secret entry, application start, deployment, or Terraform operation was performed.
+
+| Sequence | Question or hurdle | Action and result | Decision |
+| -------- | ----------------- | ---------------- | -------- |
+| 1 | Which authentication and payload format does the BTP Credential Store binding require? | Checked the current SAP Credential Store application example and binding documentation. The service returns encrypted JWE payloads; bindings may use basic authentication or mTLS, and trial plans can use mTLS. | Implement both binding modes, require HTTPS, and decrypt only `RSA-OAEP-256` / `A256GCM` responses with the binding's client private key. |
+| 2 | Can the API handle trial and future subaccount binding shapes without hard-coded instance IDs? | Added `VCAP_SERVICES` discovery by `credstore` label/name, one-level nested credential normalization, and fixed provider-to-credential references. | Resolve `flowpilot` namespace names server-side; never accept a browser-supplied endpoint or credential name. |
+| 3 | How can health/authentication remain available when the provider key is absent or rotated? | Added a lazy LangChain chat-model wrapper. Credential Store is read on first model use, cached in memory for five minutes, and refreshed after expiry; production never falls back to provider-key environment variables. | Fail closed only for chat/model use while retaining the existing health and authentication startup path. |
+| 4 | How can encrypted retrieval be tested without exposing a real key or calling Groq? | Generated an ephemeral RSA key pair in Vitest, produced an in-memory JWE fixture, injected the HTTPS request, and asserted URL, namespace, authentication, cache, mTLS, local fallback, and failure behavior. | Keep all provider tests deterministic and billable-provider free. |
+| 5 | Did the first test command match the project runner? | The first attempt passed Jest's unsupported `--runInBand` option to Vitest and ran no tests. The native Vitest command then passed. | Use each repository's declared test runner and options rather than assuming Jest semantics. |
+
+- Changes: Added `apps/api/src/credentials/credential-store.ts`, wired lazy provider resolution into `apps/api/src/runtime.ts`, and added `apps/api/test/credential-store.test.ts`. Updated architecture and provider-configuration documentation with the implemented binding behavior.
+- Verification: API type-check passed; API tests passed with 18 tests and one intentionally skipped PostgreSQL integration test; the API production bundle passed; `git diff --check` passed. No secret value was used.
+- Remaining risk: The real Credential Store binding and Groq key still need a separately approved cloud deployment and smoke test. The strict MTAR build should be rerun and inspected after this runtime change.
+
+### 2026-09-01 — Checkpoint 4.3C: strict MTAR build and archive inspection
+
+- Objective: Produce and inspect the versioned `0.1.4` deployment archive after the Credential Store runtime change, without deploying it.
+- Approval boundary: The user approved local packaging and inspection only. No `cf deploy`, service creation, secret entry, application start, Terraform apply, or database operation was performed.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | Can the full strict build run with the workstation's Make discovery issue? | Used the approved scoped GNU Make path and clone-local npm cache. MBT built API, web, and AppRouter, generated metadata, cleaned temporary files, and exited `0`. | Accept the strict build as the packaging gate for MTA `0.1.4`. |
+| 2 | Does the generated metadata include the new runtime dependencies and non-secret model settings? | Inspected `META-INF/mtad.yaml` without extracting application payloads. It contains `flowpilot-credentials` (`credstore` / `trial`), `flowpilot-postgres`, API requirements, and the Groq model properties. | Keep the Credential Store and PostgreSQL bindings API-only and declarative in the MTA. |
+| 3 | Does the API archive contain runnable code and no local state or secret files? | Inspected both nested `data.zip` manifests. API contains `dist/server.js`, both compiled `@flowpilot` packages, and production `@langchain/core`; exact prohibited-path checks returned zero. | Accept the archive contents for the next deployment-approval checkpoint. |
+| 4 | Did the production dependency audit remain clean across all modules? | API and package installs reported zero vulnerabilities. AppRouter's production install reported three moderate npm audit findings, while the build still completed successfully. | Record the AppRouter findings as a release-hardening follow-up; do not hide or auto-fix them during this deployment gate. |
+
+- Artifact: `mta_archives/flowpilot_0.1.4.mtar`, 34,172,372 bytes, SHA-256 `D355534F33DB40C10E5494CED375BA0384C8802ED450BE174CD7B2EFE0BB7407`.
+- Verification: Required metadata and runtime entries are present; API nested archive has 11,923 files, AppRouter 5,266 files, exact prohibited-entry count is zero for both, and generated staging files/processes were cleaned.
+- Remaining risk: The archive is not yet deployed. Before release, investigate the three moderate AppRouter dependency findings and perform the separately approved Credential Store/Groq smoke test.
+
+### 2026-09-01 — Checkpoint 4.4A: Cloud Foundry deployment preflight
+
+- Objective: Confirm the target Cloud Foundry space, existing application/service state, required marketplace entitlements, and the locally available MTAR before any deployment mutation.
+- Approval boundary: The user approved read-only preflight only. No `cf start`, service creation, secret entry, `cf deploy`, Terraform operation, or application/database mutation was performed.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | Is the CLI still targeting the intended trial environment? | Read `cf target`; endpoint is `api.cf.us10-001.hana.ondemand.com`, organization is `7d472741trial`, and space is `dev`. | Use this target for the next explicitly approved cloud mutation. |
+| 2 | Are the deployed applications already running? | Read `cf apps`; both `flowpilot-api` and `flowpilot-approuter` are stopped (`web:0/1`). | Do not start them separately; the approved deployment should recreate/update and start them. |
+| 3 | Is PostgreSQL available for the MTA binding? | Read `cf services` and `cf service flowpilot-postgres`; the `postgresql-db` / `trial` instance is healthy but currently unbound. | Let the MTA bind the existing/reconciled PostgreSQL resource to the API. |
+| 4 | Is the Credential Store instance ready? | `flowpilot-credentials` does not exist, but `credstore` exposes an available free `trial` plan in the marketplace. | The next mutation must create/reconcile the MTA-owned Credential Store resource, then pause for manual Groq-key entry in the cockpit. |
+| 5 | Is the deployment artifact present and the build evidence preserved? | Found `mta_archives/flowpilot_0.1.4.mtar` (34,172,372 bytes; SHA-256 `D355534F33DB40C10E5494CED375BA0384C8802ED450BE174CD7B2EFE0BB7407`). | Deploy only this inspected versioned archive unless a later approved build supersedes it. |
+| 6 | Did the read-only CLI checks have any workstation limitation? | CF repeatedly reported `Error writing config: open C:\\Users\\saura\\.cf\\temp-config...: Access is denied.` while still returning valid target, app, service, and marketplace data. | Classify this as a terminal config-write limitation; do not modify `.cf` or credentials as a workaround. |
+
+- Outcome: The environment is ready for the deployment gate except that `flowpilot-credentials` must be provisioned. PostgreSQL is healthy and the MTAR is available; both application processes are currently stopped.
+- Reusable lesson: A deployment preflight should separate “entitlement exists,” “service instance exists,” “binding exists,” and “application is running.” A healthy existing database does not prove that the next deployment has a usable binding.
+- Next gate: Ask for explicit approval for Checkpoint 4.4B — create/reconcile the MTA-owned Credential Store resource and deploy `flowpilot_0.1.4`, pausing before any provider secret is entered.
+
+### 2026-09-01 — Checkpoint 4.4B: deploy inspected MTAR and provision bindings
+
+- Objective: Deploy the inspected `flowpilot_0.1.4.mtar` to the approved trial org/space, reconcile the MTA-owned services and bindings, and stop before any provider secret is entered.
+- Approval boundary: The user explicitly approved this cloud mutation. The Groq API key was not entered, printed, transmitted in chat, or placed in a terminal command.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | The first deploy attempt failed before contacting Cloud Foundry. | The CLI reported `Config error: Access is denied` while trying to write `C:\\Users\\saura\\.cf\\temp-config...`. | Use a temporary task-specific `CF_HOME` containing a copy of the existing session config; never modify the user-level CF config or repository. |
+| 2 | The isolated CF session did not initially expose the `deploy` command. | The base config did not include the installed MultiApps plugin. Verified the default plugin inventory and copied only the plugin metadata/binary into the temporary CF home. | Preserve the existing authenticated session and plugin locally for this operation; do not install an unrelated plugin or change global CLI state. |
+| 3 | Will the MTA create the missing Credential Store and reconcile the existing PostgreSQL service? | Ran `cf deploy mta_archives\\flowpilot_0.1.4.mtar -f --retries 1 --apps-start-timeout 600`; operation `390e3f9a-a622-11f1-9ed9-eeee0a913d66` finished successfully. The deployment created `flowpilot-credentials`, reconciled/bound `flowpilot-postgres`, bound the existing supporting services, staged both apps, and started both apps. | Accept the deployment operation as successful. |
+| 4 | Are the applications and service bindings healthy after deployment? | Read-only verification reported both apps `STARTED`, `web:1/1`; Credential Store `create succeeded` and bound to `flowpilot-api`; PostgreSQL bound to `flowpilot-api`; MTA version `0.1.4` is healthy. | Proceed to the separate secret-entry gate; no Groq request is attempted until the key is entered manually. |
+| 5 | Can the local terminal independently call the direct API health URL? | PowerShell and native `curl` both failed TLS credential acquisition locally (`Authentication failed` / Schannel `SEC_E_NO_CREDENTIALS`). No `-k`/insecure retry was used. | Classify this as a workstation probe limitation, not evidence of an application failure; use the authenticated browser/AppRouter smoke test after secret configuration. |
+
+- Outcome: Cloud deployment is complete. The Credential Store instance now exists and is API-bound; PostgreSQL is API-bound; both applications are running `1/1`; no provider secret has been entered.
+- Reusable lessons: When a CLI needs to update an inaccessible user config, isolate the session in a temporary config home rather than changing global credentials. For CF MTA deployment, the MultiApps plugin is a required local dependency even when `cf.exe` itself is installed.
+- Next gate: Ask for explicit approval for Checkpoint 4.4C — manually enter the Groq credential in the BTP Credential Store cockpit, then run the authenticated application/model smoke test. The secret must remain outside chat and terminal output.
+
+### 2026-09-01 — Checkpoint 4.4C: provider secret entry and smoke-test gate (paused)
+
+- Objective: Add the Groq credential to the deployed SAP Credential Store and then verify authenticated chat/model execution without exposing the secret to the development terminal or conversation.
+- Approval boundary: The user approved this checkpoint. The secret-entry portion is intentionally paused for a manual user action; no Groq key has been received or handled by the agent.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | Can the agent safely automate the Credential Store dashboard? | Read the browser-control instructions and attempted to initialize the approved browser runtime. The runtime failed because its trusted browser-service path was unavailable in this session. | Do not use an untrusted browser workaround and do not ask the user to paste a secret into chat or terminal. |
+| 2 | What exact credential contract does the deployed runtime require? | Confirmed from the implemented adapter: namespace `flowpilot`, fixed name `groq-api-key`, Credential Store password endpoint, and server-side `MODEL_PROVIDER=groq`. | The user must create one password credential with those exact non-secret identifiers. |
+| 3 | Can a disposable CF task call the resolver without using the browser? | Submitted a bounded task against `flowpilot-api`. The first smoke script failed; a redacted diagnostic showed the failure at the imports stage because the production API is bundled into `dist/server.js` and does not ship `dist/credentials/credential-store.js` as a separate module. | Do not change the production bundle solely for this probe. Use the authenticated AppRouter flow, which exercises the deployed bundle and XSUAA path exactly as the user does. |
+| 4 | Did the failed task expose any secret or leave a running process? | The task printed only a generic failure marker and error class; no key, token, or provider response was printed. The task completed with failure and was not a long-running process. | Keep the task failure as audit evidence and use the browser-driven smoke test for the real model call. |
+| 5 | What did the user's real browser smoke test prove? | The authenticated UI loaded, created/listed private conversations, and persisted conversation state; the message request returned the intended `502 model_unavailable` response. | Authentication, PostgreSQL ownership, and conversation APIs are working; isolate the remaining fault to provider invocation. |
+| 6 | Is the provider credential being retrieved successfully? | A disposable task exported the deployed bundle in a temporary file and ran the resolver without printing the value. The resolver stage completed; the model invocation returned HTTP `404`. | Treat the Credential Store binding, JWE decryption, and entered key as valid for this test; investigate the configured model ID. |
+| 7 | Is `llama-3.3-70b-versatile` still valid for the current Groq developer tier? | Checked Groq's official [model deprecation notice](https://console.groq.com/docs/deprecations) and [supported-model catalog](https://console.groq.com/docs/models). Groq lists the model as deprecated for free/developer usage from 2026-08-16 and recommends `openai/gpt-oss-120b` or `qwen/qwen3.6-27b`. | Replace the stale non-secret `MODEL_NAME` configuration; preserve the provider-neutral adapter seam. |
+| 8 | Does an official replacement work with the entered key and deployed runtime? | Ran the same bundle-level probe with a temporary `MODEL_NAME=openai/gpt-oss-120b` override. Credential resolution and one bounded Groq invocation completed successfully; no response body or secret was printed. | Use `openai/gpt-oss-120b` as the next reviewed default candidate, subject to explicit configuration/build/deploy approval. |
+
+- Manual action required: Open the `flowpilot-credentials` service dashboard in the BTP cockpit, create a password credential with namespace `flowpilot` and name `groq-api-key`, and enter the Groq key directly into the masked value field. Do not share the value or a screenshot.
+- Outcome to date: The entered key is usable and the private-chat path works through persistence; the deployed app fails only because `mta.yaml` still sets the deprecated `llama-3.3-70b-versatile` model. A temporary override to `openai/gpt-oss-120b` succeeded.
+- Remaining verification: Update the declarative model configuration, rebuild/inspect the MTAR, redeploy, and repeat the authenticated browser message test. Never copy the key or authorization token into the terminal or chat.
+- Next gate: Ask for explicit approval for Checkpoint 4.4D — change `MODEL_NAME` to `openai/gpt-oss-120b`, rebuild and inspect the archive, deploy it, and rerun the user smoke test.
+
+### 2026-09-01 — Checkpoint 4.4D: replace deprecated Groq model and redeploy
+
+- Objective: Replace the deprecated Groq model ID with the verified `openai/gpt-oss-120b` candidate, produce an inspected archive, deploy it, and repeat the authenticated browser smoke test.
+- Approval boundary: The user explicitly approved the configuration change, rebuild, deployment, and smoke-test phase. The existing Credential Store secret was not read into the terminal or chat.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | How should the model correction remain recoverable after a trial-account replacement? | Changed only declarative `mta.yaml` configuration: version `0.1.5`, `MODEL_PROVIDER=groq`, `MODEL_NAME=openai/gpt-oss-120b`; updated the README deploy command. | Keep the replacement in Git/MTA configuration rather than relying on a one-off Cloud Foundry environment override. |
+| 2 | Does the strict MBT command finish cleanly on this Windows host? | The 15-minute bounded command timed out during process lifecycle, but generated `mta_archives/flowpilot_0.1.5.mtar`; no build processes or temporary staging directory remained afterward. | Inspect the produced archive before accepting it; record the timeout as a host/tooling limitation rather than silently retrying. |
+| 3 | Does the generated archive contain the corrected model and required runtime? | Archive inspection found the expected top-level entries, `MODEL_NAME: openai/gpt-oss-120b`, both managed resources, all required API files, and zero prohibited local-state entries. SHA-256: `2B8BD7D32D60869B0A34B7647030E9CB90623A32F75DF6CDF02B319FDB3ACBC4`. | Accept `flowpilot_0.1.5.mtar` as the deployment artifact. |
+| 4 | Did the corrected archive deploy and restart both applications? | `cf deploy mta_archives\\flowpilot_0.1.5.mtar -f --retries 1 --apps-start-timeout 600` completed successfully; operation `a918d4a3-a62a-11f1-ab2a-eeee0a8cf3c6`. Read-only verification reports MTA `0.1.5`, both apps `STARTED` `1/1`, Credential Store bound to API, and PostgreSQL bound to API. | Treat the cloud deployment as successful and request the final browser message test. |
+| 5 | Does the real authenticated user flow now complete a Groq request? | The user refreshed the AppRouter session and received an assistant response. Redacted CF router logs show `POST /api/conversations/:id/messages` returned HTTP `200` in 0.692 seconds. | Accept the provider, persistence, authentication, and UI smoke gate. |
+
+- Outcome: Checkpoint 4.4C/4.4D is complete. The deployed app uses the verified Groq replacement model; Credential Store retrieval, Groq invocation, PostgreSQL persistence, XSUAA authentication, and the real browser flow all succeeded. No key rotation or re-entry was required.
+- Verification: The authenticated browser received an assistant response, and the corresponding redacted API request returned HTTP `200`.
+- Next gate: Ask for explicit approval before beginning the next feature phase; do not make additional codebase changes automatically.
+
+### 2026-09-02 — Post-deployment trial-state check
+
+- Objective: Confirm whether the corrected model deployment remains present after the trial environment was inactive between sessions.
+- Evidence: Read-only `cf mta flowpilot` reports MTA version `0.1.5` with Credential Store and PostgreSQL bindings intact. Both `flowpilot-api` and `flowpilot-approuter` are currently `STOPPED`, `0/1` instances.
+- Decision: The model update is still deployed; this is a trial lifecycle stop, not a rollback or lost deployment. Do not run `cf start` automatically during a status check; start the applications only in an explicitly approved boot/recovery action.
+
+### 2026-09-02 — Current status and next milestone boundary
+
+- Objective: Recheck the live deployment and identify the next reviewed delivery milestone without starting implementation automatically.
+- Evidence: Read-only `cf apps` and `cf mta flowpilot` report `flowpilot-api` and `flowpilot-approuter` as `STARTED`, `web:1/1`; MTA `0.1.5` is healthy; `flowpilot-credentials` and `flowpilot-postgres` remain API-bound with successful broker operations.
+- Decision: The deployed private-chat vertical slice is operational. The next milestone is **Milestone 5 — first read-only operational tool integration**: select a reviewed SAP API/OpenAPI contract, call it through a BTP Destination, expose it through a standard independently deployable MCP server, and connect it to the controlled LangGraph tool registry.
+- Approval boundary: No Milestone 5 code, API YAML, destination, MCP server, registry, or cloud changes begin until the user approves a short design checkpoint.
+
+### 2026-09-02 — Milestone 5 kickoff: design checkpoint preparation
+
+- Objective: Begin the first operational-tool milestone while preserving the explicit approval boundary before implementation or BTP mutation.
+- Current repository finding: No reviewed SAP/API Business Hub OpenAPI or Swagger contract is present in the repository yet; the only YAML file currently found is the deployment descriptor `mta.yaml`.
+- Evidence reviewed: `docs/product.md`, `docs/architecture.md`, `packages/README.md`, and `servers/README.md`. They consistently define the first slice as one read-only Destination-backed SAP API, one independently deployable MCP server, and controlled LangGraph tool registration.
+- Platform research: Reviewed SAP's official [Destination Service documentation](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/destination-service) and [Application Routes and Destinations guidance](https://help.sap.com/docs/btp/sap-business-technology-platform/application-routes-and-destinations). These confirm that remote API routing/authentication should be centralized in BTP Destinations rather than placed in browser code or user-provided URLs.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | Which API should be implemented first? | Compared the existing product and architecture intent with the available repository contents. A concrete OpenAPI contract is not yet checked in, and the exact SAP tenant/base URL/authentication mode is not known. | Recommend one read-only Sales Order query as the default first use case, but do not invent an endpoint or generate code until the exact contract/version is reviewed. |
+| 2 | How should third-party or future APIs remain interchangeable? | Confirmed the intended boundary: browser and chat orchestration call approved tools; the server resolves fixed BTP Destination names; MCP servers remain independently deployable and use a standard transport/configuration shape. | Keep user-supplied URLs and arbitrary tools out of the MVP; use a server-side allowlist and least-privilege read-only scopes. |
+| 3 | What is the next short approval gate? | Defined Checkpoint 5.0 as design-only: contract selection, destination/auth model, MCP interface, registry policy, acceptance tests, and rollout order. | No application code, API YAML, destination, MCP server, registry, or cloud change starts before explicit approval of Checkpoint 5.0. |
+
+- Proposed Milestone 5 sequence: **5.0 design lock** → **5.1 Destination-backed connector contract** → **5.2 MCP server scaffold** → **5.3 first read-only tool generated from the reviewed OpenAPI** → **5.4 controlled LangGraph registry integration** → **5.5 local/BTP end-to-end verification and independent deployment**.
+- Reusable lesson: Before generating an API-derived tool, lock the source contract, version, target system, authentication flow, and allowed operations. A generic API name such as “Sales Order API” is insufficient to produce a safe deployable integration.
+- Next gate: Ask the user to approve **Checkpoint 5.0** and, before 5.1 implementation, provide or identify the exact reviewed OpenAPI YAML/URL and target authentication mode.
+
+### 2026-09-02 — Milestone 5 platform suitability check: Integration Suite versus S/4HANA trial
+
+- User recommendation: Prefer SAP Integration Suite APIs because the capability can be provisioned in the BTP trial account; verify whether an S/4HANA system can be provisioned there before selecting the first integration target.
+- S/4HANA finding: SAP's official [S/4HANA Cloud Public Edition trial](https://www.sap.com/products/erp/s4hana/trial.html) is a separate, shared 30-day tenant with sample data. SAP states that BTP integration is not offered in the basic trial, and the official FAQ says the trial cannot be connected to an API or another application because the required administration apps are unavailable.
+- BTP trial finding: The current `7d472741trial / dev` space exposes the free `it-rt` offering with `integration-flow` and `api` plans. Existing instances are present and healthy: `demo-iflow` (`integration-flow`, create succeeded) and `demo-api` (`api`, update succeeded); neither is bound to an application. Their service keys also exist (`iflowKey` and `apiKey`); only key names were inspected, never credential values. The marketplace also exposes the free `apimanagement-apiportal-trial` `apiportal-apiaccess` plan, but no API Management instance was selected for this checkpoint.
+- Official capability evidence: SAP documents that Cloud Integration APIs require a service instance and service key for inbound authentication, and that the Message Processing Logs OData API supports read-oriented monitoring queries with the `MonitoringDataRead` role. See [Cloud Integration API access](https://help.sap.com/docs/integration-suite/sap-integration-suite/ci?locale=en-US) and [Message Processing Logs](https://help.sap.com/docs/cloud-integration/sap-cloud-integration/message-processing-logs).
+
+| Question | Result | Design consequence |
+| -------- | ------ | ------------------ |
+| Can an S/4HANA system be provisioned as a service inside this BTP trial subaccount? | No. The public-edition basic trial is separate from BTP and does not expose the integration administration needed for a supported API connection. | Do not make S/4HANA the first live dependency; keep an S/4 adapter contract possible for a future customer/partner tenant. |
+| Can Integration Suite be used in this BTP trial? | Yes. The current account already has Cloud Integration runtime/API OAuth-client instances, and the free plans are visible in the marketplace. The Integration Suite tutorial notes that one Integration Suite tenant can be consumed per trial account. | Reuse the existing Integration Suite capability where possible; avoid provisioning a second tenant or duplicating standalone subscriptions. |
+| Which first tool best matches FlowPilot's troubleshooting goal? | Cloud Integration Message Processing Logs is a read-only operational API with bounded filters such as status, flow, correlation ID, and time range. | Revise the default Milestone 5 use case from Sales Order to a CPI/MPL monitoring query. |
+
+- Revised default: **FlowPilot → approved MCP server → BTP Destination → SAP Cloud Integration Message Processing Logs API**. The first tool will be read-only, bounded by time/filter/row limits, and exposed to LangGraph only through a server-side allowlist.
+- Credential boundary: Keep the `demo-api` service-key values out of source code, browser code, chat, and logs. The eventual implementation should place the destination/client credentials in BTP-managed configuration/secret services and let the API call use the existing server-side destination resolution boundary.
+- Verification note: `cf marketplace -s ...` was initially attempted using an unsupported flag; the native `cf marketplace -e it-rt` command was then used successfully. CF also reported the known workstation config-write warning while returning valid read-only data; no cloud mutation was performed.
+- Next gate: Checkpoint 5.0 should now approve the Integration Suite/MPL direction, the exact OpenAPI contract (or an exported API Business Hub definition), the target Cloud Integration tenant/host, and the OAuth role/plan before any connector or MCP code is written.
+
+### 2026-09-02 — BTP CLI not found from Git Bash: diagnosis
+
+- Symptom: Git Bash reports that `btp` is not recognized even though the BTP CLI was previously installed.
+- Read-only evidence: The expected executable path `C:\Users\saura\AppData\Local\Programs\btpcli\btp.exe` exists, but the Windows user-level `Path` contains only the WindowsApps entry and does not contain the `btpcli` directory. The current Codex process has a temporary PATH entry, which explains why repository-side checks can see the directory while an independently launched Git Bash cannot.
+- Root cause: Git Bash inherits the Windows user/system environment when it starts. A process-local PATH entry is not a persistent installation and is not retroactively applied to already-open shells.
+- Corrective options (not executed): Add the exact BTP CLI directory to the Windows user PATH and restart Git Bash, or add `export PATH="/c/Users/saura/AppData/Local/Programs/btpcli:$PATH"` to the Git Bash session/profile. If the shell is actually WSL rather than Git Bash, use the mounted Windows executable explicitly or install the Linux CLI separately.
+- Verification command: In Git Bash, check `echo "$MSYSTEM"`, `command -v btp`, and `btp --version` after restarting or updating PATH. No credentials, repository files, or BTP resources are involved.
+- Reusable lesson: Distinguish an executable's existence, a process-local PATH, the persistent user PATH, and the shell type. Always restart the shell after an installation or verify the current shell's PATH explicitly.
+
+### 2026-09-02 — New BTP trial target metadata complete
+
+- Objective: Capture the replacement trial account target required to reproduce the Milestone 4 deployment after the previous global account is retired.
+- Target metadata received from read-only BTP/CF commands:
+  - Global account display/subdomain: `455cbc42trial` / `455cbc42trial-ga`
+  - Global account ID: `45a83c02-a27b-4f5f-9b19-37f4425d73a9`
+  - Subaccount: `trial` (`c0ca2be5-7f8b-4563-8c23-28a9ce74ab63`), subdomain `455cbc42trial`, region `us10`, state `OK`
+  - Cloud Foundry environment instance: `29BE33A7-C7CB-4342-A394-AA9CDB4F9A3D`, landscape `cf-us10-001`, state `OK`
+  - Cloud Foundry target: `https://api.cf.us10-001.hana.ondemand.com`, organization `455cbc42trial`, space `dev`
+- Completeness: All non-secret values required by `config/environments/btp.local.json` and the Terraform variables are now available. The environment-instance ID came from `btp list accounts/environment-instance`; `cf target` alone does not display it.
+- Explicit non-actions: No local profile was edited, no Terraform initialization/plan/apply ran, no service or subscription was created, no provider secret was entered, and no MTA deployment ran.
+- Next gate: Perform a read-only new-account preflight (entitlements, marketplace plans, Cloud Foundry target, toolchain, and approved `0.1.5` MTAR) only after explicit user approval. Deployment remains a separate approval, followed by manual Credential Store key entry and browser smoke testing.
+
+### 2026-09-02 — New-account Milestone 4 preflight completed
+
+- Objective: Verify that the replacement trial account can receive the current approved FlowPilot deployment before creating any service instance or application.
+- Target result: BTP and Cloud Foundry targets matched the supplied replacement metadata. The Cloud Foundry environment instance is `OK`; `cf apps` and `cf services` both correctly report no applications or service instances yet.
+- Entitlement result: BTP discovery found zero missing FlowPilot prerequisites: Cloud Foundry runtime/memory, XSUAA, Destination, application logs, PostgreSQL, and Credential Store. Integration Suite `it-rt` (`integration-flow` and `api`) plus the trial Integration Suite and API Management access entitlements are also present.
+- Terraform result: With the replacement values supplied through process-local `TF_VAR_...` variables and `USE_BTPCLI_SESSION=true`, the provider read the new subaccount and environment instance successfully. The plan exited `0`, showed `missing_required_entitlements = []`, and proposed no infrastructure resources (only output values).
+- Artifact result: `mta_archives/flowpilot_0.1.5.mtar` is present at `34,200,615` bytes with SHA-256 `2B8BD7D32D60869B0A34B7647030E9CB90623A32F75DF6CDF02B319FDB3ACBC4`.
+
+| Hurdle | Action and result | Decision |
+| ------ | ---------------- | -------- |
+| `btp` and Terraform were not on the current PowerShell PATH, although the installed binaries exist in user-local directories. | Used the verified absolute executable paths for the read-only checks; no global PATH or repository file was changed. | Keep shell/tool discovery as a preflight requirement and use process-local paths when necessary. |
+| The replacement worktree did not have the cached SAP/btp provider, and Terraform Registry discovery was reset by the network. | Reused the previously verified provider cache from the main workspace, then reran Terraform plan-only. | Treat provider cache/network access as a workstation prerequisite; do not weaken provider checks or claim a failed initialization as an account failure. |
+| The new target profile `config/environments/btp.local.json` does not yet exist in this worktree. | Passed all target values through process-local variables for this read-only gate. | Create the ignored local profile only in a separately approved bootstrap-preparation step. |
+
+- Explicit non-actions: No Terraform apply, service creation, Integration Suite subscription, service key read, Credential Store entry, MTA deployment, application start, or database operation was performed.
+- Outcome: The replacement account is ready for the next approved recovery action. Milestone 5 remains paused until Milestone 4 is redeployed and smoke-tested in this account.
+- Next gate: Request approval for **New-Account Recovery Step 1 — prepare the ignored target profile and rerun the repository's read-only bootstrap verification**. Creating/reconciling MTA-owned services and deploying the MTAR will remain a separate cloud-mutation approval; the Groq key entry and post-deployment browser smoke test remain separate human gates.
+
+### 2026-09-02 — New-account Recovery Step 1: profile and bootstrap verification
+
+- Objective: Prepare the ignored replacement-account profile and prove that the repository's read-only bootstrap checks target the new trial correctly.
+- Change made: Added `config/environments/btp.local.json` with the supplied non-secret global-account, subaccount, region, Cloud Foundry environment-instance, organization, and space values. `.gitignore` confirms that the profile is ignored and will not be committed.
+- Verification: `node scripts/btp-bootstrap.mjs --mode verify` exited `0`. It validated the local profile schema, BTP target `455cbc42trial-ga`, Cloud Foundry target `455cbc42trial/dev`, Node `24.12.0`, npm `11.6.2`, Git `2.52.0`, CF CLI `8.18.4`, BTP CLI `2.106.1`, Terraform `1.15.8`, GNU Make `3.81`, MBT wrapper/native versions, MultiApps plugin presence, and Terraform format/provider configuration. No apply, deploy, secret, backup, restore, or external resource mutation ran.
+- Artifact cross-check: The approved `mta_archives/flowpilot_0.1.5.mtar` remains present at `34,200,615` bytes with SHA-256 `2B8BD7D32D60869B0A34B7647030E9CB90623A32F75DF6CDF02B319FDB3ACBC4`.
+
+| Hurdle | Action and result | Decision |
+| ------ | ---------------- | -------- |
+| The bootstrap verifier reports `MTAR: not present` because its artifact check is still hard-coded to the historical `flowpilot_0.1.3.mtar` name. | Independently checked the current approved `flowpilot_0.1.5.mtar`; it is present and matches the recorded hash. No verifier code was changed during this local-only step. | Treat the environment verification as passed, but record the stale artifact check as a small tooling follow-up before relying on the verifier as the release gate for later versions. |
+
+- Outcome: The replacement profile and read-only bootstrap path are ready for the deployment gate. Milestone 5 remains paused; the new account still has no FlowPilot services or applications.
+- Next gate: Request approval for **New-Account Recovery Step 2 — deploy the reviewed `flowpilot_0.1.5.mtar` so the MTA creates/reconciles the Milestone 4 services and bindings**. Credential Store entry and browser/provider smoke testing remain separate human gates.
+
+### 2026-09-02 — New-account Recovery Step 2: Milestone 4 deployment completed
+
+- Objective: Deploy the reviewed `flowpilot_0.1.5.mtar` to the replacement trial account and verify the complete Milestone 4 runtime without handling the Groq secret.
+- Approval boundary: The user explicitly approved this deployment step. No provider key was read, entered, printed, or transmitted by the agent. Milestone 5 remains paused.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | Can the existing authenticated CF session be used without changing the user's global CLI configuration? | The first isolated attempt set `CF_HOME` directly to the temporary `.cf` directory. `cf target` returned `No API endpoint set`; no BTP mutation occurred. | Keep the user-level CF configuration untouched and diagnose the Windows CF_HOME layout. |
+| 2 | What directory layout does CF CLI 8 require on Windows? | Read-only inspection confirmed the existing config has a valid target and access/refresh tokens (values were not printed). A test then placed the copied file at `<temporary-home>\\.cf\\config.json`; `cf target` validated `https://api.cf.us10-001.hana.ondemand.com`, org `455cbc42trial`, space `dev`. | Use a temporary user-home with nested `.cf` for the deployment session. |
+| 3 | Can the MultiApps plugin be staged into that isolated session? | The first deployment staging command stopped locally because PowerShell `Copy-Item -LiteralPath` was given a wildcard (`plugins\\*`). No BTP mutation occurred. The corrected command copied plugin entries explicitly and passed target validation. | Treat this as a local shell error; do not alter the installed/global plugin. |
+| 4 | Did the approved MTAR create the required services and bindings? | Ran the approved `flowpilot_0.1.5.mtar` deployment. `flowpilot-auth`, `flowpilot-credentials`, `flowpilot-destination`, and `flowpilot-logs` created successfully; `flowpilot-postgres` took longer but then completed successfully and bound to `flowpilot-api`. | Accept the MTA-owned service set as reconciled. |
+| 5 | Did the deployment client finish within its local timeout? | The local command exceeded the 10-minute client limit while Cloud Foundry continued provisioning. A subsequent authoritative check reported MTA version `0.1.5`, both applications present, and all service operations successful. | Record the client timeout as a workstation/long-provisioning limitation; use post-timeout CF state, not the client exit alone, as the deployment verdict. |
+| 6 | Are both applications actually healthy after the timeout? | `cf app` and `cf apps` report `flowpilot-api` and `flowpilot-approuter` requested `started`, `web:1/1`, running and ready, each at `256M`. A transient `cf mta` view showed stale `STOPPED` for the API while `cf apps` already showed `1/1`; the direct app view resolved the discrepancy. | Treat both apps as healthy; prefer `cf app`/`cf apps` for process readiness when views race during asynchronous deployment. |
+| 7 | Do the public routes respond as expected? | Read-only HTTP checks: API `/health` returned `200` with `{"status":"ok","service":"flowpilot-api"}`; AppRouter `/` returned `302` to authentication. | Accept route and health smoke checks; authenticated model testing is a separate secret/smoke gate. |
+
+- Deployment artifact: `mta_archives/flowpilot_0.1.5.mtar`, `34,200,615` bytes, SHA-256 `2B8BD7D32D60869B0A34B7647030E9CB90623A32F75DF6CDF02B319FDB3ACBC4`.
+- Deployed routes: `https://455cbc42trial-dev-flowpilot-approuter.cfapps.us10-001.hana.ondemand.com` and the direct API route `https://455cbc42trial-dev-flowpilot-api.cfapps.us10-001.hana.ondemand.com`.
+- Outcome: New-account Milestone 4 deployment is complete and operational. The replacement account now has the two apps, XSUAA, Destination, application logs, PostgreSQL, and Credential Store resources with the expected bindings. The Groq credential is not part of this step and must remain a manual cockpit action.
+- Reusable lessons: On Windows, isolate CF CLI state with `CF_HOME=<temporary-home>` plus `<temporary-home>\\.cf\\config.json`; asynchronous managed-service provisioning can outlive a local deploy timeout; verify final state independently with `cf mta`, `cf apps`, `cf app`, `cf services`, and a bounded HTTP health probe.
+- Next gate: Request approval for **New-account Recovery Step 3 — manually confirm/create the Groq Credential Store entry in the new account and run the authenticated browser model smoke test**. Do not begin Milestone 5 or change code until that gate is approved.
+
+### 2026-09-02 — New-account Recovery Step 3: Credential Store confirmation and browser smoke-test handoff
+
+- Objective: Confirm that the Groq credential was entered into the replacement account's `flowpilot-credentials` service and validate one authenticated chat request without exposing the secret.
+- Manual action: The user confirmed that the Credential Store password credential was entered. The agent did not receive, read, print, or transmit the credential value.
+
+| Sequence | Hurdle or question | Action and result | Decision |
+| -------- | ------------------ | ---------------- | -------- |
+| 1 | Can the authenticated in-app browser be used for the final user-flow test? | Browser initialization was attempted with the bundled browser client. The first path was invalid locally; the corrected plugin path then failed with `Trusted RPC dependency must resolve within a configured trusted code path` for the browser service. | Do not use an untrusted browser workaround, inspect cookies/storage, or bypass authentication. Treat the browser connector as unavailable for this session. |
+| 2 | Is the deployed API still healthy while browser tooling is unavailable? | Read-only `cf app flowpilot-api` reports requested `started`, `1/1`, running and ready. A recent-log filter returned no matching startup, credential, Groq, model, or error lines. | Keep the cloud deployment unchanged; this does not prove an authenticated model response. |
+| 3 | What is the safest fallback for the remaining acceptance test? | The user can open the replacement AppRouter URL and send the existing smoke message directly in the authenticated UI. No secret or token needs to be shared. | Use the user's visible browser result as the acceptance evidence if the connector cannot be restored. |
+
+- Manual smoke test: Open `https://455cbc42trial-dev-flowpilot-approuter.cfapps.us10-001.hana.ondemand.com`, sign in if prompted, open/create a conversation, and send `Reply with exactly OK.`. Confirm whether an assistant response appears; do not share credentials or tokens.
+- Current outcome: Credential entry is confirmed by the user and the runtime is healthy, but Recovery Step 3 remains **pending** until the authenticated chat request is observed or the user reports its result.
+- Reusable lesson: A secret-entry confirmation and a successful service health check are separate from an end-user model smoke test. When browser automation is unavailable, request one bounded UI action from the user instead of bypassing the authentication boundary.
+- Next gate: After the user reports the smoke-test result, record it and close Recovery Step 3. Only then request approval to resume Milestone 5; no codebase or cloud changes begin automatically.
+
+### 2026-09-02 — New-account Recovery Step 3A: authorization diagnosis (no mutation)
+
+- Symptom: The replacement AppRouter serves the frontend, but the page displays `FlowPilot could not start` with “Your session or permission is no longer valid.”
+- Read-only evidence: Recent AppRouter logs show the browser loading `/index.html` and assets successfully, redirecting unauthenticated requests to the replacement XSUAA authorization endpoint, then returning HTTP `403` for repeated authenticated-looking `GET /api/me` requests. The API process remains `1/1` running and ready.
+- Code-path confirmation: `apps/api/src/auth.ts` returns HTTP `403` with `{ error: "forbidden" }` when the validated XSUAA token does not contain the local `ChatUser` scope. The frontend maps both `401` and `403` to the displayed message.
+- Diagnosis: The user is reaching the new XSUAA instance, but the new subaccount has not yet assigned the `FlowPilotUsers` role collection (which grants `ChatUser`) to the user. This is an account authorization gap, not a Groq credential, PostgreSQL, route, or application-startup failure.
+- Explicit non-actions: No role assignment, code edit, redeploy, token inspection, cookie inspection, or secret handling was performed.
+- Required next gate: Ask for approval for **New-account Recovery Step 3A — assign the `FlowPilotUsers` role collection to the user's email in the new BTP subaccount**, then repeat the authenticated browser smoke test. The assignment can be performed in BTP Cockpit under **Security → Role Collections** (select `FlowPilotUsers`, add the user's identity-provider email, save). Do not paste tokens or secrets into chat.
+
+### 2026-09-02 — New-account Recovery Step 3B: role assignment verified, stale-token recovery
+
+- Symptom: The same frontend authorization message persisted after the user reported assigning the role collection.
+- Read-only verification: `btp get security/role-collection FlowPilotUsers --subaccount c0ca2be5-7f8b-4563-8c23-28a9ce74ab63 --show-user-assignments true` shows `saurabhsemwal.info@gmail.com` assigned through identity provider `sap.default`. The role collection and user are therefore present in the replacement subaccount.
+- Runtime evidence: AppRouter logs continue to show successful frontend delivery and HTTP `403` for `/api/me`; `apps/api/src/auth.ts` maps a validated token without the local `ChatUser` scope to that response. This is consistent with an already-issued browser token from before the assignment, not a missing role collection.
+- Safe recovery: In the same browser, open `https://455cbc42trial-dev-flowpilot-approuter.cfapps.us10-001.hana.ondemand.com/do/logout`, complete sign-in again, then reopen `/index.html`. If the old session is still reused, repeat once in a private/incognito window or clear site data only for the new AppRouter and authentication domains. Do not clear unrelated browser data or share tokens.
+- Explicit non-actions: No role assignment was changed by the agent, no code was edited, no redeploy ran, and no browser cookies/tokens were inspected.
+- Next gate: After a fresh login, repeat `Reply with exactly OK.`. If `/api/me` remains `403` after a genuinely new session, investigate identity-provider trust/role mapping as a separate approved authorization diagnostic.
+
+### 2026-09-02 — New-account Recovery Step 3C: logout endpoint clarification
+
+- User result: The suggested `/do/logout` URL returned `Not Found`.
+- Diagnosis: This AppRouter configuration defines only the API and static-resource routes in `apps/approuter/xs-app.json`; it does not define a custom `/do/logout` route. The 404 is expected and is unrelated to XSUAA role assignment.
+- Safe recovery adjustment: Use a browser InPrivate/incognito window for the new AppRouter URL, or clear site data only for the new AppRouter and replacement authentication domains, then sign in again. This forces a new token that can contain the assigned `ChatUser` scope without changing application code.
+- Explicit non-actions: No logout route, frontend control, code, or cloud configuration was changed in response to this 404.
+
+### 2026-09-02 — New-account Recovery Step 3D: fresh-session authorization verified
+
+- User result: The user opened the replacement AppRouter in a private session and confirmed that the startup error cleared.
+- Read-only server evidence: AppRouter logs show the replacement OAuth callback completing with HTTP `302`, followed by `GET /api/me` HTTP `200` and `GET /api/conversations` HTTP `200`. Static assets also return `200`. This confirms that the `FlowPilotUsers` assignment is now present in the newly issued token and that the private conversation path is reachable.
+- Explicit non-actions: No code, role assignment, service, route, credential, or deployment change was performed in this step. Tokens and cookies were not inspected.
+- Outcome: New-account authentication recovery is complete. The replacement Milestone 4 deployment is ready for normal use. The user may optionally send `Reply with exactly OK.` to capture the end-to-end Groq response in the audit; the latest log slice proves authorization and conversation access but does not contain a message POST.
+- Next gate: Return to the planned **Milestone 5 Checkpoint 5.0 design lock**. Approval is required before selecting the Integration Suite/MPL contract or writing connector/MCP/registry code.
 
 ## How to maintain this document
 
