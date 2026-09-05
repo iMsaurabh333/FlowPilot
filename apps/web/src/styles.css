@@ -325,6 +325,162 @@ textarea {
   font-size: var(--sapFontSmallSize);
 }
 
+.admin-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem clamp(1rem, 3vw, 2rem) 1.5rem;
+  border-block-start: var(--sapList_BorderWidth) solid
+    var(--sapList_BorderColor);
+  background: var(--sapGroup_ContentBackground);
+}
+
+.admin-panel-header,
+.admin-server-heading,
+.admin-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-panel-header {
+  align-items: flex-start;
+}
+
+.admin-panel-header h2,
+.admin-panel-header p,
+.admin-server-heading h3 {
+  margin: 0;
+}
+
+.admin-panel-header h2 {
+  font-family: var(--sapFontHeaderFamily);
+  font-size: var(--sapFontHeader3Size);
+}
+
+.admin-panel-header > div > p:last-child {
+  max-width: 48rem;
+  margin-block-start: 0.375rem;
+  color: var(--sapContent_LabelColor);
+  line-height: 1.45;
+}
+
+.admin-error {
+  max-width: 48rem;
+}
+
+.admin-loading,
+.admin-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.admin-server-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-server-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  background: var(--sapBackgroundColor);
+  box-shadow: var(--sapContent_Shadow0);
+}
+
+.admin-server-heading {
+  align-items: flex-start;
+}
+
+.admin-server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.health-pill {
+  display: inline-block;
+  margin-block-start: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--sapNeutralElementColor);
+  color: var(--sapContent_ContrastTextColor);
+  font-size: var(--sapFontSmallSize);
+  text-transform: capitalize;
+}
+
+.health-pill.healthy {
+  background: var(--sapPositiveElementColor);
+}
+
+.health-pill.unhealthy {
+  background: var(--sapNegativeElementColor);
+}
+
+.health-pill.stale {
+  background: var(--sapCriticalElementColor);
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(12rem, 1fr));
+  gap: 0.875rem;
+}
+
+.admin-form-grid label {
+  display: grid;
+  gap: 0.375rem;
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.admin-form-grid input,
+.admin-form-grid select {
+  min-height: 2.25rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--sapField_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  color: var(--sapField_TextColor);
+  background: var(--sapField_Background);
+}
+
+.admin-toggle-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.admin-health-detail {
+  margin-inline-start: auto;
+}
+
+@media (max-width: 900px) {
+  .admin-form-grid {
+    grid-template-columns: repeat(2, minmax(12rem, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-panel-header,
+  .admin-server-heading {
+    flex-direction: column;
+  }
+
+  .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-health-detail {
+    margin-inline-start: 0;
+  }
+}
+
 @media (max-width: 700px) {
   .workspace {
     grid-template-columns: 1fr;

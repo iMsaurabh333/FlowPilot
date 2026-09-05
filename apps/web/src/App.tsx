@@ -6,6 +6,7 @@ import { ListItemStandard } from "@ui5/webcomponents-react/ListItemStandard";
 import { MessageStrip } from "@ui5/webcomponents-react/MessageStrip";
 import { Popover } from "@ui5/webcomponents-react/Popover";
 import { ShellBar } from "@ui5/webcomponents-react/ShellBar";
+import { Switch } from "@ui5/webcomponents-react/Switch";
 import { TextArea } from "@ui5/webcomponents-react/TextArea";
 import {
   useEffect,
@@ -23,6 +24,8 @@ import {
   type ConversationSummary,
   type CurrentUser,
   type FlowPilotApi,
+  type McpServerInput,
+  type McpServerRecord,
 } from "./api";
 import "./styles.css";
 
@@ -32,6 +35,62 @@ type LoadState =
   | { status: "error"; message: string };
 
 type PendingAction = "creating" | "sending" | undefined;
+
+interface AdminDraft {
+  key: string;
+  serverId: string;
+  profileId: McpServerRecord["profileId"];
+  displayName: string;
+  endpointUrl: string;
+  mcpPath: string;
+  externalPort: string;
+  authProfileRef: string;
+  allowedToolNames: string;
+  requiredScopes: string;
+  enabled: boolean;
+  server?: McpServerRecord;
+}
+
+function draftFromServer(server: McpServerRecord): AdminDraft {
+  return {
+    key: server.serverId,
+    serverId: server.serverId,
+    profileId: server.profileId,
+    displayName: server.displayName,
+    endpointUrl: server.endpointUrl,
+    mcpPath: server.mcpPath,
+    externalPort:
+      server.externalPort === null ? "" : String(server.externalPort),
+    authProfileRef: server.authProfileRef,
+    allowedToolNames: server.allowedToolNames.join(", "),
+    requiredScopes: server.requiredScopes.join(", "),
+    enabled: server.enabled,
+    server,
+  };
+}
+
+function newAdminDraft(): AdminDraft {
+  return {
+    key: "__new__",
+    serverId: "",
+    profileId: "cloud-integration-monitoring",
+    displayName: "",
+    endpointUrl: "",
+    mcpPath: "/mcp",
+    externalPort: "",
+    authProfileRef: "destination:FLOWPILOT_CLOUD_INTEGRATION_MPL",
+    allowedToolNames: "search_message_processing_logs",
+    requiredScopes: "McpInvoke",
+    enabled: false,
+  };
+}
+
+function commaSeparated(value: string) {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
 
 function userInitials(user: CurrentUser) {
   const name = user.displayName?.trim() || user.subject;
@@ -73,6 +132,10 @@ function visibleError(error: unknown) {
       return "This conversation is no longer available. Refresh the conversation list.";
     case "invalid_request":
       return "The request was not accepted. Check the message and try again.";
+    case "server_unhealthy":
+      return "The MCP server must pass an authenticated Ping before it can be enabled.";
+    case "registry_unavailable":
+      return "The MCP registry is temporarily unavailable. Try again shortly.";
     default:
       return error.status === 401 || error.status === 403
         ? "Your session or permission is no longer valid. Refresh the page and sign in again."
@@ -96,6 +159,12 @@ export function App({ client = flowPilotApi }: AppProps) {
   const [draft, setDraft] = useState("");
   const [requestError, setRequestError] = useState<string>();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [adminDrafts, setAdminDrafts] = useState<Record<string, AdminDraft>>(
+    {},
+  );
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminPending, setAdminPending] = useState<string>();
+  const [adminError, setAdminError] = useState<string>();
   const detailRequest = useRef(0);
   const profileRef = useRef<AvatarDomRef>(null);
 
@@ -113,6 +182,26 @@ export function App({ client = flowPilotApi }: AppProps) {
 
         setUser(currentUser);
         setConversations(available);
+        if (currentUser.scopes.includes("ChatAdmin") && client.listMcpServers) {
+          setAdminLoading(true);
+          try {
+            const servers = await client.listMcpServers();
+            if (!cancelled) {
+              setAdminDrafts(
+                Object.fromEntries(
+                  servers.map((server) => [
+                    server.serverId,
+                    draftFromServer(server),
+                  ]),
+                ),
+              );
+            }
+          } catch (error) {
+            if (!cancelled) setAdminError(visibleError(error));
+          } finally {
+            if (!cancelled) setAdminLoading(false);
+          }
+        }
         if (available[0]) {
           setDetailLoading(true);
           const detail = await client.loadConversation(available[0].id);
@@ -232,6 +321,72 @@ export function App({ client = flowPilotApi }: AppProps) {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       void sendMessage();
+    }
+  };
+
+  const updateAdminDraft = (key: string, patch: Partial<AdminDraft>) => {
+    setAdminDrafts((current) => ({
+      ...current,
+      [key]: { ...current[key], ...patch },
+    }));
+  };
+
+  const addAdminServer = () => {
+    setAdminError(undefined);
+    setAdminDrafts((current) => ({ ...current, __new__: newAdminDraft() }));
+  };
+
+  const saveAdminServer = async (draft: AdminDraft) => {
+    if (!client.upsertMcpServer || !draft.serverId.trim()) return;
+    const pending = `${draft.key}:save`;
+    setAdminPending(pending);
+    setAdminError(undefined);
+    const input: McpServerInput = {
+      profileId: draft.profileId,
+      displayName: draft.displayName,
+      endpointUrl: draft.endpointUrl,
+      mcpPath: draft.mcpPath,
+      externalPort: draft.externalPort.trim()
+        ? Number(draft.externalPort)
+        : null,
+      authProfileRef: draft.authProfileRef,
+      allowedToolNames: commaSeparated(draft.allowedToolNames),
+      requiredScopes: commaSeparated(draft.requiredScopes),
+      enabled: draft.enabled,
+    };
+    try {
+      const saved = await client.upsertMcpServer(draft.serverId.trim(), input);
+      setAdminDrafts((current) => {
+        const next = { ...current };
+        delete next[draft.key];
+        next[saved.serverId] = draftFromServer(saved);
+        return next;
+      });
+    } catch (error) {
+      setAdminError(visibleError(error));
+      if (error instanceof ApiError && error.code === "server_unhealthy") {
+        updateAdminDraft(draft.key, { enabled: false });
+      }
+    } finally {
+      setAdminPending(undefined);
+    }
+  };
+
+  const pingAdminServer = async (draft: AdminDraft) => {
+    if (!client.pingMcpServer || !draft.server) return;
+    const pending = `${draft.key}:ping`;
+    setAdminPending(pending);
+    setAdminError(undefined);
+    try {
+      const checked = await client.pingMcpServer(draft.server.serverId);
+      setAdminDrafts((current) => ({
+        ...current,
+        [draft.key]: draftFromServer(checked),
+      }));
+    } catch (error) {
+      setAdminError(visibleError(error));
+    } finally {
+      setAdminPending(undefined);
     }
   };
 
@@ -450,6 +605,230 @@ export function App({ client = flowPilotApi }: AppProps) {
           </form>
         </main>
       </div>
+
+      {user?.scopes.includes("ChatAdmin") && client.listMcpServers && (
+        <section className="admin-panel" aria-labelledby="mcp-admin-title">
+          <header className="admin-panel-header">
+            <div>
+              <p className="section-label">Administrator controls</p>
+              <h2 id="mcp-admin-title">MCP server registry</h2>
+              <p>
+                Configure approved server routes, optional external ports, and
+                activation state. FlowPilot performs Ping on the server side.
+              </p>
+            </div>
+            <Button
+              design="Emphasized"
+              disabled={Boolean(adminPending) || Boolean(adminDrafts.__new__)}
+              onClick={addAdminServer}
+            >
+              Register server
+            </Button>
+          </header>
+
+          {adminError && (
+            <MessageStrip
+              className="admin-error"
+              design="Negative"
+              onClose={() => setAdminError(undefined)}
+            >
+              {adminError}
+            </MessageStrip>
+          )}
+
+          {adminLoading ? (
+            <div className="admin-loading" role="status">
+              <BusyIndicator active size="S" delay={0} />
+              <span>Loading registry…</span>
+            </div>
+          ) : Object.keys(adminDrafts).length === 0 ? (
+            <p className="admin-empty">No MCP servers are registered.</p>
+          ) : (
+            <div className="admin-server-list">
+              {Object.values(adminDrafts).map((draft) => {
+                const saving = adminPending === `${draft.key}:save`;
+                const pinging = adminPending === `${draft.key}:ping`;
+                return (
+                  <article className="admin-server-card" key={draft.key}>
+                    <div className="admin-server-heading">
+                      <div>
+                        <h3>{draft.displayName || "New MCP server"}</h3>
+                        {draft.server && (
+                          <span
+                            className={`health-pill ${draft.server.healthState}`}
+                          >
+                            {draft.server.healthState.replaceAll("_", " ")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="admin-server-actions">
+                        <Button
+                          disabled={Boolean(adminPending) || !draft.server}
+                          loading={pinging}
+                          onClick={() => void pingAdminServer(draft)}
+                        >
+                          Ping
+                        </Button>
+                        <Button
+                          design="Emphasized"
+                          disabled={
+                            Boolean(adminPending) || !draft.serverId.trim()
+                          }
+                          loading={saving}
+                          onClick={() => void saveAdminServer(draft)}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="admin-form-grid">
+                      <label>
+                        Server ID
+                        <input
+                          value={draft.serverId}
+                          disabled={Boolean(draft.server)}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              serverId: event.target.value,
+                            })
+                          }
+                          placeholder="cloud-integration-monitoring"
+                        />
+                      </label>
+                      <label>
+                        Profile
+                        <select
+                          value={draft.profileId}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              profileId: event.target
+                                .value as AdminDraft["profileId"],
+                            })
+                          }
+                        >
+                          <option value="cloud-integration-monitoring">
+                            Cloud Integration monitoring
+                          </option>
+                          <option value="cloud-integration-content">
+                            Cloud Integration content
+                          </option>
+                          <option value="event-mesh">Event Mesh</option>
+                        </select>
+                      </label>
+                      <label>
+                        Display name
+                        <input
+                          value={draft.displayName}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              displayName: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        HTTPS endpoint
+                        <input
+                          value={draft.endpointUrl}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              endpointUrl: event.target.value,
+                            })
+                          }
+                          placeholder="https://approved-host.example"
+                        />
+                      </label>
+                      <label>
+                        MCP path
+                        <input
+                          value={draft.mcpPath}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              mcpPath: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        External port (optional)
+                        <input
+                          inputMode="numeric"
+                          value={draft.externalPort}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              externalPort: event.target.value,
+                            })
+                          }
+                          placeholder="Platform route"
+                        />
+                      </label>
+                      <label>
+                        Authentication profile
+                        <input
+                          value={draft.authProfileRef}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              authProfileRef: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Allowed tools (comma-separated)
+                        <input
+                          value={draft.allowedToolNames}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              allowedToolNames: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Required scopes (comma-separated)
+                        <input
+                          value={draft.requiredScopes}
+                          onChange={(event) =>
+                            updateAdminDraft(draft.key, {
+                              requiredScopes: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="admin-toggle-row">
+                      <Switch
+                        checked={draft.enabled}
+                        accessibleName={`Enable ${draft.displayName || "MCP server"}`}
+                        textOn="On"
+                        textOff="Off"
+                        onChange={(event) =>
+                          updateAdminDraft(draft.key, {
+                            enabled: event.target.checked,
+                          })
+                        }
+                      />
+                      <span>
+                        {draft.enabled
+                          ? "Enabled after a successful Ping"
+                          : "Disabled; its tools are excluded"}
+                      </span>
+                      {draft.server?.lastCheckedAt && (
+                        <span className="admin-health-detail">
+                          Last checked {formatDate(draft.server.lastCheckedAt)}
+                          {draft.server.latencyMs === null
+                            ? ""
+                            : ` · ${draft.server.latencyMs} ms`}
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       <Popover
         open={profileOpen}

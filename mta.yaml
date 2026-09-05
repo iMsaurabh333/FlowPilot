@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.5
+version: 0.1.6
 description: Secure operational assistant for SAP BTP
 
 parameters:

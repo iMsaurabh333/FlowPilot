@@ -12,6 +12,11 @@ import {
 } from "./credentials/credential-store.js";
 import { runMigrations } from "./db/migrations.js";
 import { createPostgresPool, resolveDatabaseConfig } from "./db/postgres.js";
+import { createConfiguredMcpServerProbe } from "./mcp/probe.js";
+import {
+  McpRegistryService,
+  PostgresMcpRegistryRepository,
+} from "./mcp/registry.js";
 
 export async function createRuntime(
   environment: NodeJS.ProcessEnv = process.env,
@@ -45,9 +50,13 @@ export async function createRuntime(
     });
     const repository = new PostgresConversationRepository(pool);
     const conversations = new ConversationService(repository, agent);
+    const registry = new McpRegistryService(
+      new PostgresMcpRegistryRepository(pool),
+      createConfiguredMcpServerProbe(environment),
+    );
 
     return {
-      app: createApp({ conversations }),
+      app: createApp({ conversations, registry }),
       async close() {
         await pool.end();
       },

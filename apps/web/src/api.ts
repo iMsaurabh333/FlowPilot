@@ -5,6 +5,43 @@ export interface CurrentUser {
   scopes: string[];
 }
 
+export type McpHealthState =
+  "never_checked" | "healthy" | "unhealthy" | "stale";
+
+export interface McpServerRecord {
+  serverId: string;
+  profileId:
+    "cloud-integration-monitoring" | "cloud-integration-content" | "event-mesh";
+  displayName: string;
+  endpointUrl: string;
+  mcpPath: string;
+  externalPort: number | null;
+  authProfileRef: string;
+  allowedToolNames: string[];
+  requiredScopes: string[];
+  enabled: boolean;
+  healthState: McpHealthState;
+  lastCheckedAt: string | null;
+  latencyMs: number | null;
+  protocolVersion: "2026-07-28" | "2025-11-25" | null;
+  discoveredToolCount: number | null;
+  lastErrorCategory: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface McpServerInput {
+  profileId?: McpServerRecord["profileId"];
+  displayName?: string;
+  endpointUrl?: string;
+  mcpPath?: string;
+  externalPort?: number | null;
+  authProfileRef?: string;
+  allowedToolNames?: string[];
+  requiredScopes?: string[];
+  enabled?: boolean;
+}
+
 export interface ConversationSummary {
   id: string;
   title: string;
@@ -31,6 +68,12 @@ export interface FlowPilotApi {
     conversationId: string,
     content: string,
   ): Promise<ConversationDetail>;
+  listMcpServers?(): Promise<McpServerRecord[]>;
+  upsertMcpServer?(
+    serverId: string,
+    input: McpServerInput,
+  ): Promise<McpServerRecord>;
+  pingMcpServer?(serverId: string): Promise<McpServerRecord>;
 }
 
 export class ApiError extends Error {
@@ -175,6 +218,28 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content }),
         },
+      );
+    },
+    async listMcpServers() {
+      const payload = await request<{ servers: McpServerRecord[] }>(
+        "/api/admin/mcp-servers",
+      );
+      return payload.servers;
+    },
+    upsertMcpServer(serverId, input) {
+      return request<McpServerRecord>(
+        `/api/admin/mcp-servers/${encodeURIComponent(serverId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
+    },
+    pingMcpServer(serverId) {
+      return request<McpServerRecord>(
+        `/api/admin/mcp-servers/${encodeURIComponent(serverId)}/ping`,
+        { method: "POST" },
       );
     },
   };

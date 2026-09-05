@@ -54,6 +54,52 @@ function migrations(schemaName: string) {
           );
       `,
     },
+    {
+      version: 2,
+      sql: `
+        CREATE TABLE ${schema}.mcp_servers (
+          server_id text PRIMARY KEY,
+          profile_id text NOT NULL,
+          display_name text NOT NULL,
+          endpoint_url text NOT NULL,
+          mcp_path text NOT NULL,
+          external_port integer,
+          auth_profile_ref text NOT NULL,
+          allowed_tool_names text[] NOT NULL,
+          required_scopes text[] NOT NULL,
+          enabled boolean NOT NULL DEFAULT false,
+          health_state text NOT NULL DEFAULT 'never_checked',
+          last_checked_at timestamptz,
+          latency_ms integer,
+          protocol_version text,
+          discovered_tool_count integer,
+          last_error_category text,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT mcp_servers_id_length CHECK (char_length(server_id) BETWEEN 1 AND 63),
+          CONSTRAINT mcp_servers_name_length CHECK (char_length(display_name) BETWEEN 1 AND 120),
+          CONSTRAINT mcp_servers_port_range CHECK (external_port IS NULL OR external_port BETWEEN 1 AND 65535),
+          CONSTRAINT mcp_servers_health_state CHECK (health_state IN ('never_checked', 'healthy', 'unhealthy', 'stale')),
+          CONSTRAINT mcp_servers_latency_range CHECK (latency_ms IS NULL OR latency_ms >= 0),
+          CONSTRAINT mcp_servers_tool_count_range CHECK (discovered_tool_count IS NULL OR discovered_tool_count >= 0)
+        );
+
+        CREATE INDEX mcp_servers_enabled_health_idx
+          ON ${schema}.mcp_servers (enabled, health_state, updated_at DESC);
+
+        CREATE UNIQUE INDEX mcp_servers_external_port_unique_idx
+          ON ${schema}.mcp_servers (external_port)
+          WHERE external_port IS NOT NULL;
+
+        ALTER TABLE ${schema}.mcp_servers ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.mcp_servers FORCE ROW LEVEL SECURITY;
+
+        CREATE POLICY mcp_servers_admin_policy
+          ON ${schema}.mcp_servers
+          USING (current_setting('flowpilot.is_admin', true) = 'true')
+          WITH CHECK (current_setting('flowpilot.is_admin', true) = 'true');
+      `,
+    },
   ] as const;
 }
 

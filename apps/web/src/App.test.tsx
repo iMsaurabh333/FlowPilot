@@ -13,6 +13,13 @@ const user = {
   scopes: ["ChatUser"],
 };
 
+const adminUser = {
+  subject: "admin-123",
+  tenantId: "tenant-456",
+  displayName: "FlowPilot Admin",
+  scopes: ["ChatUser", "ChatAdmin"],
+};
+
 const summary = {
   id: "11111111-1111-4111-8111-111111111111",
   title: "Check sales order",
@@ -156,5 +163,63 @@ describe("FlowPilot chat interface", () => {
       ({ impact }) => impact === "serious" || impact === "critical",
     );
     expect(seriousViolations).toEqual([]);
+  });
+
+  it("shows admin registry controls and invokes Ping and Save", async () => {
+    const server = {
+      serverId: "cloud-integration",
+      profileId: "cloud-integration-monitoring" as const,
+      displayName: "Cloud Integration monitoring",
+      endpointUrl: "https://mcp.example.test",
+      mcpPath: "/mcp",
+      externalPort: null,
+      authProfileRef: "destination:FLOWPILOT_CLOUD_INTEGRATION_MPL",
+      allowedToolNames: ["search_message_processing_logs"],
+      requiredScopes: ["McpInvoke"],
+      enabled: false,
+      healthState: "healthy" as const,
+      lastCheckedAt: "2026-09-05T12:00:00.000Z",
+      latencyMs: 12,
+      protocolVersion: "2026-07-28" as const,
+      discoveredToolCount: 1,
+      lastErrorCategory: null,
+      createdAt: "2026-09-05T11:00:00.000Z",
+      updatedAt: "2026-09-05T12:00:00.000Z",
+    };
+    const pingMcpServer = vi.fn().mockResolvedValue(server);
+    const upsertMcpServer = vi.fn().mockResolvedValue(server);
+    const client = api({
+      loadCurrentUser: vi.fn().mockResolvedValue(adminUser),
+      listMcpServers: vi.fn().mockResolvedValue([server]),
+      pingMcpServer,
+      upsertMcpServer,
+    });
+
+    renderApp(client);
+
+    expect(
+      await screen.findByRole("heading", { name: "MCP server registry" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("healthy")).toBeInTheDocument();
+    expect(screen.getByText("Ping")).toBeInTheDocument();
+    expect(screen.getByText("Save")).toBeInTheDocument();
+    expect(
+      document.querySelector(
+        'ui5-switch[accessible-name="Enable Cloud Integration monitoring"]',
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Ping"));
+    await waitFor(() =>
+      expect(pingMcpServer).toHaveBeenCalledWith(server.serverId),
+    );
+
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() =>
+      expect(upsertMcpServer).toHaveBeenCalledWith(
+        server.serverId,
+        expect.objectContaining({ enabled: false }),
+      ),
+    );
   });
 });

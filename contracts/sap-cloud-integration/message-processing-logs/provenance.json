@@ -1,0 +1,47 @@
+{
+  "artifact": "MessageProcessingLogs.edmx",
+  "publisher": "SAP SE",
+  "product": "SAP Cloud Integration",
+  "api": "Message Processing Logs",
+  "sourceUrl": "https://api.sap.com/api/MessageProcessingLogs/overview",
+  "acquisitionMethod": "Downloaded by the user from the authenticated SAP Business Accelerator Hub API Specification page and supplied to this task.",
+  "receivedAtUtc": "2026-09-02T04:51:34.625Z",
+  "contentLengthBytes": 26915,
+  "sha256": "de7715ec5238bc4817b31237f5f6f639f113d6a87371d554ac15088359cbf67e",
+  "metadata": {
+    "edmxVersion": "1.0",
+    "dataServiceVersion": "2.0",
+    "namespace": "com.sap.hci.api",
+    "entityTypeCount": 23,
+    "entitySetCount": 23,
+    "functionImportCount": 3,
+    "allowedEntitySet": "MessageProcessingLogs",
+    "allowedEntityType": "MessageProcessingLog",
+    "key": "MessageGuid"
+  },
+  "review": {
+    "allowedBusinessMethod": "GET",
+    "allowedResourcePath": "/MessageProcessingLogs",
+    "excludedFunctionImports": [
+      "activateArchivingConfiguration",
+      "activateExternalLogging",
+      "deactivateExternalLogging"
+    ],
+    "excludedCapabilities": [
+      "all other entity sets",
+      "navigation-property traversal",
+      "stream and payload retrieval",
+      "attachments",
+      "trace messages",
+      "custom header properties",
+      "message store entries",
+      "error information",
+      "adapter attributes",
+      "write operations"
+    ]
+  },
+  "notes": [
+    "The artifact does not embed an SAP API release number; the immutable SHA-256 is the local version pin.",
+    "The hash proves local byte identity, not publisher authenticity. Source attribution is based on the user's authenticated download handoff."
+  ]
+}
