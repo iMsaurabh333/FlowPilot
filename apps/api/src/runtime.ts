@@ -40,8 +40,20 @@ export async function createRuntime(
     );
     const agent = createChatAgent({
       checkpointer,
-      maxContextMessages: 12,
+      maxContextTokens: modelConfig.maxContextTokens,
+      maxSummaryTokens: modelConfig.maxSummaryTokens,
       model,
+      provider: modelConfig.provider,
+      modelName: modelConfig.model,
+      onModelRun: (event) => {
+        console.log(
+          JSON.stringify({
+            level: "info",
+            message: "FlowPilot model run",
+            ...event,
+          }),
+        );
+      },
     });
     const repository = new PostgresConversationRepository(pool);
     const conversations = new ConversationService(repository, agent);

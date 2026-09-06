@@ -13,8 +13,21 @@ describe("model adapter configuration", () => {
       model: "llama-3.3-70b-versatile",
       temperature: 0,
       maxOutputTokens: 1024,
+      maxContextTokens: 6_000,
+      maxSummaryTokens: 512,
       timeoutMs: 30_000,
       maxRetries: 2,
+      reasoningEffort: "medium",
+      verbosity: "low",
+    });
+  });
+
+  it("uses GPT-5.6 Terra as the OpenAI default", () => {
+    expect(loadModelConfig({ MODEL_PROVIDER: "openai" })).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-terra",
+      reasoningEffort: "medium",
+      verbosity: "low",
     });
   });
 
@@ -40,5 +53,21 @@ describe("model adapter configuration", () => {
   it("fails closed when the selected provider credential is missing", () => {
     const config = loadModelConfig({});
     expect(() => createChatModel(config, {})).toThrow(ModelConfigurationError);
+  });
+
+  it("configures reasoning models without temperature", () => {
+    const chatModel = createChatModel(
+      loadModelConfig({
+        MODEL_PROVIDER: "openai",
+        MODEL_NAME: "gpt-5.6-terra",
+      }),
+      { openai: "test-only-placeholder" },
+    ) as unknown as {
+      reasoning?: { effort?: string };
+      temperature?: number;
+    };
+
+    expect(chatModel.reasoning).toEqual({ effort: "medium" });
+    expect(chatModel.temperature).toBeUndefined();
   });
 });

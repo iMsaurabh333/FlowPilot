@@ -13,6 +13,10 @@ MODEL_PROVIDER=groq                 SAP Credential Store
 MODEL_NAME=llama-3.3-70b-versatile  namespace: flowpilot
 MODEL_TIMEOUT_MS=30000              credential: groq-api-key
 MODEL_MAX_RETRIES=2
+MODEL_MAX_CONTEXT_TOKENS=6000
+MODEL_MAX_SUMMARY_TOKENS=512
+MODEL_REASONING_EFFORT=medium
+MODEL_VERBOSITY=low
 ```
 
 ## Security model
@@ -83,6 +87,10 @@ properties:
   MODEL_NAME: llama-3.3-70b-versatile
   MODEL_TEMPERATURE: "0"
   MODEL_MAX_OUTPUT_TOKENS: "1024"
+  MODEL_MAX_CONTEXT_TOKENS: "6000"
+  MODEL_MAX_SUMMARY_TOKENS: "512"
+  MODEL_REASONING_EFFORT: medium
+  MODEL_VERBOSITY: low
   MODEL_TIMEOUT_MS: "30000"
   MODEL_MAX_RETRIES: "2"
 ```
@@ -185,8 +193,11 @@ The current BTP marketplace also exposes a Redis trial service, which is a candi
 - Set conservative Groq project limits.
 - Configure spend limits and alerts where the account plan supports them.
 - Record model ID, latency, input/output token counts, outcome, and opaque request ID.
+- Use the configured context budget and compact older turns into a bounded extractive summary while retaining the full conversation history in PostgreSQL checkpoints.
 - Do not record prompt or response bodies by default.
 - Reject unbounded context and output requests before calling the provider.
+
+For OpenAI, the default model when `MODEL_PROVIDER=openai` is `gpt-5.6-terra`. Set `MODEL_REASONING_EFFORT` and `MODEL_VERBOSITY` deliberately for the selected model. The adapter omits temperature for recognized OpenAI reasoning models because those models may reject that parameter.
 
 See [Groq spend limits](https://console.groq.com/docs/spend-limits) and [Groq security onboarding](https://console.groq.com/docs/production-readiness/security-onboarding).
 

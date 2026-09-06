@@ -68,10 +68,15 @@ Rules:
 - Default model: `llama-3.3-70b-versatile`.
 - Temperature: `0` for predictable troubleshooting responses.
 - Maximum output: `1024` tokens.
+- Maximum model context: `6000` estimated tokens.
+- Maximum stored context summary: `512` estimated tokens.
+- Reasoning effort: `medium` when the selected provider supports it.
+- Output verbosity: `low` when the selected provider supports it.
 - Provider timeout: `30` seconds.
 - Provider retries: at most `2`, only for retryable failures.
 - Conversation input: bounded by server-side payload and character limits.
-- Model context: system instructions plus the most recent messages that fit the configured budget.
+- Model context: stable system instructions, a bounded summary of older turns, and the most recent messages that fit the configured token budget.
+- Model telemetry: model ID, request ID, duration, token counts, cache-read tokens, reasoning tokens, and outcome; never prompt or response bodies.
 - No tools, API calls, MCP servers, prompt uploads, or user-selectable system prompts in this milestone.
 
 ## Delivery checkpoints

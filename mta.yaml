@@ -26,9 +26,19 @@ modules:
       NODE_ENV: production
       AUTH_MODE: xsuaa
       MODEL_PROVIDER: groq
+<<<<<<< HEAD
       MODEL_NAME: openai/gpt-oss-120b
       MODEL_TEMPERATURE: "0"
       MODEL_MAX_OUTPUT_TOKENS: "1024"
+=======
+      MODEL_NAME: llama-3.3-70b-versatile
+      MODEL_TEMPERATURE: "0"
+      MODEL_MAX_OUTPUT_TOKENS: "1024"
+      MODEL_MAX_CONTEXT_TOKENS: "6000"
+      MODEL_MAX_SUMMARY_TOKENS: "512"
+      MODEL_REASONING_EFFORT: medium
+      MODEL_VERBOSITY: low
+>>>>>>> cc1cab9 (Configure token-bounded chat context and model telemetry)
       MODEL_TIMEOUT_MS: "30000"
       MODEL_MAX_RETRIES: "2"
     provides:

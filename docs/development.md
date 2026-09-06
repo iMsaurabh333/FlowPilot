@@ -2,7 +2,7 @@
 
 ## Session start
 
-1. Read `DevFlow.md` and the current progress tracker.
+1. Read `AGENTS.md` and the relevant current milestone or architecture docs. Read `DevFlow.md` only when the task updates the AI-assisted development process, milestone history, or asks for that document.
 2. Run `git status --short` and preserve unrelated changes.
 3. Confirm the task objective, scope, acceptance criteria, and verification.
 4. Inspect the relevant source and ADRs before editing.

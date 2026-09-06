@@ -2,7 +2,7 @@
 
 FlowPilot is a standalone SAP BTP Cloud Foundry application for authenticated, natural-language troubleshooting and transaction monitoring. It will connect to SAP and third-party APIs directly and through standard Model Context Protocol (MCP) servers.
 
-The project is also a reference implementation of a repeatable, platform-neutral AI-assisted development process. See [DevFlow.md](./DevFlow.md).
+The project is also a reference implementation of a repeatable, platform-neutral AI-assisted development process. Routine Codex guidance is in [AGENTS.md](./AGENTS.md); optional concise request templates are in [docs/codex-task-briefs.md](./docs/codex-task-briefs.md). The detailed process history is in [DevFlow.md](./DevFlow.md) and is consulted only for process or history updates.
 
 ## Current milestone
 
