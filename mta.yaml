@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.6
+version: 0.1.7
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -92,6 +92,36 @@ modules:
             - "*"
           target-path: resources
 
+  - name: flowpilot-mcp-cloud-integration
+    type: nodejs
+    path: servers/flowpilot-mcp-cloud-integration
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    provides:
+      - name: flowpilot-mcp-binding
+        properties:
+          mcp-url: ${default-url}
+    requires:
+      - name: flowpilot-mcp-auth
+      - name: flowpilot-destination
+      - name: flowpilot-logs
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
 resources:
   - name: flowpilot-auth
     type: org.cloudfoundry.managed-service
@@ -129,3 +159,10 @@ resources:
     parameters:
       service: credstore
       service-plan: trial
+
+  - name: flowpilot-mcp-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security-mcp.json

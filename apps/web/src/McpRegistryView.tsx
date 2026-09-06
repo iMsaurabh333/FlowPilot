@@ -351,7 +351,7 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
               <div>
                 <p id="policy-title">Generic secure MCP</p>
                 <span>
-                  HTTPS or local loopback · /mcp · Destination credentials ·
+                  HTTPS or local loopback · /mcp · managed authentication ·
                   McpInvoke scope
                 </span>
               </div>
@@ -407,7 +407,7 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                 <span>The preset adds the fixed /mcp protocol path.</span>
               </label>
               <label>
-                Destination credential reference
+                Authentication profile
                 <input
                   value={selectedDraft.authProfileRef}
                   disabled={Boolean(pending)}
@@ -416,11 +416,14 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                       authProfileRef: event.target.value,
                     })
                   }
-                  placeholder="destination:FLOWPILOT_MCP_SERVER"
-                  pattern="destination:[A-Za-z0-9_.-]{1,100}"
+                  placeholder="technical:flowpilot-mcp"
+                  pattern="(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp)"
                   required
                 />
-                <span>No secret is stored in the registry.</span>
+                <span>
+                  Use the approved technical profile for FlowPilot MCP; no
+                  secret is stored in the registry.
+                </span>
               </label>
               <label>
                 External port <span className="optional">Optional</span>

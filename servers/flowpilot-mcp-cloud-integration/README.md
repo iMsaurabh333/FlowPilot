@@ -59,5 +59,19 @@ Default listener: `127.0.0.1:4100`. A public listener requires:
 `MCP_AUTHORIZATION_SERVER_URL` can override the authorization-server URL advertised
 in metadata. XSUAA mode otherwise derives it from the validated service binding.
 
-Production remains incomplete until a later approved task adds the dedicated XSUAA
-scope/grant, service binding, public route metadata, and deployment configuration.
+## Production deployment
+
+The FlowPilot MTA deploys this package as `flowpilot-mcp-cloud-integration` with
+its own public HTTPS route and sets `MCP_PUBLIC_URL`, `MCP_ALLOWED_HOSTS`, and
+`MCP_ALLOWED_ORIGINS` from that route. The module binds to the dedicated
+`flowpilot-mcp-auth` XSUAA instance. Its `McpInvoke` scope is granted only to
+technical clients; it is intentionally absent from all user role collections.
+
+The MCP XSUAA descriptor grants `McpInvoke` only to FlowPilot's existing API
+XSUAA application, which explicitly accepts that authority. The API obtains a
+short-lived client-credentials token only for the fixed
+`technical:flowpilot-mcp` registry profile. It reads its own bound XSUAA client
+at runtime, so the client secret is never stored in a registry row, application
+property, service key, or source file. Before a cloud deployment, obtain
+approval for the MTA mutation. After deployment, register the public MCP route
+with that technical profile and perform an authenticated registry Ping.

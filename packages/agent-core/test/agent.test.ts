@@ -1,4 +1,6 @@
 import { FakeListChatModel } from "@langchain/core/utils/testing";
+import { fakeModel } from "@langchain/core/testing";
+import { AIMessage } from "@langchain/core/messages";
 import { MemorySaver } from "@langchain/langgraph";
 import { describe, expect, it } from "vitest";
 
@@ -39,5 +41,41 @@ describe("FlowPilot chat graph", () => {
         content: "Other thread answer",
       }),
     ]);
+  });
+
+  it("runs only the per-request registered namespaced tools", async () => {
+    const invoked: Record<string, unknown>[] = [];
+    const model = fakeModel()
+      .respondWithTools([
+        { name: "monitoring__search_logs", args: { query: "failed" } },
+      ])
+      .respond(
+        new AIMessage("The approved monitoring tool found no failures."),
+      );
+    const agent = createChatAgent({ checkpointer: new MemorySaver(), model });
+
+    const messages = await agent.sendMessage("operator-thread", "Check logs", [
+      {
+        name: "monitoring__search_logs",
+        description: "Search approved monitoring logs.",
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+        async invoke(input) {
+          invoked.push(input);
+          return "No failures";
+        },
+      },
+    ]);
+
+    expect(invoked).toEqual([{ query: "failed" }]);
+    expect(messages.at(-1)).toEqual(
+      expect.objectContaining({
+        role: "assistant",
+        content: "The approved monitoring tool found no failures.",
+      }),
+    );
   });
 });

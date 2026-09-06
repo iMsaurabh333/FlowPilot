@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatAgent, ChatMessage } from "@flowpilot/agent-core";
+import type { ChatAgent, ChatMessage, ChatTool } from "@flowpilot/agent-core";
 
 import type { AuthenticatedUser } from "../types.js";
 import type { ConversationRecord, ConversationRepository } from "./types.js";
@@ -54,10 +54,17 @@ function conversationTitle(content: string) {
 export class ConversationService {
   readonly #repository: ConversationRepository;
   readonly #agent: ChatAgent;
+  readonly #tools:
+    { resolve(user: AuthenticatedUser): Promise<ChatTool[]> } | undefined;
 
-  constructor(repository: ConversationRepository, agent: ChatAgent) {
+  constructor(
+    repository: ConversationRepository,
+    agent: ChatAgent,
+    tools?: { resolve(user: AuthenticatedUser): Promise<ChatTool[]> },
+  ) {
     this.#repository = repository;
     this.#agent = agent;
+    this.#tools = tools;
   }
 
   async create(user: AuthenticatedUser) {
@@ -102,6 +109,7 @@ export class ConversationService {
       messages = await this.#agent.sendMessage(
         acquisition.conversation.threadId,
         content,
+        await this.#tools?.resolve(user),
       );
     } catch (error) {
       try {

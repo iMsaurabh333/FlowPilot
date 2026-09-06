@@ -13,7 +13,9 @@ import {
   START,
   StateGraph,
 } from "@langchain/langgraph";
+import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import type { BaseCheckpointSaver } from "@langchain/langgraph-checkpoint";
+import { tool } from "@langchain/core/tools";
 
 export type ChatMessageRole = "user" | "assistant";
 
@@ -25,7 +27,18 @@ export interface ChatMessage {
 
 export interface ChatAgent {
   getMessages(threadId: string): Promise<ChatMessage[]>;
-  sendMessage(threadId: string, content: string): Promise<ChatMessage[]>;
+  sendMessage(
+    threadId: string,
+    content: string,
+    tools?: ChatTool[],
+  ): Promise<ChatMessage[]>;
+}
+
+export interface ChatTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  invoke(input: Record<string, unknown>): Promise<string>;
 }
 
 export interface ChatAgentOptions {
@@ -100,24 +113,51 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
   const maxContextMessages = Math.max(2, options.maxContextMessages ?? 12);
   const systemPrompt = options.systemPrompt ?? defaultSystemPrompt;
 
-  const callModel = async (
-    state: typeof MessagesAnnotation.State,
-    config: Parameters<BaseChatModel["invoke"]>[1],
-  ) => {
-    const recentMessages = state.messages.slice(-maxContextMessages);
-    const response = await options.model.invoke(
-      [new SystemMessage(systemPrompt), ...recentMessages],
-      config,
+  const createGraph = (chatTools: ChatTool[] = []) => {
+    const langChainTools = chatTools.map((chatTool) =>
+      tool(chatTool.invoke, {
+        name: chatTool.name,
+        description: chatTool.description,
+        schema: chatTool.inputSchema,
+      }),
     );
-    response.id ??= randomUUID();
-    return { messages: [response] };
+    const model =
+      langChainTools.length === 0
+        ? options.model
+        : options.model.bindTools?.(langChainTools);
+    if (!model) {
+      throw new Error("Configured model does not support tool invocation");
+    }
+    const callModel = async (
+      state: typeof MessagesAnnotation.State,
+      config: Parameters<BaseChatModel["invoke"]>[1],
+    ) => {
+      const recentMessages = state.messages.slice(-maxContextMessages);
+      const response = await model.invoke(
+        [new SystemMessage(systemPrompt), ...recentMessages],
+        config,
+      );
+      response.id ??= randomUUID();
+      return { messages: [response] };
+    };
+    const graph = new StateGraph(MessagesAnnotation)
+      .addNode("model", callModel)
+      .addEdge(START, "model");
+    if (langChainTools.length === 0) {
+      graph.addEdge("model", END);
+    } else {
+      graph
+        .addNode(
+          "tools",
+          new ToolNode(langChainTools, { handleToolErrors: true }),
+        )
+        .addConditionalEdges("model", toolsCondition, ["tools", END])
+        .addEdge("tools", "model");
+    }
+    return graph.compile({ checkpointer: options.checkpointer });
   };
 
-  const graph = new StateGraph(MessagesAnnotation)
-    .addNode("model", callModel)
-    .addEdge(START, "model")
-    .addEdge("model", END)
-    .compile({ checkpointer: options.checkpointer });
+  const graph = createGraph();
 
   const graphConfig = (threadId: string) => ({
     configurable: { thread_id: threadId },
@@ -135,8 +175,9 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
 
   return {
     getMessages: readMessages,
-    async sendMessage(threadId, content) {
-      await graph.invoke(
+    async sendMessage(threadId, content, tools) {
+      const invocationGraph = tools?.length ? createGraph(tools) : graph;
+      await invocationGraph.invoke(
         {
           messages: [
             new HumanMessage({ id: randomUUID(), content: content.trim() }),

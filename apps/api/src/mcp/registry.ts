@@ -38,7 +38,8 @@ export const APPROVED_MCP_POLICY_PRESETS: Record<
     requiredScopes: ["McpInvoke"],
     allowExternalPort: true,
     allowedPath: MCP_DEFAULT_PATH,
-    allowedAuthProfilePattern: /^destination:[A-Za-z0-9_.-]{1,100}$/u,
+    allowedAuthProfilePattern:
+      /^(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp)$/u,
   },
 };
 

@@ -362,8 +362,11 @@ export class HttpMcpServerProbe implements McpServerProbe {
 
 export function createConfiguredMcpServerProbe(
   environment: NodeJS.ProcessEnv = process.env,
+  authResolver: McpAuthProfileResolver = new EnvironmentMcpAuthProfileResolver(
+    environment,
+  ),
 ) {
   return new HttpMcpServerProbe({
-    authResolver: new EnvironmentMcpAuthProfileResolver(environment),
+    authResolver,
   });
 }

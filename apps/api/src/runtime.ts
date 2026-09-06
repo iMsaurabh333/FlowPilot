@@ -17,6 +17,8 @@ import {
   McpRegistryService,
   PostgresMcpRegistryRepository,
 } from "./mcp/registry.js";
+import { McpToolResolver } from "./mcp/tool-resolver.js";
+import { createConfiguredMcpAuthProfileResolver } from "./mcp/technical-auth.js";
 
 export async function createRuntime(
   environment: NodeJS.ProcessEnv = process.env,
@@ -49,10 +51,19 @@ export async function createRuntime(
       model,
     });
     const repository = new PostgresConversationRepository(pool);
-    const conversations = new ConversationService(repository, agent);
+    const mcpRepository = new PostgresMcpRegistryRepository(pool);
+    const mcpAuth = createConfiguredMcpAuthProfileResolver(environment);
+    const conversations = new ConversationService(
+      repository,
+      agent,
+      new McpToolResolver({
+        repository: mcpRepository,
+        authResolver: mcpAuth,
+      }),
+    );
     const registry = new McpRegistryService(
-      new PostgresMcpRegistryRepository(pool),
-      createConfiguredMcpServerProbe(environment),
+      mcpRepository,
+      createConfiguredMcpServerProbe(environment, mcpAuth),
     );
 
     return {
