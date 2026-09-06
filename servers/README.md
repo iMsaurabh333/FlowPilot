@@ -9,9 +9,11 @@ content and Event Mesh servers.
 provides the authenticated Streamable HTTP boundary plus the first reviewed,
 bounded GET-only `search_message_processing_logs` tool derived from the pinned
 SAP OData contract. The FlowPilot administrator registry now models multiple
-approved servers, with admin-only endpoint/profile controls, enable/disable
-state, and protocol-aware Ping health checks. Cloud Integration content and
-Event Mesh profiles are reserved for later reviewed tools; they cannot expose
-unapproved tools through the registry today. A reviewed minimal OpenAPI
-projection may be derived from the pinned EDMX if the implementation toolchain
-requires it; the projection must retain the vendor contract hash as provenance.
+approved servers through one generic secure policy preset, with admin-only
+endpoint, Destination credential reference, explicit tool allowlist,
+enable/disable state, and protocol-aware Ping health checks. The preset fixes
+the Streamable HTTP path and invocation scope so later reviewed Cloud
+Integration content and Event Mesh servers do not need product-specific
+registry code. A reviewed minimal OpenAPI projection may be derived from the
+pinned EDMX if the implementation toolchain requires it; the projection must
+retain the vendor contract hash as provenance.

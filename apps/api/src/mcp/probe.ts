@@ -1,5 +1,5 @@
 import {
-  APPROVED_MCP_SERVER_PROFILES,
+  APPROVED_MCP_POLICY_PRESETS,
   MCP_PROTOCOL_VERSIONS,
   type McpHealthState,
   type McpProtocolVersion,
@@ -155,9 +155,9 @@ function allowlistedToolCount(
     names.has(name),
   ).length;
   if (count !== server.allowedToolNames.length) {
-    return { count, category: "tool_allowlist_mismatch" };
+    return { count: names.size, category: "tool_allowlist_mismatch" };
   }
-  return { count, category: null };
+  return { count: names.size, category: null };
 }
 
 export class HttpMcpServerProbe implements McpServerProbe {
@@ -219,7 +219,7 @@ export class HttpMcpServerProbe implements McpServerProbe {
   async ping(server: McpServerRecord): Promise<McpProbeResult> {
     const checkedAt = this.#now().toISOString();
     const started = Date.now();
-    const profile = APPROVED_MCP_SERVER_PROFILES[server.profileId];
+    const policyPreset = APPROVED_MCP_POLICY_PRESETS[server.policyPresetId];
     const headers = await this.#authResolver.resolve(server.authProfileRef);
     const latency = () => Math.max(0, Date.now() - started);
     if (!headers) {
@@ -315,7 +315,7 @@ export class HttpMcpServerProbe implements McpServerProbe {
       const legacyVersion = safeProtocolVersion(
         initialize.payload?.result?.protocolVersion,
       );
-      if (legacyVersion !== "2025-11-25" || !profile) {
+      if (legacyVersion !== "2025-11-25" || !policyPreset) {
         return result(
           "unhealthy",
           checkedAt,

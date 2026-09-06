@@ -10,7 +10,7 @@ import type { McpServerRecord } from "../src/mcp/registry.js";
 
 const serverRecord: McpServerRecord = {
   serverId: "cloud-integration",
-  profileId: "cloud-integration-monitoring",
+  policyPresetId: "generic",
   displayName: "Cloud Integration monitoring",
   endpointUrl: "http://127.0.0.1",
   mcpPath: "/mcp",
@@ -92,7 +92,7 @@ describe("MCP server protocol probe", () => {
     expect(result).toMatchObject({
       healthState: "healthy",
       protocolVersion: "2026-07-28",
-      discoveredToolCount: 1,
+      discoveredToolCount: 2,
       errorCategory: null,
     });
     expect(result.latencyMs).toEqual(expect.any(Number));

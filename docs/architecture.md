@@ -30,7 +30,7 @@ flowchart LR
 5. Model responses, MCP metadata, tool arguments, and tool results are untrusted data.
 6. Destinations and Credential Store hold connection details and secrets outside source control.
 7. Only validated `ChatAdmin` requests can change MCP registry state or trigger an immediate health check. Models and ordinary chat users cannot call the registry administration operations.
-8. Registry endpoints are constrained by approved server profiles. Server-side validation blocks unsupported schemes, hosts, ports, paths, redirects, and private or metadata targets that are outside the approved deployment boundary.
+8. Registry endpoints are constrained by an approved server policy preset. Server-side validation blocks unsupported schemes, hosts, ports, redirects, and private or metadata targets that are outside the approved deployment boundary; the preset owns the MCP path and invocation scope.
 
 ## Deployment topology
 
@@ -46,11 +46,12 @@ MCP servers use the shared server framework but remain independently deployable 
 
 ## MCP registry and administration
 
-- The registry supports multiple independently deployable MCP servers from its first implementation. Each record has a stable server ID, display name, Streamable HTTP endpoint, optional external port, authentication-profile reference, allowed tool names, required FlowPilot scopes, enabled state, and operational limits.
+- The registry supports multiple independently deployable MCP servers from its first implementation. Each record has a stable server ID, display name, generic policy-preset ID, Streamable HTTP endpoint, optional external port, authentication-profile reference, explicit allowed tool names, derived FlowPilot scopes, enabled state, and operational limits.
 - PostgreSQL stores the non-secret runtime registry state and latest health metadata. Authentication profiles reference BTP-managed bindings or destinations; tokens, client secrets, and certificates are never stored in registry rows or returned to the browser.
-- The administrator UI can edit only endpoints permitted by an approved server profile. For a Cloud Foundry-hosted server, the UI stores its HTTPS route and MCP path; the application still listens on the platform-assigned process port. An explicit port is available only for an approved external endpoint.
+- The generic secure MCP preset accepts HTTPS endpoints (plus loopback HTTP for local verification), fixes the protocol path to `/mcp`, derives the `McpInvoke` scope, requires a Destination credential reference, and preserves an explicit per-server tool allowlist. The administrator UI therefore edits connection identity and allowlist fields rather than protocol plumbing.
+- For a Cloud Foundry-hosted server, the UI stores its HTTPS route; the application still listens on the platform-assigned process port. The optional external port is bounded and unique registry metadata, not a replacement for the platform route.
 - Toggling a server off immediately removes its tools from new registry resolutions. Toggling it on requires a successful authenticated capability probe before its tools are exposed.
-- The **Ping** action is an authenticated server-side MCP capability probe with a short timeout, not an ICMP request or browser fetch. It records safe status, latency, protocol compatibility, last-check time, and discovered allowlisted-tool count without returning raw upstream errors or credentials.
+- The **Ping** action is an authenticated server-side MCP capability probe with a short timeout, not an ICMP request or browser fetch. It records safe status, latency, protocol compatibility, last-check time, and the server's discovered tool count while separately verifying that every allowlisted tool exists, without returning raw upstream errors or credentials.
 - Health states are `never_checked`, `healthy`, `unhealthy`, and `stale`. A bounded cache prevents a probe on every chat turn; stale health is refreshed before tools are offered, and a failed refresh excludes that server's tools without changing its administrator-selected enabled flag.
 - Tool names are namespaced by server ID. The registry fails closed on duplicate names, unknown tools, missing scopes, missing authentication, incompatible protocol versions, disabled servers, and failed health checks.
 - Milestone 5 restricts downstream SAP and Event Mesh connector operations to reviewed HTTP `GET` requests. MCP Streamable HTTP still uses the methods required by the pinned MCP protocol, and registry toggles remain authenticated state-changing application operations.

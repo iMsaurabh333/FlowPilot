@@ -1,27 +1,26 @@
 import type { ChatAgent, ChatMessage } from "@flowpilot/agent-core";
 import type { RequestHandler } from "express";
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../src/app.js";
 import { ConversationService } from "../src/conversations/service.js";
 import {
   McpRegistryService,
   MemoryMcpRegistryRepository,
+  PostgresMcpRegistryRepository,
   type McpProbeResult,
   type McpServerProbe,
   type McpServerRecord,
 } from "../src/mcp/registry.js";
 
 const baseInput = {
-  profileId: "cloud-integration-monitoring" as const,
+  policyPresetId: "generic" as const,
   displayName: "Cloud Integration monitoring",
   endpointUrl: "http://127.0.0.1:4100",
-  mcpPath: "/mcp",
   externalPort: null,
   authProfileRef: "destination:FLOWPILOT_CLOUD_INTEGRATION_MPL",
   allowedToolNames: ["search_message_processing_logs"],
-  requiredScopes: ["McpInvoke"],
 };
 
 class FakeProbe implements McpServerProbe {
@@ -90,6 +89,49 @@ function appFor(registry: McpRegistryService) {
 }
 
 describe("MCP registry administration", () => {
+  it("normalizes deployed profile rows to the generic policy preset", async () => {
+    const query = vi.fn(async (sql: string) =>
+      sql.includes("SELECT *")
+        ? {
+            rows: [
+              {
+                server_id: "cloud-integration",
+                profile_id: "cloud-integration-monitoring",
+                display_name: "Cloud Integration monitoring",
+                endpoint_url: "https://mcp.example.test",
+                mcp_path: "/legacy-path",
+                external_port: null,
+                auth_profile_ref: "destination:FLOWPILOT_CLOUD_INTEGRATION_MPL",
+                allowed_tool_names: ["search_message_processing_logs"],
+                required_scopes: ["LegacyScope"],
+                enabled: false,
+                health_state: "healthy",
+                last_checked_at: "2026-09-05T12:00:00.000Z",
+                latency_ms: 4,
+                protocol_version: "2026-07-28",
+                discovered_tool_count: 1,
+                last_error_category: null,
+                created_at: "2026-09-05T11:00:00.000Z",
+                updated_at: "2026-09-05T12:00:00.000Z",
+              },
+            ],
+          }
+        : { rows: [] },
+    );
+    const client = { query, release: vi.fn() };
+    const repository = new PostgresMcpRegistryRepository({
+      connect: async () => client,
+    } as never);
+
+    await expect(repository.list()).resolves.toEqual([
+      expect.objectContaining({
+        policyPresetId: "generic",
+        mcpPath: "/mcp",
+        requiredScopes: ["McpInvoke"],
+      }),
+    ]);
+  });
+
   it("keeps registry access admin-only and supports multiple records", async () => {
     const repository = new MemoryMcpRegistryRepository();
     const probe = new FakeProbe();
@@ -177,7 +219,7 @@ describe("MCP registry administration", () => {
     expect(probe.calls).toBe(3);
   });
 
-  it("rejects unapproved endpoints and external ports", async () => {
+  it("rejects unsafe endpoints and derives fixed policy fields", async () => {
     const registry = new McpRegistryService(
       new MemoryMcpRegistryRepository(),
       new FakeProbe(),
@@ -191,12 +233,29 @@ describe("MCP registry administration", () => {
       .expect(400);
     expect(privateEndpoint.body).toEqual({ error: "invalid_request" });
 
-    const cloudFoundryPort = await request(app)
-      .put("/api/admin/mcp-servers/cloud-port")
+    const saved = await request(app)
+      .put("/api/admin/mcp-servers/generic-server")
       .set("x-test-role", "admin")
-      .send({ ...baseInput, externalPort: 4100 })
-      .expect(400);
-    expect(cloudFoundryPort.body).toEqual({ error: "invalid_request" });
+      .send({
+        ...baseInput,
+        externalPort: 4100,
+        allowedToolNames: ["read_orders", "inspect_events"],
+      })
+      .expect(200);
+    expect(saved.body).toMatchObject({
+      policyPresetId: "generic",
+      mcpPath: "/mcp",
+      externalPort: 4100,
+      allowedToolNames: ["read_orders", "inspect_events"],
+      requiredScopes: ["McpInvoke"],
+    });
+
+    await request(app)
+      .put("/api/admin/mcp-servers/unapproved-policy-field")
+      .set("x-test-role", "admin")
+      .send({ ...baseInput, mcpPath: "/custom" })
+      .expect(400)
+      .expect({ error: "invalid_request" });
   });
 
   it("prevents two approved external servers from claiming one port", async () => {
@@ -206,14 +265,12 @@ describe("MCP registry administration", () => {
     );
     const app = appFor(registry);
     const input = {
-      profileId: "cloud-integration-content" as const,
+      policyPresetId: "generic" as const,
       displayName: "Integration Content",
       endpointUrl: "http://127.0.0.1:4200",
-      mcpPath: "/mcp",
       externalPort: 4_200,
       authProfileRef: "destination:FLOWPILOT_CLOUD_INTEGRATION_CONTENT",
       allowedToolNames: [],
-      requiredScopes: ["McpInvoke"],
       enabled: false,
     };
     await request(app)

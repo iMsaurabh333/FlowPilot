@@ -19,7 +19,7 @@ Operational users need one secure interface for troubleshooting and monitoring t
 - Direct calls to SAP and third-party APIs through BTP destinations.
 - Provider-configurable LangGraph chat agent.
 - Standard remote MCP clients with a controlled multi-server registry.
-- A narrow `ChatAdmin`-only graphical MCP registry for approved endpoint configuration, activation, and health checks.
+- A narrow `ChatAdmin`-only graphical MCP registry with a generic secure policy preset for approved endpoint configuration, explicit tool allowlists, activation, and health checks.
 - Reusable MCP server template generated from reviewed OpenAPI operations.
 
 ## Non-functional requirements
@@ -30,7 +30,7 @@ Operational users need one secure interface for troubleshooting and monitoring t
 - Secrets stay in BTP-managed services or approved CI secret stores.
 - Tool access follows least privilege and read-only defaults.
 - The first connector release permits downstream business-API `GET` operations only. This restriction does not apply to MCP's own protocol transport or authenticated administrative registry mutations.
-- MCP endpoint changes are validated server-side against approved schemes, hosts, ports, paths, and authentication profiles; the browser never probes a server directly.
+- MCP endpoint changes are validated server-side against the generic preset's approved schemes, hosts, bounded ports, fixed path, Destination authentication reference, and derived scope; the browser never probes a server directly.
 - Model and tool calls have timeouts, size limits, audit metadata, and safe errors.
 - Repository commands and documentation are portable across AI development tools.
 
@@ -45,7 +45,7 @@ The MVP includes only a narrow administrator MCP registry screen. It excludes en
 - Two simultaneous users cannot read or address each other's conversations.
 - A model can be changed among installed provider adapters through configuration.
 - Multiple reviewed MCP servers can be registered, namespaced, enabled, disabled, and health-checked without changing the graph.
-- An administrator can configure an approved MCP endpoint route and optional external port, while Cloud Foundry-hosted servers use their platform route rather than a manually assigned process port.
+- An administrator can configure an approved MCP endpoint, Destination credential reference, explicit tool allowlist, and optional external port while the generic preset supplies the fixed MCP path and invocation scope.
 - Disabled, unauthorized, unhealthy, or stale MCP servers do not contribute tools to a chat session.
 - A clean checkout can be built, tested, packaged, deployed, and smoke-tested using documented commands.
 - Every milestone produces a reusable lesson or process update in `DevFlow.md`.

@@ -10,8 +10,7 @@ export type McpHealthState =
 
 export interface McpServerRecord {
   serverId: string;
-  profileId:
-    "cloud-integration-monitoring" | "cloud-integration-content" | "event-mesh";
+  policyPresetId: "generic";
   displayName: string;
   endpointUrl: string;
   mcpPath: string;
@@ -31,14 +30,12 @@ export interface McpServerRecord {
 }
 
 export interface McpServerInput {
-  profileId?: McpServerRecord["profileId"];
+  policyPresetId?: McpServerRecord["policyPresetId"];
   displayName?: string;
   endpointUrl?: string;
-  mcpPath?: string;
   externalPort?: number | null;
   authProfileRef?: string;
   allowedToolNames?: string[];
-  requiredScopes?: string[];
   enabled?: boolean;
 }
 

@@ -30,20 +30,12 @@ const messageBodySchema = z
 
 const mcpServerInputSchema = z
   .object({
-    profileId: z
-      .enum([
-        "cloud-integration-monitoring",
-        "cloud-integration-content",
-        "event-mesh",
-      ])
-      .optional(),
+    policyPresetId: z.enum(["generic"]).optional(),
     displayName: z.string().trim().min(1).max(120).optional(),
     endpointUrl: z.string().trim().min(1).max(2_048).optional(),
-    mcpPath: z.string().trim().min(1).max(256).optional(),
     externalPort: z.number().int().min(1).max(65_535).nullable().optional(),
     authProfileRef: z.string().trim().min(1).max(128).optional(),
     allowedToolNames: z.array(z.string()).max(100).optional(),
-    requiredScopes: z.array(z.string()).max(20).optional(),
     enabled: z.boolean().optional(),
   })
   .strict();

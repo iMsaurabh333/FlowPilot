@@ -18,45 +18,23 @@ export const MCP_HEALTH_STATES = [
 ] as const;
 export type McpHealthState = (typeof MCP_HEALTH_STATES)[number];
 
-export const MCP_PROFILE_IDS = [
-  "cloud-integration-monitoring",
-  "cloud-integration-content",
-  "event-mesh",
-] as const;
-export type McpProfileId = (typeof MCP_PROFILE_IDS)[number];
+export const MCP_POLICY_PRESET_IDS = ["generic"] as const;
+export type McpPolicyPresetId = (typeof MCP_POLICY_PRESET_IDS)[number];
 
-export interface ApprovedMcpServerProfile {
-  profileId: McpProfileId;
-  allowedToolNames: readonly string[];
+export interface ApprovedMcpPolicyPreset {
+  policyPresetId: McpPolicyPresetId;
   requiredScopes: readonly string[];
   allowExternalPort: boolean;
   allowedPath: string;
   allowedAuthProfilePattern: RegExp;
 }
 
-export const APPROVED_MCP_SERVER_PROFILES: Record<
-  McpProfileId,
-  ApprovedMcpServerProfile
+export const APPROVED_MCP_POLICY_PRESETS: Record<
+  McpPolicyPresetId,
+  ApprovedMcpPolicyPreset
 > = {
-  "cloud-integration-monitoring": {
-    profileId: "cloud-integration-monitoring",
-    allowedToolNames: ["search_message_processing_logs"],
-    requiredScopes: ["McpInvoke"],
-    allowExternalPort: false,
-    allowedPath: MCP_DEFAULT_PATH,
-    allowedAuthProfilePattern: /^destination:FLOWPILOT_CLOUD_INTEGRATION_MPL$/u,
-  },
-  "cloud-integration-content": {
-    profileId: "cloud-integration-content",
-    allowedToolNames: [],
-    requiredScopes: ["McpInvoke"],
-    allowExternalPort: true,
-    allowedPath: MCP_DEFAULT_PATH,
-    allowedAuthProfilePattern: /^destination:[A-Za-z0-9_.-]{1,100}$/u,
-  },
-  "event-mesh": {
-    profileId: "event-mesh",
-    allowedToolNames: [],
+  generic: {
+    policyPresetId: "generic",
     requiredScopes: ["McpInvoke"],
     allowExternalPort: true,
     allowedPath: MCP_DEFAULT_PATH,
@@ -66,7 +44,7 @@ export const APPROVED_MCP_SERVER_PROFILES: Record<
 
 export interface McpServerRecord {
   serverId: string;
-  profileId: McpProfileId;
+  policyPresetId: McpPolicyPresetId;
   displayName: string;
   endpointUrl: string;
   mcpPath: string;
@@ -86,14 +64,12 @@ export interface McpServerRecord {
 }
 
 export interface McpServerInput {
-  profileId?: McpProfileId;
+  policyPresetId?: McpPolicyPresetId;
   displayName?: string;
   endpointUrl?: string;
-  mcpPath?: string;
   externalPort?: number | null;
   authProfileRef?: string;
   allowedToolNames?: string[];
-  requiredScopes?: string[];
   enabled?: boolean;
 }
 
@@ -205,25 +181,12 @@ function validateEndpoint(value: unknown) {
   return url.href.replace(/\/+$/u, "");
 }
 
-function validatePath(value: unknown, profile: ApprovedMcpServerProfile) {
-  assertSafeText(value, "MCP path", 256);
-  if (
-    value !== profile.allowedPath ||
-    !/^\/[A-Za-z0-9._~/-]+$/u.test(value) ||
-    value.includes("..") ||
-    value.includes("//")
-  ) {
-    throw new McpRegistryError("invalid_request", "MCP path is not allowed");
-  }
-  return value;
-}
-
 function validateAuthProfile(
   value: unknown,
-  profile: ApprovedMcpServerProfile,
+  policyPreset: ApprovedMcpPolicyPreset,
 ) {
   assertSafeText(value, "authentication profile", 128);
-  if (!profile.allowedAuthProfilePattern.test(value)) {
+  if (!policyPreset.allowedAuthProfilePattern.test(value)) {
     throw new McpRegistryError(
       "invalid_request",
       "Authentication profile is not approved",
@@ -232,16 +195,10 @@ function validateAuthProfile(
   return value;
 }
 
-function validateNames(
-  value: unknown,
-  field: string,
-  allowed: readonly string[],
-  allowEmpty: boolean,
-) {
+function validateNames(value: unknown, field: string) {
   if (
     !Array.isArray(value) ||
     value.length > 100 ||
-    (!allowEmpty && value.length === 0) ||
     value.some(
       (entry) =>
         typeof entry !== "string" ||
@@ -254,51 +211,18 @@ function validateNames(
   if (unique.length !== value.length) {
     throw new McpRegistryError("invalid_request", `Duplicate ${field}`);
   }
-  if (allowed.length > 0 && unique.some((name) => !allowed.includes(name))) {
-    throw new McpRegistryError("invalid_request", `${field} is not approved`);
-  }
-  if (allowed.length === 0 && unique.length > 0) {
-    throw new McpRegistryError("invalid_request", `${field} is not approved`);
-  }
-  return unique;
-}
-
-function validateScopes(value: unknown, required: readonly string[]) {
-  if (
-    !Array.isArray(value) ||
-    value.length === 0 ||
-    value.length > 20 ||
-    value.some(
-      (entry) =>
-        typeof entry !== "string" ||
-        !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u.test(entry),
-    )
-  ) {
-    throw new McpRegistryError("invalid_request", "Invalid required scopes");
-  }
-  const unique = [...new Set(value)];
-  if (
-    unique.length !== value.length ||
-    unique.length !== required.length ||
-    unique.some((scope) => !required.includes(scope))
-  ) {
-    throw new McpRegistryError(
-      "invalid_request",
-      "Required scopes are not approved",
-    );
-  }
   return unique;
 }
 
 function validatePort(
   value: unknown,
-  profile: ApprovedMcpServerProfile,
+  policyPreset: ApprovedMcpPolicyPreset,
 ): number | null {
   if (value === undefined || value === null) {
     return null;
   }
   if (
-    !profile.allowExternalPort ||
+    !policyPreset.allowExternalPort ||
     typeof value !== "number" ||
     !Number.isSafeInteger(value) ||
     value < 1 ||
@@ -312,14 +236,29 @@ function validatePort(
   return value;
 }
 
-function validateProfile(value: unknown): ApprovedMcpServerProfile {
-  if (typeof value !== "string" || !(value in APPROVED_MCP_SERVER_PROFILES)) {
+function validatePolicyPreset(value: unknown): ApprovedMcpPolicyPreset {
+  if (typeof value !== "string" || !(value in APPROVED_MCP_POLICY_PRESETS)) {
     throw new McpRegistryError(
       "invalid_request",
-      "MCP server profile is not approved",
+      "MCP policy preset is not approved",
     );
   }
-  return APPROVED_MCP_SERVER_PROFILES[value as McpProfileId];
+  return APPROVED_MCP_POLICY_PRESETS[value as McpPolicyPresetId];
+}
+
+function storedPolicyPreset(value: unknown): McpPolicyPresetId {
+  if (
+    value === "generic" ||
+    value === "cloud-integration-monitoring" ||
+    value === "cloud-integration-content" ||
+    value === "event-mesh"
+  ) {
+    return "generic";
+  }
+  throw new McpRegistryError(
+    "registry_unavailable",
+    "Registry policy preset is invalid",
+  );
 }
 
 function iso(value: unknown) {
@@ -334,12 +273,14 @@ function iso(value: unknown) {
 }
 
 function rowToRecord(row: Record<string, unknown>): McpServerRecord {
+  const policyPresetId = storedPolicyPreset(row.profile_id);
+  const policyPreset = APPROVED_MCP_POLICY_PRESETS[policyPresetId];
   return {
     serverId: String(row.server_id),
-    profileId: String(row.profile_id) as McpProfileId,
+    policyPresetId,
     displayName: String(row.display_name),
     endpointUrl: String(row.endpoint_url),
-    mcpPath: String(row.mcp_path),
+    mcpPath: policyPreset.allowedPath,
     externalPort:
       row.external_port === null || row.external_port === undefined
         ? null
@@ -348,9 +289,7 @@ function rowToRecord(row: Record<string, unknown>): McpServerRecord {
     allowedToolNames: Array.isArray(row.allowed_tool_names)
       ? row.allowed_tool_names.map(String)
       : [],
-    requiredScopes: Array.isArray(row.required_scopes)
-      ? row.required_scopes.map(String)
-      : [],
+    requiredScopes: [...policyPreset.requiredScopes],
     enabled: Boolean(row.enabled),
     healthState: String(row.health_state) as McpHealthState,
     lastCheckedAt: row.last_checked_at ? iso(row.last_checked_at) : null,
@@ -452,7 +391,7 @@ export class PostgresMcpRegistryRepository implements McpRegistryRepository {
       `,
         [
           server.serverId,
-          server.profileId,
+          server.policyPresetId,
           server.displayName,
           server.endpointUrl,
           server.mcpPath,
@@ -502,15 +441,14 @@ function mergeServer(
   now: string,
 ): McpServerRecord {
   validateServerId(serverId);
-  const profile = validateProfile(input.profileId ?? existing?.profileId);
+  const policyPreset = validatePolicyPreset(
+    input.policyPresetId ?? existing?.policyPresetId ?? "generic",
+  );
   const displayName = input.displayName ?? existing?.displayName;
   const endpointUrl = input.endpointUrl ?? existing?.endpointUrl;
-  const mcpPath = input.mcpPath ?? existing?.mcpPath ?? MCP_DEFAULT_PATH;
   const authProfileRef = input.authProfileRef ?? existing?.authProfileRef;
   const allowedToolNames =
     input.allowedToolNames ?? existing?.allowedToolNames ?? [];
-  const requiredScopes =
-    input.requiredScopes ?? existing?.requiredScopes ?? profile.requiredScopes;
   if (displayName === undefined) {
     throw new McpRegistryError("invalid_request", "Display name is required");
   }
@@ -525,23 +463,13 @@ function mergeServer(
   }
   assertSafeText(displayName, "display name", 120);
   const normalizedEndpoint = validateEndpoint(endpointUrl);
-  const normalizedPath = validatePath(mcpPath, profile);
-  const normalizedAuth = validateAuthProfile(authProfileRef, profile);
-  const normalizedTools = validateNames(
-    allowedToolNames,
-    "allowed tools",
-    profile.allowedToolNames,
-    profile.allowedToolNames.length === 0,
-  );
-  const normalizedScopes = validateScopes(
-    requiredScopes,
-    profile.requiredScopes,
-  );
+  const normalizedAuth = validateAuthProfile(authProfileRef, policyPreset);
+  const normalizedTools = validateNames(allowedToolNames, "allowed tools");
   const externalPort = validatePort(
     input.externalPort !== undefined
       ? input.externalPort
       : existing?.externalPort,
-    profile,
+    policyPreset,
   );
   const enabled = input.enabled ?? existing?.enabled ?? false;
   if (typeof enabled !== "boolean") {
@@ -550,14 +478,14 @@ function mergeServer(
 
   return {
     serverId,
-    profileId: profile.profileId,
+    policyPresetId: policyPreset.policyPresetId,
     displayName,
     endpointUrl: normalizedEndpoint,
-    mcpPath: normalizedPath,
+    mcpPath: policyPreset.allowedPath,
     externalPort,
     authProfileRef: normalizedAuth,
     allowedToolNames: normalizedTools,
-    requiredScopes: normalizedScopes,
+    requiredScopes: [...policyPreset.requiredScopes],
     enabled,
     healthState: existing?.healthState ?? "never_checked",
     lastCheckedAt: existing?.lastCheckedAt ?? null,

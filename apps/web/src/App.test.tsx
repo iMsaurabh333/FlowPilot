@@ -80,6 +80,13 @@ describe("FlowPilot chat interface", () => {
     expect(
       screen.getByRole("navigation", { name: "Conversation history" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Primary navigation" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Chat/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getAllByText("Test User").length).toBeGreaterThan(0);
   });
 
@@ -89,7 +96,7 @@ describe("FlowPilot chat interface", () => {
       listConversations: vi.fn().mockResolvedValue([]),
       createConversation,
     });
-    renderApp(client);
+    const { container } = renderApp(client);
 
     const start = await screen.findByText("Start a conversation");
     fireEvent.click(start);
@@ -168,7 +175,7 @@ describe("FlowPilot chat interface", () => {
   it("shows admin registry controls and invokes Ping and Save", async () => {
     const server = {
       serverId: "cloud-integration",
-      profileId: "cloud-integration-monitoring" as const,
+      policyPresetId: "generic" as const,
       displayName: "Cloud Integration monitoring",
       endpointUrl: "https://mcp.example.test",
       mcpPath: "/mcp",
@@ -195,31 +202,45 @@ describe("FlowPilot chat interface", () => {
       upsertMcpServer,
     });
 
-    renderApp(client);
+    const { container } = renderApp(client);
 
+    fireEvent.click(await screen.findByRole("button", { name: /MCP servers/ }));
     expect(
-      await screen.findByRole("heading", { name: "MCP server registry" }),
+      await screen.findByRole("heading", { name: "MCP servers" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Generic secure MCP")).toBeInTheDocument();
     expect(screen.getByText("healthy")).toBeInTheDocument();
-    expect(screen.getByText("Ping")).toBeInTheDocument();
-    expect(screen.getByText("Save")).toBeInTheDocument();
+    expect(screen.getByText("Ping server")).toBeInTheDocument();
+    expect(screen.getByText("Save registration")).toBeInTheDocument();
     expect(
-      document.querySelector(
-        'ui5-switch[accessible-name="Enable Cloud Integration monitoring"]',
-      ),
+      screen.getByRole("switch", {
+        name: "Enable Cloud Integration monitoring",
+      }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Ping"));
+    fireEvent.click(screen.getByText("Ping server"));
     await waitFor(() =>
       expect(pingMcpServer).toHaveBeenCalledWith(server.serverId),
     );
 
-    fireEvent.click(screen.getByText("Save"));
+    fireEvent.click(screen.getByText("Save registration"));
     await waitFor(() =>
       expect(upsertMcpServer).toHaveBeenCalledWith(
         server.serverId,
-        expect.objectContaining({ enabled: false }),
+        expect.objectContaining({
+          policyPresetId: "generic",
+          enabled: false,
+        }),
       ),
     );
+
+    const results = await axe.run(container, {
+      rules: { "color-contrast": { enabled: false } },
+    });
+    expect(
+      results.violations.filter(
+        ({ impact }) => impact === "serious" || impact === "critical",
+      ),
+    ).toEqual([]);
   });
 });
