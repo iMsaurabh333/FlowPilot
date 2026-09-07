@@ -1,7 +1,6 @@
 import type { McpAuthProfileResolver } from "./probe.js";
 
 const MCP_TECHNICAL_AUTH_PROFILE = "technical:flowpilot-mcp";
-const MCP_INVOKE_SCOPE = "flowpilot-mcp.McpInvoke";
 const TOKEN_TIMEOUT_MS = 5_000;
 const TOKEN_CACHE_TTL_MS = 4 * 60_000;
 
@@ -9,6 +8,10 @@ interface McpXsuaaBinding {
   clientid: string;
   clientsecret: string;
   url: string;
+  xsappname: string;
+}
+
+interface McpScopeBinding {
   xsappname: string;
 }
 
@@ -31,9 +34,7 @@ function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function parseBinding(
-  environment: NodeJS.ProcessEnv,
-): McpXsuaaBinding | undefined {
+function serviceBindings(environment: NodeJS.ProcessEnv) {
   const raw = environment.VCAP_SERVICES;
   if (!raw?.trim()) return undefined;
   let services: unknown;
@@ -43,9 +44,16 @@ function parseBinding(
     return undefined;
   }
   if (!record(services)) return undefined;
-  const candidates = Object.values(services).flatMap((value) =>
+  return Object.values(services).flatMap((value) =>
     Array.isArray(value) ? value : [],
   );
+}
+
+function parseBinding(
+  environment: NodeJS.ProcessEnv,
+): McpXsuaaBinding | undefined {
+  const candidates = serviceBindings(environment);
+  if (!candidates) return undefined;
   const service = candidates.find(
     (value) => record(value) && value.name === "flowpilot-auth",
   );
@@ -63,6 +71,19 @@ function parseBinding(
   return { url: url.replace(/\/$/u, ""), clientid, clientsecret, xsappname };
 }
 
+function parseScopeBinding(
+  environment: NodeJS.ProcessEnv,
+): McpScopeBinding | undefined {
+  const candidates = serviceBindings(environment);
+  if (!candidates) return undefined;
+  const service = candidates.find(
+    (value) => record(value) && value.name === "flowpilot-mcp-auth",
+  );
+  if (!record(service) || !record(service.credentials)) return undefined;
+  const xsappname = text(service.credentials.xsappname);
+  return xsappname ? { xsappname } : undefined;
+}
+
 async function defaultRequester(
   request: TechnicalTokenRequest,
 ): Promise<{ ok: boolean; body: string }> {
@@ -78,6 +99,7 @@ async function defaultRequester(
 
 export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
   readonly #binding: McpXsuaaBinding | undefined;
+  readonly #scopeBinding: McpScopeBinding | undefined;
   readonly #request: TechnicalTokenRequester;
   readonly #now: () => number;
   #token: { value: string; expiresAt: number } | undefined;
@@ -87,12 +109,17 @@ export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
     options: { request?: TechnicalTokenRequester; now?: () => number } = {},
   ) {
     this.#binding = parseBinding(environment);
+    this.#scopeBinding = parseScopeBinding(environment);
     this.#request = options.request ?? defaultRequester;
     this.#now = options.now ?? Date.now;
   }
 
   async resolve(authProfileRef: string) {
-    if (authProfileRef !== MCP_TECHNICAL_AUTH_PROFILE || !this.#binding) {
+    if (
+      authProfileRef !== MCP_TECHNICAL_AUTH_PROFILE ||
+      !this.#binding ||
+      !this.#scopeBinding
+    ) {
       return undefined;
     }
     const now = this.#now();
@@ -114,7 +141,7 @@ export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
         },
         body: new URLSearchParams({
           grant_type: "client_credentials",
-          scope: MCP_INVOKE_SCOPE,
+          scope: `${this.#scopeBinding.xsappname}.McpInvoke`,
         }).toString(),
         signal: controller.signal,
       });

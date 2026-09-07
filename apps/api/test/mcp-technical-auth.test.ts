@@ -14,6 +14,12 @@ const binding = {
           xsappname: "flowpilot",
         },
       },
+      {
+        name: "flowpilot-mcp-auth",
+        credentials: {
+          xsappname: "flowpilot-mcp!t123456",
+        },
+      },
     ],
   }),
 };
@@ -43,7 +49,8 @@ describe("MCP technical authentication", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
       url: "https://mcp-auth.example.test/oauth/token",
-      body: "grant_type=client_credentials&scope=flowpilot-mcp.McpInvoke",
+      body:
+        "grant_type=client_credentials&scope=flowpilot-mcp%21t123456.McpInvoke",
     });
   });
 

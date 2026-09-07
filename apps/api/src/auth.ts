@@ -41,7 +41,9 @@ function displayName(
 }
 
 export function createXsuaaAuthentication(): RequestHandler {
-  const bindings = xsenv.getServices({ xsuaa: { tag: "xsuaa" } });
+  const bindings = xsenv.getServices({
+    xsuaa: { name: "flowpilot-auth" },
+  });
   const credentials = bindings.xsuaa as ConstructorParameters<
     typeof XsuaaService
   >[0];
