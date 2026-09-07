@@ -237,10 +237,15 @@ export function App({ client = flowPilotApi }: AppProps) {
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      void sendMessage();
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    ) {
+      return;
     }
+    event.preventDefault();
+    void sendMessage();
   };
 
   if (state.status === "loading") {

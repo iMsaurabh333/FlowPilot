@@ -108,7 +108,7 @@ describe("FlowPilot chat interface", () => {
     expect(composer()).not.toHaveAttribute("disabled");
   });
 
-  it("sends a trimmed message with the documented keyboard shortcut", async () => {
+  it("sends a trimmed message when Enter is pressed", async () => {
     const response = {
       ...detail,
       messages: [
@@ -124,13 +124,26 @@ describe("FlowPilot chat interface", () => {
     const input = composer();
     Object.assign(input, { value: "  Check delivery  " });
     fireEvent.input(input);
-    fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() =>
       expect(sendMessage).toHaveBeenCalledWith(summary.id, "Check delivery"),
     );
     expect(await screen.findByText("Checking.")).toBeInTheDocument();
     expect(input).toHaveProperty("value", "");
+  });
+
+  it("keeps Shift+Enter available for a newline without sending", async () => {
+    const sendMessage = vi.fn();
+    renderApp(api({ sendMessage }));
+
+    await screen.findByText("Check order 42");
+    const input = composer();
+    Object.assign(input, { value: "First line" });
+    fireEvent.input(input);
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it("keeps the draft and presents a safe provider failure", async () => {
