@@ -101,6 +101,11 @@ function toChatMessage(
     return undefined;
   }
   const content = contentAsText(message.content);
+  // Tool-call requests are AI messages with no user-facing text. They stay in
+  // the checkpoint for the model, but are not rendered as chat bubbles.
+  if (role === "assistant" && content.trim().length === 0) {
+    return undefined;
+  }
 
   return {
     id: stableMessageId(threadId, index, role, content),

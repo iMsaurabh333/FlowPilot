@@ -78,4 +78,17 @@ describe("FlowPilot chat graph", () => {
       }),
     );
   });
+
+  it("does not expose empty assistant placeholders as chat messages", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: [""] }),
+    });
+
+    const messages = await agent.sendMessage("empty-response", "Check logs");
+
+    expect(messages.map(({ role, content }) => ({ role, content }))).toEqual([
+      { role: "user", content: "Check logs" },
+    ]);
+  });
 });
