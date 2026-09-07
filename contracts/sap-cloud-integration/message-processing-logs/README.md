@@ -55,12 +55,19 @@ until the official EDMX is pinned.
 
 | Field               | Type               | Required | Rules                                                                                                |
 | ------------------- | ------------------ | -------- | ---------------------------------------------------------------------------------------------------- |
-| `fromUtc`           | RFC 3339 timestamp | yes      | Must include UTC offset and normalize to UTC.                                                        |
-| `toUtc`             | RFC 3339 timestamp | yes      | Must be later than `fromUtc`; window is at most 24 hours.                                            |
+| `fromUtc`           | RFC 3339 timestamp | no*      | Must be paired with `toUtc`, include a UTC offset, and normalize to UTC.                             |
+| `toUtc`             | RFC 3339 timestamp | no*      | Must be paired with `fromUtc`, be later, and create a window of at most 24 hours.                    |
 | `status`            | enum               | no       | `COMPLETED`, `PROCESSING`, `RETRY`, `ESCALATED`, `FAILED`, `CANCELLED`, `DISCARDED`, or `ABANDONED`. |
 | `integrationFlowId` | string             | no       | Exact semantic identifier mapped to `IntegrationArtifact/Id`; no wildcard or OData expression.       |
 | `correlationId`     | string             | no       | Semantic identifier only; no wildcard or OData expression.                                           |
+| `applicationMessageId` | string          | no       | Exact `ApplicationMessageId`, populated by the `SAP_ApplicationID` header; no wildcard or expression. |
+| `applicationMessageType` | string        | no       | Exact `ApplicationMessageType`, populated by the `SAP_MessageType` header; no wildcard or expression. |
 | `limit`             | integer            | no       | Default `20`; minimum `1`; maximum `100`.                                                            |
+
+\* When an exact correlation ID, integration-flow ID, or application message ID is
+present, the connector may query using that exact selector without a time window.
+When neither a selector nor a time window is present, it defaults to the last 24
+hours. An application message type by itself uses that bounded recent window.
 
 The request schema does not accept a URL, destination, resource path, raw filter,
 projection, ordering, skip token, header, credential, or arbitrary query option.
@@ -74,6 +81,8 @@ The connector returns at most `limit` items plus safe envelope metadata.
 | ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
 | `messageId`            | string                       | `MessageGuid`, non-null `Edm.String` and entity key                                  |
 | `correlationId`        | string or null               | `CorrelationId`, nullable `Edm.String`                                               |
+| `applicationMessageId` | string or null               | `ApplicationMessageId`, nullable `Edm.String`                                        |
+| `applicationMessageType` | string or null             | `ApplicationMessageType`, nullable `Edm.String`                                      |
 | `integrationFlowId`    | string or null               | `IntegrationArtifact/Id`, nullable `Edm.String` inside the non-null complex property |
 | `integrationFlowName`  | string or null               | `IntegrationFlowName`, nullable `Edm.String`                                         |
 | `status`               | string or null               | `Status`, nullable `Edm.String`                                                      |
@@ -95,9 +104,11 @@ internally, but the normalized result still returns no more than 100 items.
   Never concatenate a model-authored query fragment.
 - Use the fixed projection
   `MessageGuid,CorrelationId,IntegrationArtifact,IntegrationFlowName,Status,LogStart,LogEnd`.
-- Express the UTC input interval as `LogStart ge <from>` and `LogStart lt <to>` and
-  add only exact `Status`, `CorrelationId`, or `IntegrationArtifact/Id` equality
-  predicates when supplied. Normalize timestamps to UTC, then serialize SAP OData
+- Express a supplied or default UTC input interval as `LogStart ge <from>` and
+  `LogStart lt <to>` and add only exact `Status`, `CorrelationId`,
+  `ApplicationMessageId`, `ApplicationMessageType`, or `IntegrationArtifact/Id`
+  equality predicates when supplied. Exact identifier lookups may omit the interval.
+  Normalize timestamps to UTC, then serialize SAP OData
   v2 datetime literals without a `Z` suffix or numeric offset because SAP documents
   that those suffixes are not interpreted for this API.
 - Use fixed `$orderby=LogStart desc` and `$top=limit+1` (at most `101`) so the

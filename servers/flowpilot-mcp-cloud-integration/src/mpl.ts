@@ -7,7 +7,7 @@ export const MPL_REQUEST_TIMEOUT_MS = 10_000;
 export const MPL_MAX_RESPONSE_BYTES = 256 * 1024;
 export const MPL_ACCEPT_HEADER = "application/json";
 export const MPL_SELECT =
-  "MessageGuid,CorrelationId,IntegrationArtifact,IntegrationFlowName,Status,LogStart,LogEnd";
+  "MessageGuid,CorrelationId,ApplicationMessageId,ApplicationMessageType,IntegrationArtifact,IntegrationFlowName,Status,LogStart,LogEnd";
 
 export const MPL_STATUSES = [
   "COMPLETED",
@@ -23,17 +23,21 @@ export const MPL_STATUSES = [
 export type MplStatus = (typeof MPL_STATUSES)[number];
 
 export interface SearchMessageProcessingLogsRequest {
-  fromUtc: string;
-  toUtc: string;
+  fromUtc?: string;
+  toUtc?: string;
   status?: MplStatus;
   integrationFlowId?: string;
   correlationId?: string;
+  applicationMessageId?: string;
+  applicationMessageType?: string;
   limit?: number;
 }
 
 export interface MessageProcessingLogItem {
   messageId: string;
   correlationId: string | null;
+  applicationMessageId: string | null;
+  applicationMessageType: string | null;
   integrationFlowId: string | null;
   integrationFlowName: string | null;
   status: string | null;
@@ -143,6 +147,7 @@ function parseStatus(value: unknown): MplStatus | undefined {
 
 export function validateSearchRequest(
   value: unknown,
+  now: number = Date.now(),
 ): SearchMessageProcessingLogsRequest {
   if (!isRecord(value)) {
     throw invalidRequest();
@@ -154,21 +159,28 @@ export function validateSearchRequest(
     "status",
     "integrationFlowId",
     "correlationId",
+    "applicationMessageId",
+    "applicationMessageType",
     "limit",
   ]);
   if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
     throw invalidRequest();
   }
 
-  const from = parseUtcTimestamp(value.fromUtc);
-  const to = parseUtcTimestamp(value.toUtc);
-  const windowMs = to.getTime() - from.getTime();
-  if (
-    !Number.isFinite(windowMs) ||
-    windowMs <= 0 ||
-    windowMs > MPL_MAX_WINDOW_MS
-  ) {
-    throw invalidRequest();
+  const hasFrom = value.fromUtc !== undefined;
+  const hasTo = value.toUtc !== undefined;
+  if (hasFrom !== hasTo) throw invalidRequest();
+  const from = hasFrom ? parseUtcTimestamp(value.fromUtc) : undefined;
+  const to = hasTo ? parseUtcTimestamp(value.toUtc) : undefined;
+  if (from && to) {
+    const windowMs = to.getTime() - from.getTime();
+    if (
+      !Number.isFinite(windowMs) ||
+      windowMs <= 0 ||
+      windowMs > MPL_MAX_WINDOW_MS
+    ) {
+      throw invalidRequest();
+    }
   }
 
   const limit = value.limit ?? MPL_DEFAULT_LIMIT;
@@ -194,12 +206,38 @@ export function validateSearchRequest(
     correlationId = value.correlationId;
   }
 
+  let applicationMessageId: string | undefined;
+  if (value.applicationMessageId !== undefined) {
+    assertSafeIdentifier(value.applicationMessageId);
+    applicationMessageId = value.applicationMessageId;
+  }
+
+  let applicationMessageType: string | undefined;
+  if (value.applicationMessageType !== undefined) {
+    assertSafeIdentifier(value.applicationMessageType);
+    applicationMessageType = value.applicationMessageType;
+  }
+
+  const hasExactSelector = Boolean(
+    integrationFlowId || correlationId || applicationMessageId,
+  );
+  const defaultWindow =
+    !from && !to && !hasExactSelector
+      ? {
+          fromUtc: new Date(now - MPL_MAX_WINDOW_MS).toISOString(),
+          toUtc: new Date(now).toISOString(),
+        }
+      : {};
+
   return {
-    fromUtc: from.toISOString(),
-    toUtc: to.toISOString(),
+    ...(from && to
+      ? { fromUtc: from.toISOString(), toUtc: to.toISOString() }
+      : defaultWindow),
     ...(status ? { status } : {}),
     ...(integrationFlowId ? { integrationFlowId } : {}),
     ...(correlationId ? { correlationId } : {}),
+    ...(applicationMessageId ? { applicationMessageId } : {}),
+    ...(applicationMessageType ? { applicationMessageType } : {}),
     limit,
   };
 }
@@ -217,10 +255,13 @@ export function buildMessageProcessingLogsQuery(
   request: SearchMessageProcessingLogsRequest,
 ): URLSearchParams {
   const normalized = validateSearchRequest(request);
-  const filters = [
-    `LogStart ge ${serializeODataDateTime(normalized.fromUtc)}`,
-    `LogStart lt ${serializeODataDateTime(normalized.toUtc)}`,
-  ];
+  const filters: string[] = [];
+  if (normalized.fromUtc && normalized.toUtc) {
+    filters.push(
+      `LogStart ge ${serializeODataDateTime(normalized.fromUtc)}`,
+      `LogStart lt ${serializeODataDateTime(normalized.toUtc)}`,
+    );
+  }
   if (normalized.status) {
     filters.push(`Status eq ${escapeODataString(normalized.status)}`);
   }
@@ -232,6 +273,16 @@ export function buildMessageProcessingLogsQuery(
   if (normalized.integrationFlowId) {
     filters.push(
       `IntegrationArtifact/Id eq ${escapeODataString(normalized.integrationFlowId)}`,
+    );
+  }
+  if (normalized.applicationMessageId) {
+    filters.push(
+      `ApplicationMessageId eq ${escapeODataString(normalized.applicationMessageId)}`,
+    );
+  }
+  if (normalized.applicationMessageType) {
+    filters.push(
+      `ApplicationMessageType eq ${escapeODataString(normalized.applicationMessageType)}`,
     );
   }
 
@@ -445,6 +496,14 @@ function normalizeRow(value: unknown): MessageProcessingLogItem {
   return {
     messageId,
     correlationId: optionalString(value.CorrelationId, "CorrelationId"),
+    applicationMessageId: optionalString(
+      value.ApplicationMessageId,
+      "ApplicationMessageId",
+    ),
+    applicationMessageType: optionalString(
+      value.ApplicationMessageType,
+      "ApplicationMessageType",
+    ),
     integrationFlowId,
     integrationFlowName: optionalString(
       value.IntegrationFlowName,
@@ -487,7 +546,7 @@ export class MessageProcessingLogsConnector implements MessageProcessingLogsConn
   }
 
   async search(value: unknown): Promise<SearchMessageProcessingLogsResponse> {
-    const request = validateSearchRequest(value);
+    const request = validateSearchRequest(value, this.now());
     let destination: ResolvedDestination;
     try {
       destination = await this.resolver.resolve(MPL_DESTINATION_NAME);

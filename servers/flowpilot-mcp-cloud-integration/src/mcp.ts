@@ -23,7 +23,6 @@ import {
 const searchInputSchema = fromJsonSchema<SearchMessageProcessingLogsRequest>({
   type: "object",
   additionalProperties: false,
-  required: ["fromUtc", "toUtc"],
   properties: {
     fromUtc: {
       type: "string",
@@ -40,6 +39,12 @@ const searchInputSchema = fromJsonSchema<SearchMessageProcessingLogsRequest>({
     status: { type: "string", enum: [...MPL_STATUSES] },
     integrationFlowId: { type: "string", minLength: 1, maxLength: 256 },
     correlationId: { type: "string", minLength: 1, maxLength: 256 },
+    applicationMessageId: { type: "string", minLength: 1, maxLength: 256 },
+    applicationMessageType: {
+      type: "string",
+      minLength: 1,
+      maxLength: 256,
+    },
     limit: {
       type: "integer",
       minimum: 1,
@@ -62,6 +67,8 @@ const searchOutputSchema = fromJsonSchema<SearchMessageProcessingLogsResponse>({
         required: [
           "messageId",
           "correlationId",
+          "applicationMessageId",
+          "applicationMessageType",
           "integrationFlowId",
           "integrationFlowName",
           "status",
@@ -72,6 +79,8 @@ const searchOutputSchema = fromJsonSchema<SearchMessageProcessingLogsResponse>({
         properties: {
           messageId: { type: "string" },
           correlationId: { type: ["string", "null"] },
+          applicationMessageId: { type: ["string", "null"] },
+          applicationMessageType: { type: ["string", "null"] },
           integrationFlowId: { type: ["string", "null"] },
           integrationFlowName: { type: ["string", "null"] },
           status: { type: ["string", "null"] },

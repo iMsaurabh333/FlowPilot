@@ -76,6 +76,26 @@ function httpErrorStatus(error: unknown) {
   return undefined;
 }
 
+function safeModelFailureDetails(error: ModelInvocationError) {
+  const cause = error.cause;
+  const causeRecord =
+    typeof cause === "object" && cause !== null
+      ? (cause as Record<string, unknown>)
+      : undefined;
+  const status = causeRecord?.status;
+  const code = causeRecord?.code;
+  return {
+    errorType: error.name,
+    causeType: cause instanceof Error ? cause.name : "UnknownError",
+    ...(typeof status === "number" && Number.isSafeInteger(status)
+      ? { providerStatus: status }
+      : {}),
+    ...(typeof code === "string" && /^[A-Za-z0-9_-]{1,64}$/u.test(code)
+      ? { providerCode: code }
+      : {}),
+  };
+}
+
 export function createApp(options: AppOptions) {
   const app = express();
   app.disable("x-powered-by");
@@ -225,6 +245,13 @@ export function createApp(options: AppOptions) {
         return;
       }
       if (error instanceof ModelInvocationError) {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            message: "FlowPilot model invocation failed",
+            ...safeModelFailureDetails(error),
+          }),
+        );
         response.status(502).json({ error: "model_unavailable" });
         return;
       }

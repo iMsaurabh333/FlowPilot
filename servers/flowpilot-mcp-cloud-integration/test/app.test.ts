@@ -271,6 +271,8 @@ describe("authenticated Streamable HTTP MCP server", () => {
         {
           messageId: "message-1",
           correlationId: "corr-1",
+          applicationMessageId: null,
+          applicationMessageType: null,
           integrationFlowId: "iflow-1",
           integrationFlowName: "Orders",
           status: "FAILED",

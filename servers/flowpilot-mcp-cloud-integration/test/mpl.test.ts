@@ -9,6 +9,7 @@ import {
   MessageProcessingLogsError,
   MPL_DESTINATION_NAME,
   type DestinationResolver,
+  validateSearchRequest,
 } from "../src/mpl.js";
 
 const REQUEST = {
@@ -17,6 +18,8 @@ const REQUEST = {
   status: "FAILED" as const,
   integrationFlowId: "O'Hare",
   correlationId: "corr-1",
+  applicationMessageId: "application-1",
+  applicationMessageType: "purchase-order",
   limit: 2,
 };
 
@@ -47,6 +50,8 @@ async function startFakeODataServer(): Promise<FakeODataServer> {
             {
               MessageGuid: "message-1",
               CorrelationId: "corr-1",
+              ApplicationMessageId: "application-1",
+              ApplicationMessageType: "purchase-order",
               IntegrationArtifact: { Id: "iflow-1" },
               IntegrationFlowName: "Orders",
               Status: "FAILED",
@@ -116,15 +121,35 @@ describe("Message Processing Logs connector", () => {
   it("builds a bounded, escaped OData v2 query", () => {
     const query = buildMessageProcessingLogsQuery(REQUEST);
     expect(query.get("$select")).toBe(
-      "MessageGuid,CorrelationId,IntegrationArtifact,IntegrationFlowName,Status,LogStart,LogEnd",
+      "MessageGuid,CorrelationId,ApplicationMessageId,ApplicationMessageType,IntegrationArtifact,IntegrationFlowName,Status,LogStart,LogEnd",
     );
     expect(query.get("$orderby")).toBe("LogStart desc");
     expect(query.get("$top")).toBe("3");
     expect(query.get("$filter")).toBe(
-      "LogStart ge datetime'2025-12-31T22:00:00' and LogStart lt datetime'2026-01-01T00:00:00' and Status eq 'FAILED' and CorrelationId eq 'corr-1' and IntegrationArtifact/Id eq 'O''Hare'",
+      "LogStart ge datetime'2025-12-31T22:00:00' and LogStart lt datetime'2026-01-01T00:00:00' and Status eq 'FAILED' and CorrelationId eq 'corr-1' and IntegrationArtifact/Id eq 'O''Hare' and ApplicationMessageId eq 'application-1' and ApplicationMessageType eq 'purchase-order'",
     );
     expect(query.toString()).not.toContain("%22");
     expect(query.toString()).not.toContain("$skiptoken");
+  });
+
+  it("uses exact identifier filters without imposing a time window", () => {
+    const query = buildMessageProcessingLogsQuery({
+      applicationMessageId: "application-1",
+      applicationMessageType: "purchase-order",
+      limit: 10,
+    });
+
+    expect(query.get("$filter")).toBe(
+      "ApplicationMessageId eq 'application-1' and ApplicationMessageType eq 'purchase-order'",
+    );
+  });
+
+  it("defaults an unfiltered recent search to a bounded 24-hour window", () => {
+    expect(validateSearchRequest({}, Date.UTC(2026, 0, 2))).toMatchObject({
+      fromUtc: "2026-01-01T00:00:00.000Z",
+      toUtc: "2026-01-02T00:00:00.000Z",
+      limit: 20,
+    });
   });
 
   it.each([
@@ -171,6 +196,8 @@ describe("Message Processing Logs connector", () => {
         {
           messageId: "message-1",
           correlationId: "corr-1",
+          applicationMessageId: "application-1",
+          applicationMessageType: "purchase-order",
           integrationFlowId: "iflow-1",
           integrationFlowName: "Orders",
           status: "FAILED",
@@ -181,6 +208,8 @@ describe("Message Processing Logs connector", () => {
         {
           messageId: "message-2",
           correlationId: null,
+          applicationMessageId: null,
+          applicationMessageType: null,
           integrationFlowId: "iflow-2",
           integrationFlowName: null,
           status: "COMPLETED",
