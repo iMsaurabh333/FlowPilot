@@ -36,6 +36,29 @@ type PendingAction = "creating" | "sending" | undefined;
 
 type AppView = "chat" | "registry";
 
+const starterPrompts = [
+  {
+    label: "Investigate a failed message",
+    prompt:
+      "Investigate a failed message. I can provide its correlation ID, integration flow ID, or application message ID.",
+  },
+  {
+    label: "Check transaction status",
+    prompt:
+      "Check the status of a transaction and explain the relevant processing-log results.",
+  },
+  {
+    label: "Summarize recent errors",
+    prompt:
+      "Summarize recent failed integration messages and identify the most useful next checks.",
+  },
+  {
+    label: "Explain an integration flow",
+    prompt:
+      "Help me investigate an integration flow. I will provide the flow ID and the observed symptom.",
+  },
+] as const;
+
 function userInitials(user: CurrentUser) {
   const name = user.displayName?.trim() || user.subject;
   return name
@@ -463,6 +486,22 @@ export function App({ client = flowPilotApi }: AppProps) {
                         Include the observed symptom and relevant transaction or
                         integration context. Do not include secrets.
                       </p>
+                      <div
+                        className="starter-prompts"
+                        role="group"
+                        aria-label="Starter prompts"
+                      >
+                        {starterPrompts.map(({ label, prompt }) => (
+                          <Button
+                            key={label}
+                            design="Transparent"
+                            type="Button"
+                            onClick={() => setDraft(prompt)}
+                          >
+                            {label}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <ol

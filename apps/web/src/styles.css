@@ -379,6 +379,19 @@ textarea {
   line-height: 1.5;
 }
 
+.starter-prompts {
+  width: min(34rem, 100%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-block-start: 0.5rem;
+}
+
+.starter-prompts ui5-button {
+  max-width: 100%;
+}
+
 .message-list {
   width: min(56rem, 100%);
   display: flex;

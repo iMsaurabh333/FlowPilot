@@ -108,6 +108,28 @@ describe("FlowPilot chat interface", () => {
     expect(composer()).not.toHaveAttribute("disabled");
   });
 
+  it("copies a starter prompt into a new conversation draft without sending", async () => {
+    const createConversation = vi.fn().mockResolvedValue(summary);
+    const sendMessage = vi.fn();
+    renderApp(
+      api({
+        listConversations: vi.fn().mockResolvedValue([]),
+        createConversation,
+        sendMessage,
+      }),
+    );
+
+    fireEvent.click(await screen.findByText("Start a conversation"));
+    await screen.findByRole("group", { name: "Starter prompts" });
+    fireEvent.click(screen.getByText("Investigate a failed message"));
+
+    expect(composer()).toHaveProperty(
+      "value",
+      "Investigate a failed message. I can provide its correlation ID, integration flow ID, or application message ID.",
+    );
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
   it("sends a trimmed message when Enter is pressed", async () => {
     const response = {
       ...detail,
