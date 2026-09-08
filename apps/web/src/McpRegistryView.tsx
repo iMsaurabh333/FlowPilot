@@ -428,10 +428,18 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                 GP
               </div>
               <div>
-                <p id="policy-title">Generic secure MCP</p>
+                <p id="policy-title">
+                  {selectedDraft.server?.policyPresetId ===
+                  "cloud-integration-content"
+                    ? "Cloud Integration Content MCP"
+                    : "Generic secure MCP"}
+                </p>
                 <span>
                   HTTPS or local loopback · /mcp · managed authentication ·
-                  McpInvoke scope
+                  {selectedDraft.server?.policyPresetId ===
+                  "cloud-integration-content"
+                    ? "ContentInvoke scope"
+                    : "McpInvoke scope"}
                 </span>
               </div>
               <span className="preset-badge">Policy preset</span>
@@ -496,7 +504,7 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                     })
                   }
                   placeholder="technical:flowpilot-mcp"
-                  pattern="(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp)"
+                  pattern="(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp(?:-content)?)"
                   required
                 />
                 <span>
@@ -599,6 +607,10 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                 <div>
                   <dt>Discovered tools</dt>
                   <dd>{selectedDraft.server.discoveredToolCount ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Last error</dt>
+                  <dd>{selectedDraft.server.lastErrorCategory ?? "—"}</dd>
                 </div>
               </dl>
             )}
