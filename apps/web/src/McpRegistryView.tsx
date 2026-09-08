@@ -512,11 +512,12 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                       allowedToolNames: event.target.value,
                     })
                   }
-                  placeholder="search_message_processing_logs"
+                  placeholder="search_message_processing_logs, get_message_processing_log_error_information"
                 />
                 <span>
                   Only named tools are exposed. Ping fails if an allowed tool is
-                  missing from the server.
+                  missing from the server. Add the error-information tool only
+                  when error-detail access is approved.
                 </span>
               </label>
             </div>

@@ -634,6 +634,30 @@ export function App({ client = flowPilotApi }: AppProps) {
                           <div className="message-content">
                             {message.content}
                           </div>
+                          {message.role === "assistant" && message.sources && (
+                            <p className="message-sources">
+                              Source: {message.sources.map(({ label }) => label).join(" · ")}
+                            </p>
+                          )}
+                          {message.role === "assistant" && message.tables?.map((table) => (
+                            <div className="tool-table" key={`${message.id}-${table.title}`}>
+                              <table>
+                                <caption>{table.title}</caption>
+                                <thead>
+                                  <tr>
+                                    {table.columns.map((column) => <th key={column} scope="col">{column}</th>)}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {table.rows.map((row, rowIndex) => (
+                                    <tr key={`${message.id}-${rowIndex}`}>
+                                      {row.map((cell, cellIndex) => <td key={`${message.id}-${rowIndex}-${table.columns[cellIndex]}`}>{cell ?? "—"}</td>)}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ))}
                         </li>
                       ))}
                     </ol>

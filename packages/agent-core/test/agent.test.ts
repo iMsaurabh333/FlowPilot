@@ -79,6 +79,52 @@ describe("FlowPilot chat graph", () => {
     );
   });
 
+  it("attaches a business-friendly source and MPL table to a tool-grounded answer", async () => {
+    const model = fakeModel()
+      .respondWithTools([
+        {
+          name: "cloud-integration__search_message_processing_logs",
+          args: { status: "FAILED" },
+        },
+      ])
+      .respond(new AIMessage("One failed message was found."));
+    const agent = createChatAgent({ checkpointer: new MemorySaver(), model });
+
+    const messages = await agent.sendMessage("mpl-thread", "Find failures", [
+      {
+        name: "cloud-integration__search_message_processing_logs",
+        description: "Search MPLs.",
+        inputSchema: { type: "object" },
+        async invoke() {
+          return JSON.stringify({
+            items: [
+              {
+                messageId: "message-1",
+                status: "FAILED",
+                integrationFlowName: "Orders",
+                startedAt: "2026-09-08T10:00:00.000Z",
+              },
+            ],
+          });
+        },
+      },
+    ]);
+
+    expect(messages.at(-1)).toMatchObject({
+      role: "assistant",
+      sources: [
+        { label: "Cloud Integration monitoring · Message Processing Logs" },
+      ],
+      tables: [
+        {
+          title: "Message Processing Logs",
+          columns: ["Message ID", "Status", "Integration flow", "Started"],
+          rows: [["message-1", "FAILED", "Orders", "2026-09-08T10:00:00.000Z"]],
+        },
+      ],
+    });
+  });
+
   it("does not expose empty assistant placeholders as chat messages", async () => {
     const agent = createChatAgent({
       checkpointer: new MemorySaver(),

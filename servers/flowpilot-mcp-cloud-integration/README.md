@@ -1,9 +1,9 @@
 # FlowPilot Cloud Integration MCP server
 
 This package is the independently runnable Streamable HTTP boundary for SAP Cloud
-Integration. It exposes the reviewed, bounded `search_message_processing_logs`
-tool through a Destination-backed connector. The connector is read-only and
-accepts only the semantic fields defined by the pinned EDMX-derived contract.
+Integration. It exposes reviewed, bounded Message Processing Log tools through
+a Destination-backed connector. The connector is read-only and accepts only the
+semantic fields defined by the pinned EDMX-derived contract.
 
 ## Current protocol and security contract
 
@@ -26,10 +26,16 @@ accepts only the semantic fields defined by the pinned EDMX-derived contract.
   **Ping** must use the authenticated MCP protocol endpoint instead: authenticated
   `server/discover` for the 2026 protocol and initialize plus `ping` for the 2025
   compatibility path.
-- One tool, `search_message_processing_logs`, is registered. It performs only a
-  bounded HTTP `GET` against the fixed `FLOWPILOT_CLOUD_INTEGRATION_MPL`
-  destination and returns normalized Message Processing Log metadata. No
-  resources, prompts, sampling, elicitation, roots, or subscriptions are exposed.
+- Two tools are registered:
+  - `search_message_processing_logs` performs a bounded HTTP `GET` against the
+    fixed `FLOWPILOT_CLOUD_INTEGRATION_MPL` destination and returns normalized
+    Message Processing Log metadata.
+  - `get_message_processing_log_error_information` returns bounded plain-text
+    error details only when supplied the MessageGuid and a non-completed status
+    from an approved log search. Completed and discarded messages are not
+    queried.
+- No resources, prompts, sampling, elicitation, roots, or subscriptions are
+  exposed.
 
 ## Local verification
 

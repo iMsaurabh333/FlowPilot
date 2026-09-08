@@ -39,6 +39,24 @@ const detail = {
   ],
 };
 
+const toolDetail = {
+  ...detail,
+  messages: [
+    ...detail.messages,
+    {
+      id: "message-3",
+      role: "assistant" as const,
+      content: "One failed message was found.",
+      sources: [{ label: "Cloud Integration monitoring · Message Processing Logs" }],
+      tables: [{
+        title: "Message Processing Logs",
+        columns: ["Message ID", "Status", "Integration flow", "Started"],
+        rows: [["message-1", "FAILED", "Orders", "2026-09-08T10:00:00.000Z"]],
+      }],
+    },
+  ],
+};
+
 function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
   return {
     loadCurrentUser: vi.fn().mockResolvedValue(user),
@@ -196,6 +214,16 @@ describe("FlowPilot chat interface", () => {
       await screen.findByText(/assistant is temporarily unavailable/i),
     ).toBeInTheDocument();
     expect(input).toHaveProperty("value", "Retryable message");
+  });
+
+  it("shows the MCP source and an accessible MPL result table", async () => {
+    renderApp(api({ loadConversation: vi.fn().mockResolvedValue(toolDetail) }));
+
+    expect(await screen.findByText(/Source: Cloud Integration monitoring/)).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Message Processing Logs" });
+    expect(table).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "FAILED" })).toBeInTheDocument();
   });
 
   it("asks for confirmation before deleting the active conversation", async () => {

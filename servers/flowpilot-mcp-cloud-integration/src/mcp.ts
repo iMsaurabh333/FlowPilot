@@ -17,6 +17,8 @@ import {
   MPL_STATUSES,
   type SearchMessageProcessingLogsRequest,
   type SearchMessageProcessingLogsResponse,
+  type GetMessageProcessingLogErrorInformationRequest,
+  type MessageProcessingLogErrorInformation,
   type MessageProcessingLogsConnectorLike,
 } from "./mpl.js";
 
@@ -98,6 +100,28 @@ const searchOutputSchema = fromJsonSchema<SearchMessageProcessingLogsResponse>({
   },
 });
 
+const errorInformationInputSchema = fromJsonSchema<GetMessageProcessingLogErrorInformationRequest>({
+  type: "object",
+  additionalProperties: false,
+  required: ["messageId", "status"],
+  properties: {
+    messageId: { type: "string", minLength: 1, maxLength: 256 },
+    status: { type: "string", enum: [...MPL_STATUSES] },
+  },
+});
+
+const errorInformationOutputSchema = fromJsonSchema<MessageProcessingLogErrorInformation>({
+  type: "object",
+  additionalProperties: false,
+  required: ["messageId", "status", "errorInformation", "available"],
+  properties: {
+    messageId: { type: "string" },
+    status: { type: "string", enum: [...MPL_STATUSES] },
+    errorInformation: { type: ["string", "null"] },
+    available: { type: "boolean" },
+  },
+});
+
 export interface CloudIntegrationMcpServerOptions {
   connector?: MessageProcessingLogsConnectorLike;
 }
@@ -151,6 +175,40 @@ export function createCloudIntegrationMcpServer(
     async (args) => {
       try {
         const result = await connector.search(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          structuredContent: result,
+        };
+      } catch (error: unknown) {
+        return safeToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_message_processing_log_error_information",
+    {
+      title: "Get Message Processing Log Error Information",
+      description:
+        "Return bounded plain-text error information for one non-completed Message Processing Log. " +
+        "Requires the MessageGuid and current status from an approved log search. " +
+        "Completed and discarded messages are not queried.",
+      inputSchema: errorInformationInputSchema,
+      outputSchema: errorInformationOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args) => {
+      try {
+        const getErrorInformation = connector.errorInformation;
+        if (!getErrorInformation) {
+          throw new MessageProcessingLogsError("destination_unavailable");
+        }
+        const result = await getErrorInformation.call(connector, args);
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
           structuredContent: result,

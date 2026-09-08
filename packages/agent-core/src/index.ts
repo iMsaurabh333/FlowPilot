@@ -20,10 +20,22 @@ import { tool } from "@langchain/core/tools";
 
 export type ChatMessageRole = "user" | "assistant";
 
+export interface ChatSource {
+  label: string;
+}
+
+export interface ChatTable {
+  title: string;
+  columns: string[];
+  rows: Array<Array<string | null>>;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatMessageRole;
   content: string;
+  sources?: ChatSource[];
+  tables?: ChatTable[];
 }
 
 export interface ChatAgent {
@@ -117,6 +129,62 @@ function toChatMessage(
   };
 }
 
+function toolName(message: BaseMessage): string | undefined {
+  const name = (message as BaseMessage & { name?: unknown }).name;
+  return typeof name === "string" ? name : undefined;
+}
+
+function toolSource(name: string): ChatSource {
+  if (name.endsWith("search_message_processing_logs")) {
+    return { label: "Cloud Integration monitoring · Message Processing Logs" };
+  }
+  return { label: `MCP tool: ${name.replaceAll("_", " ")}` };
+}
+
+function safeTableCell(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return typeof value === "string" && value.length <= 4_000 ? value : undefined;
+}
+
+function messageProcessingLogsTable(
+  name: string,
+  content: MessageContent,
+): ChatTable | undefined {
+  if (!name.endsWith("search_message_processing_logs")) return undefined;
+  const text = contentAsText(content);
+  try {
+    const payload = JSON.parse(text) as unknown;
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("items" in payload) ||
+      !Array.isArray(payload.items)
+    ) {
+      return undefined;
+    }
+    const rows = payload.items.flatMap((item) => {
+      if (typeof item !== "object" || item === null) return [];
+      const record = item as Record<string, unknown>;
+      const row = [
+        safeTableCell(record.messageId),
+        safeTableCell(record.status),
+        safeTableCell(record.integrationFlowName) ?? safeTableCell(record.integrationFlowId),
+        safeTableCell(record.startedAt),
+      ];
+      if (row.some((cell) => cell === undefined)) return [];
+      return [[row[0]!, row[1]!, row[2]!, row[3]!]];
+    });
+    if (rows.length === 0) return undefined;
+    return {
+      title: "Message Processing Logs",
+      columns: ["Message ID", "Status", "Integration flow", "Started"],
+      rows,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export function createChatAgent(options: ChatAgentOptions): ChatAgent {
   const maxContextMessages = Math.max(2, options.maxContextMessages ?? 12);
   const systemPrompt = options.systemPrompt ?? defaultSystemPrompt;
@@ -176,9 +244,40 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
     const messages: BaseMessage[] = Array.isArray(snapshot.values.messages)
       ? (snapshot.values.messages as BaseMessage[])
       : [];
-    return messages
-      .map((message, index) => toChatMessage(message, threadId, index))
-      .filter((message): message is ChatMessage => message !== undefined);
+    const pendingToolOutputs: Array<{ name: string; table?: ChatTable }> = [];
+    const chatMessages: ChatMessage[] = [];
+    messages.forEach((message, index) => {
+      if (message.getType() === "tool") {
+        const name = toolName(message);
+        if (name) {
+          pendingToolOutputs.push({
+            name,
+            table: messageProcessingLogsTable(name, message.content),
+          });
+        }
+        return;
+      }
+      const chatMessage = toChatMessage(message, threadId, index);
+      if (!chatMessage) return;
+      if (chatMessage.role === "assistant" && pendingToolOutputs.length > 0) {
+        const sourceLabels = new Set<string>();
+        const sources = pendingToolOutputs
+          .map(({ name }) => toolSource(name))
+          .filter(({ label }) => {
+            if (sourceLabels.has(label)) return false;
+            sourceLabels.add(label);
+            return true;
+          });
+        const tables = pendingToolOutputs.flatMap(({ table }) =>
+          table ? [table] : [],
+        );
+        chatMessage.sources = sources;
+        if (tables.length > 0) chatMessage.tables = tables;
+        pendingToolOutputs.length = 0;
+      }
+      chatMessages.push(chatMessage);
+    });
+    return chatMessages;
   };
 
   const trimOldestTurn = async (threadId: string, maxTurns: number) => {

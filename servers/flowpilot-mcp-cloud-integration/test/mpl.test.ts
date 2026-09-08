@@ -8,6 +8,7 @@ import {
   MessageProcessingLogsConnector,
   MessageProcessingLogsError,
   MPL_DESTINATION_NAME,
+  validateErrorInformationRequest,
   type DestinationResolver,
   validateSearchRequest,
 } from "../src/mpl.js";
@@ -257,5 +258,51 @@ describe("Message Processing Logs connector", () => {
     await expect(malformed.search(REQUEST)).rejects.toMatchObject({
       category: "invalid_upstream_response",
     });
+  });
+
+  it("retrieves bounded error information only for a non-completed message", async () => {
+    const requests: URL[] = [];
+    const connector = new MessageProcessingLogsConnector({
+      fetchImpl: async (input, init) => {
+        expect(init?.method).toBe("GET");
+        requests.push(new URL(String(input)));
+        return new Response("Receiver endpoint rejected the payload.", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        });
+      },
+      resolver: resolver(new URL("https://cpi.example.test")),
+    });
+
+    await expect(
+      connector.errorInformation({ messageId: "message-1", status: "FAILED" }),
+    ).resolves.toEqual({
+      messageId: "message-1",
+      status: "FAILED",
+      errorInformation: "Receiver endpoint rejected the payload.",
+      available: true,
+    });
+    await expect(
+      connector.errorInformation({ messageId: "message-2", status: "COMPLETED" }),
+    ).resolves.toEqual({
+      messageId: "message-2",
+      status: "COMPLETED",
+      errorInformation: null,
+      available: false,
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].pathname).toBe(
+      "/api/v1/MessageProcessingLogs('message-1')/ErrorInformation/$value",
+    );
+  });
+
+  it("requires a message identifier and a known status for error information", () => {
+    expect(() => validateErrorInformationRequest({ messageId: "message-1" })).toThrow(
+      MessageProcessingLogsError,
+    );
+    expect(() => validateErrorInformationRequest({ messageId: " message-1", status: "FAILED" })).toThrow(
+      MessageProcessingLogsError,
+    );
   });
 });

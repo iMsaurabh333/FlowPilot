@@ -5,6 +5,7 @@ export const MPL_DEFAULT_LIMIT = 20;
 export const MPL_MAX_WINDOW_MS = 24 * 60 * 60 * 1_000;
 export const MPL_REQUEST_TIMEOUT_MS = 10_000;
 export const MPL_MAX_RESPONSE_BYTES = 256 * 1024;
+export const MPL_ERROR_INFORMATION_MAX_RESPONSE_BYTES = 16 * 1024;
 export const MPL_ACCEPT_HEADER = "application/json";
 export const MPL_SELECT =
   "MessageGuid,CorrelationId,ApplicationMessageId,ApplicationMessageType,IntegrationArtifact,IntegrationFlowName,Status,LogStart,LogEnd";
@@ -52,6 +53,18 @@ export interface SearchMessageProcessingLogsResponse {
   hasMore: boolean;
 }
 
+export interface GetMessageProcessingLogErrorInformationRequest {
+  messageId: string;
+  status: MplStatus;
+}
+
+export interface MessageProcessingLogErrorInformation {
+  messageId: string;
+  status: MplStatus;
+  errorInformation: string | null;
+  available: boolean;
+}
+
 export type MplErrorCategory =
   | "invalid_request"
   | "not_authorized"
@@ -90,6 +103,9 @@ export interface MessageProcessingLogsConnectorOptions {
 
 export interface MessageProcessingLogsConnectorLike {
   search(value: unknown): Promise<SearchMessageProcessingLogsResponse>;
+  errorInformation?(
+    value: unknown,
+  ): Promise<MessageProcessingLogErrorInformation>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -242,6 +258,18 @@ export function validateSearchRequest(
   };
 }
 
+export function validateErrorInformationRequest(
+  value: unknown,
+): GetMessageProcessingLogErrorInformationRequest {
+  if (!isRecord(value) || Object.keys(value).some((key) => key !== "messageId" && key !== "status")) {
+    throw invalidRequest();
+  }
+  assertSafeIdentifier(value.messageId);
+  const status = parseStatus(value.status);
+  if (!status) throw invalidRequest();
+  return { messageId: value.messageId, status };
+}
+
 function escapeODataString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
@@ -339,6 +367,13 @@ function buildMessageProcessingLogsUrl(
   }
   url.pathname = `${rootPath}${MPL_ENTITY_PATH}`;
   url.search = query.toString();
+  return url;
+}
+
+function buildErrorInformationUrl(destinationUrl: string, messageId: string): URL {
+  const url = buildMessageProcessingLogsUrl(destinationUrl, new URLSearchParams());
+  url.pathname = `${url.pathname}(${escapeODataString(messageId)})/ErrorInformation/$value`;
+  url.search = "";
   return url;
 }
 
@@ -634,6 +669,67 @@ export class MessageProcessingLogsConnector implements MessageProcessingLogsConn
       items,
       count: items.length,
       hasMore: rows.length > limit,
+    };
+  }
+
+  async errorInformation(
+    value: unknown,
+  ): Promise<MessageProcessingLogErrorInformation> {
+    const request = validateErrorInformationRequest(value);
+    if (request.status === "COMPLETED" || request.status === "DISCARDED") {
+      return {
+        messageId: request.messageId,
+        status: request.status,
+        errorInformation: null,
+        available: false,
+      };
+    }
+
+    let destination: ResolvedDestination;
+    try {
+      destination = await this.resolver.resolve(MPL_DESTINATION_NAME);
+    } catch (error) {
+      if (error instanceof MessageProcessingLogsError) throw error;
+      throw new MessageProcessingLogsError(
+        "destination_unavailable",
+        "The configured destination is unavailable",
+      );
+    }
+
+    const endpoint = buildErrorInformationUrl(destination.url, request.messageId);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    let errorInformation: string;
+    try {
+      const response = await this.fetchImpl(endpoint, {
+        method: "GET",
+        headers: { ...destination.headers, Accept: "text/plain" },
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      if (response.status !== 200) throw responseError(response.status);
+      errorInformation = await readBoundedBody(
+        response,
+        Math.min(this.maxResponseBytes, MPL_ERROR_INFORMATION_MAX_RESPONSE_BYTES),
+      );
+    } catch (error: unknown) {
+      if (error instanceof MessageProcessingLogsError) throw error;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new MessageProcessingLogsError("upstream_timeout", "The upstream request timed out");
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new MessageProcessingLogsError("upstream_timeout", "The upstream request timed out");
+      }
+      throw new MessageProcessingLogsError("upstream_unavailable", "The upstream request failed");
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    return {
+      messageId: request.messageId,
+      status: request.status,
+      errorInformation: errorInformation.trim().slice(0, 8_000) || null,
+      available: true,
     };
   }
 

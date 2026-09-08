@@ -55,6 +55,12 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  sources?: Array<{ label: string }>;
+  tables?: Array<{
+    title: string;
+    columns: string[];
+    rows: Array<Array<string | null>>;
+  }>;
 }
 
 export interface ConversationDetail extends ConversationSummary {
