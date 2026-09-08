@@ -88,6 +88,25 @@ textarea {
   padding: 0.25rem 0.5rem 1rem;
 }
 
+.flowpilot-logo {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
+  background: var(--sapBrandColor);
+}
+
+.flowpilot-logo svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: var(--sapContent_ContrastTextColor);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
 .navigation-mark,
 .nav-glyph {
   flex: 0 0 auto;

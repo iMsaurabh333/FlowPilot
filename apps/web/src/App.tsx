@@ -303,6 +303,14 @@ export function App({ client = flowPilotApi }: AppProps) {
       <ShellBar
         primaryTitle="FlowPilot"
         secondaryTitle="Operational assistant"
+        logo={
+          <span className="flowpilot-logo" aria-hidden="true">
+            <svg viewBox="0 0 32 32" focusable="false">
+              <path d="M8 9h10a6 6 0 0 1 0 12h-4v4" />
+              <path d="m12 17-4 4 4 4" />
+            </svg>
+          </span>
+        }
         profile={
           <Avatar
             ref={profileRef}
@@ -311,6 +319,7 @@ export function App({ client = flowPilotApi }: AppProps) {
           />
         }
         accessibilityAttributes={{
+          logo: { name: "FlowPilot" },
           profile: {
             name: `Account details for ${signedInName}`,
             expanded: profileOpen ? "true" : "false",

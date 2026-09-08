@@ -88,6 +88,7 @@ describe("FlowPilot chat interface", () => {
       "page",
     );
     expect(screen.getAllByText("Test User").length).toBeGreaterThan(0);
+    expect(document.querySelector(".flowpilot-logo svg")).toBeInTheDocument();
   });
 
   it("creates the first conversation and enables the composer", async () => {
