@@ -273,8 +273,44 @@ textarea {
   overflow: auto;
 }
 
-.conversation-nav ui5-list {
+.conversation-list { margin: 0; padding: 0; list-style: none; }
+
+.conversation-entry {
+  display: flex;
+  align-items: stretch;
+  border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+}
+
+.conversation-select {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem 0.5rem 0.75rem 1rem;
   border: 0;
+  color: var(--sapTextColor);
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+
+.conversation-select:hover { background: var(--sapList_Hover_Background); }
+
+.conversation-entry.active .conversation-select {
+  background: var(--sapList_SelectionBackgroundColor);
+  box-shadow: inset 0.25rem 0 var(--sapList_SelectionBorderColor);
+}
+
+.conversation-title,
+.conversation-updated { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.conversation-title { font-weight: var(--sapFontBoldWeight); }
+
+.conversation-updated { color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
+
+.conversation-delete {
+  align-self: center;
+  margin-inline-end: 0.5rem;
 }
 
 .list-empty {

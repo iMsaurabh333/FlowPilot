@@ -72,7 +72,9 @@ describe("FlowPilot chat interface", () => {
   it("loads the authenticated user's latest private conversation", async () => {
     renderApp(api());
 
-    expect(await screen.findByText("Check sales order")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Check sales order" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Check order 42")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -146,6 +148,12 @@ describe("FlowPilot chat interface", () => {
     renderApp(api({ sendMessage }));
 
     await screen.findByText("Check order 42");
+    const messageRegion = screen.getByRole("region", { name: "Chat content" });
+    Object.defineProperty(messageRegion, "scrollHeight", {
+      configurable: true,
+      value: 480,
+    });
+    messageRegion.scrollTop = 0;
     const input = composer();
     Object.assign(input, { value: "  Check delivery  " });
     fireEvent.input(input);
@@ -156,6 +164,7 @@ describe("FlowPilot chat interface", () => {
     );
     expect(await screen.findByText("Checking.")).toBeInTheDocument();
     expect(input).toHaveProperty("value", "");
+    expect(messageRegion.scrollTop).toBe(480);
   });
 
   it("keeps Shift+Enter available for a newline without sending", async () => {
@@ -194,16 +203,24 @@ describe("FlowPilot chat interface", () => {
     renderApp(api({ deleteConversation }));
 
     await screen.findByText("Check order 42");
-    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+    const deleteButton = document.querySelector(".conversation-delete");
+    if (!(deleteButton instanceof HTMLElement)) {
+      throw new Error("Expected the conversation delete button");
+    }
+    fireEvent.click(deleteButton);
 
     expect(
       screen.getByRole("alertdialog", { name: "Delete this conversation?" }),
     ).toBeInTheDocument();
     expect(deleteConversation).not.toHaveBeenCalled();
 
-    fireEvent.click(
-      screen.getByRole("alertdialog").querySelector("ui5-button[design='Negative']")!,
-    );
+    const confirmButton = screen
+      .getByRole("alertdialog")
+      .querySelectorAll("ui5-button")[1];
+    if (!(confirmButton instanceof HTMLElement)) {
+      throw new Error("Expected the deletion confirmation button");
+    }
+    fireEvent.click(confirmButton);
     await waitFor(() =>
       expect(deleteConversation).toHaveBeenCalledWith(summary.id),
     );

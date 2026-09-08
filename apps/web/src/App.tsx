@@ -1,14 +1,13 @@
 import { Avatar, type AvatarDomRef } from "@ui5/webcomponents-react/Avatar";
 import { BusyIndicator } from "@ui5/webcomponents-react/BusyIndicator";
 import { Button } from "@ui5/webcomponents-react/Button";
-import { List } from "@ui5/webcomponents-react/List";
-import { ListItemStandard } from "@ui5/webcomponents-react/ListItemStandard";
 import { MessageStrip } from "@ui5/webcomponents-react/MessageStrip";
 import { Popover } from "@ui5/webcomponents-react/Popover";
 import { ShellBar } from "@ui5/webcomponents-react/ShellBar";
 import { TextArea } from "@ui5/webcomponents-react/TextArea";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -127,11 +126,13 @@ export function App({ client = flowPilotApi }: AppProps) {
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [draft, setDraft] = useState("");
   const [requestError, setRequestError] = useState<string>();
-  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [conversationToDelete, setConversationToDelete] =
+    useState<ConversationSummary>();
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeView, setActiveView] = useState<AppView>("chat");
   const detailRequest = useRef(0);
   const profileRef = useRef<AvatarDomRef>(null);
+  const messageRegionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,11 +188,20 @@ export function App({ client = flowPilotApi }: AppProps) {
     [conversations],
   );
 
-  const chooseConversation = async (conversationId: string) => {
+  useLayoutEffect(() => {
+    if (!activeConversation || detailLoading) return;
+    const region = messageRegionRef.current;
+    if (region) region.scrollTop = region.scrollHeight;
+  }, [activeConversation?.id, activeConversation?.messages.length, detailLoading]);
+
+  const chooseConversation = async (
+    conversationId: string,
+    bypassDeletionConfirmation = false,
+  ) => {
     if (
       conversationId === activeConversation?.id ||
       pendingAction === "sending" ||
-      deleteConfirmationOpen
+      (conversationToDelete && !bypassDeletionConfirmation)
     ) {
       return;
     }
@@ -277,8 +287,8 @@ export function App({ client = flowPilotApi }: AppProps) {
   };
 
   const deleteConversation = async () => {
-    const conversationId = activeConversation?.id;
-    if (!conversationId || pendingAction) return;
+    if (!conversationToDelete || pendingAction) return;
+    const { id: conversationId } = conversationToDelete;
 
     setPendingAction("deleting");
     setRequestError(undefined);
@@ -286,10 +296,14 @@ export function App({ client = flowPilotApi }: AppProps) {
       await client.deleteConversation(conversationId);
       const remaining = conversations.filter(({ id }) => id !== conversationId);
       setConversations(remaining);
-      setActiveConversation(undefined);
-      setDraft("");
-      setDeleteConfirmationOpen(false);
-      if (remaining[0]) void chooseConversation(newestFirst(remaining)[0].id);
+      setConversationToDelete(undefined);
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation(undefined);
+        setDraft("");
+        if (remaining[0]) {
+          void chooseConversation(newestFirst(remaining)[0].id, true);
+        }
+      }
     } catch (error) {
       setRequestError(visibleError(error));
     } finally {
@@ -454,21 +468,34 @@ export function App({ client = flowPilotApi }: AppProps) {
                   {orderedConversations.length === 0 ? (
                     <p className="list-empty">No conversations yet.</p>
                   ) : (
-                    <List separators="Inner">
+                    <ol className="conversation-list">
                       {orderedConversations.map((conversation) => (
-                        <ListItemStandard
+                        <li
                           key={conversation.id}
-                          text={conversation.title}
-                          description={formatDate(conversation.updatedAt)}
-                          type="Active"
-                          navigated={conversation.id === activeConversation?.id}
-                          accessibleName={`${conversation.title}, updated ${formatDate(conversation.updatedAt)}`}
-                          onClick={() =>
-                            void chooseConversation(conversation.id)
-                          }
-                        />
+                          className={`conversation-entry${conversation.id === activeConversation?.id ? " active" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="conversation-select"
+                            aria-current={conversation.id === activeConversation?.id ? "page" : undefined}
+                            onClick={() => void chooseConversation(conversation.id)}
+                          >
+                            <span className="conversation-title">{conversation.title}</span>
+                            <span className="conversation-updated">{formatDate(conversation.updatedAt)}</span>
+                          </button>
+                          <Button
+                            className="conversation-delete"
+                            design="Negative"
+                            tooltip="Delete conversation"
+                            accessibleName={`Delete ${conversation.title}`}
+                            disabled={Boolean(pendingAction) || Boolean(conversationToDelete)}
+                            onClick={() => setConversationToDelete(conversation)}
+                          >
+                            🗑
+                          </Button>
+                        </li>
                       ))}
-                    </List>
+                    </ol>
                   )}
                 </nav>
 
@@ -490,18 +517,9 @@ export function App({ client = flowPilotApi }: AppProps) {
                       {activeConversation?.title ?? "How can FlowPilot help?"}
                     </h1>
                   </div>
-                  {activeConversation && (
-                    <Button
-                      design="Transparent"
-                      disabled={Boolean(pendingAction)}
-                      onClick={() => setDeleteConfirmationOpen(true)}
-                    >
-                      Delete conversation
-                    </Button>
-                  )}
                 </header>
 
-                {deleteConfirmationOpen && activeConversation && (
+                {conversationToDelete && (
                   <section
                     className="delete-confirmation"
                     role="alertdialog"
@@ -511,14 +529,14 @@ export function App({ client = flowPilotApi }: AppProps) {
                     <div>
                       <strong id="delete-confirmation-title">Delete this conversation?</strong>
                       <p id="delete-confirmation-description">
-                        This removes it from your private conversation history. This cannot be undone.
+                        Delete “{conversationToDelete.title}” from your private conversation history? This cannot be undone.
                       </p>
                     </div>
                     <div className="delete-confirmation-actions">
                       <Button
                         design="Transparent"
                         disabled={Boolean(pendingAction)}
-                        onClick={() => setDeleteConfirmationOpen(false)}
+                        onClick={() => setConversationToDelete(undefined)}
                       >
                         Cancel
                       </Button>
@@ -544,7 +562,7 @@ export function App({ client = flowPilotApi }: AppProps) {
                   </MessageStrip>
                 )}
 
-                <section className="message-region" aria-label="Chat content">
+                <section ref={messageRegionRef} className="message-region" aria-label="Chat content">
                   {detailLoading ? (
                     <div className="loading-detail" role="status">
                       <BusyIndicator active size="M" delay={0} />
