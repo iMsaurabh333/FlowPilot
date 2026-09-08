@@ -29,6 +29,7 @@ export interface ChatMessage {
 export interface ChatAgent {
   getMessages(threadId: string): Promise<ChatMessage[]>;
   trimOldestTurn(threadId: string, maxTurns: number): Promise<boolean>;
+  improvePrompt(content: string): Promise<string>;
   sendMessage(
     threadId: string,
     content: string,
@@ -201,6 +202,15 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
   return {
     getMessages: readMessages,
     trimOldestTurn,
+    async improvePrompt(content) {
+      const response = await options.model.invoke([
+        new SystemMessage(
+          "Rewrite the user's operational request for clarity. Preserve stated facts, do not invent identifiers or results, and return only the improved request.",
+        ),
+        new HumanMessage(content.trim()),
+      ]);
+      return contentAsText(response.content).trim().slice(0, 4_000);
+    },
     async sendMessage(threadId, content, tools) {
       const invocationGraph = tools?.length ? createGraph(tools) : graph;
       await invocationGraph.invoke(

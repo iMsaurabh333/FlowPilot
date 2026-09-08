@@ -90,6 +90,20 @@ export class ConversationService {
     return (await this.#repository.list(user)).map(summary);
   }
 
+  async improvePrompt(content: string) {
+    try {
+      const improvePrompt = (
+        this.#agent as ChatAgent & {
+          improvePrompt?: (draft: string) => Promise<string>;
+        }
+      ).improvePrompt;
+      if (!improvePrompt) throw new Error("Prompt assistance is unavailable");
+      return await improvePrompt.call(this.#agent, content);
+    } catch (error) {
+      throw new ModelInvocationError({ cause: error });
+    }
+  }
+
   async get(user: AuthenticatedUser, conversationId: string) {
     const record = await this.#repository.findOwned(user, conversationId);
     if (!record) {

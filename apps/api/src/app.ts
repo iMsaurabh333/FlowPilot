@@ -211,6 +211,12 @@ export function createApp(options: AppOptions) {
     response.status(201).json(conversation);
   });
 
+  app.post("/api/prompt-assist", async (request, response) => {
+    const { content } = messageBodySchema.parse(request.body);
+    const improved = await options.conversations.improvePrompt(content);
+    response.status(200).json({ content: improved });
+  });
+
   app.get("/api/conversations", async (request, response) => {
     const conversations = await options.conversations.list(
       authenticatedUser(request),

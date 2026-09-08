@@ -106,4 +106,16 @@ describe("FlowPilot chat graph", () => {
       "second", "two", "third", "three",
     ]);
   });
+
+  it("rewrites a draft without adding it to chat history", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: ["Check order 42 and report its current status."] }),
+    });
+
+    await expect(agent.improvePrompt("order 42 status")).resolves.toBe(
+      "Check order 42 and report its current status.",
+    );
+    await expect(agent.getMessages("unused-thread")).resolves.toEqual([]);
+  });
 });

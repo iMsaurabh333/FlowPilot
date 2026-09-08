@@ -46,6 +46,7 @@ function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
     createConversation: vi.fn().mockResolvedValue(summary),
     loadConversation: vi.fn().mockResolvedValue(detail),
     sendMessage: vi.fn().mockResolvedValue(detail),
+    improvePrompt: vi.fn().mockResolvedValue("Improved prompt"),
     ...overrides,
   };
 }

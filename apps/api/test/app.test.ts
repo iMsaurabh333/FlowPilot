@@ -132,6 +132,10 @@ class FakeChatAgent implements ChatAgent {
     return this.messages.get(threadId) ?? [];
   }
 
+  async improvePrompt(content: string) {
+    return `Improved: ${content}`;
+  }
+
   async sendMessage(threadId: string, content: string) {
     if (this.failNext) {
       this.failNext = false;
@@ -253,6 +257,14 @@ describe("FlowPilot API", () => {
     );
     expect(loaded.status).toBe(200);
     expect(loaded.body.messages).toEqual(replied.body.messages);
+  });
+
+  it("improves an authenticated draft without creating a conversation", async () => {
+    const response = await request(app)
+      .post("/api/prompt-assist")
+      .send({ content: "order 42 status" });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ content: "Improved: order 42 status" });
   });
 
   it("does not disclose or mutate another identity's conversation", async () => {

@@ -32,7 +32,7 @@ type LoadState =
   | { status: "ready" }
   | { status: "error"; message: string };
 
-type PendingAction = "creating" | "sending" | undefined;
+type PendingAction = "creating" | "sending" | "improving" | undefined;
 
 type AppView = "chat" | "registry";
 
@@ -252,6 +252,21 @@ export function App({ client = flowPilotApi }: AppProps) {
         newestFirst([detail, ...current.filter(({ id }) => id !== detail.id)]),
       );
       setDraft("");
+    } catch (error) {
+      setRequestError(visibleError(error));
+    } finally {
+      setPendingAction(undefined);
+    }
+  };
+
+  const improvePrompt = async () => {
+    const content = draft.trim();
+    if (!content || pendingAction) return;
+    setPendingAction("improving");
+    setRequestError(undefined);
+    try {
+      const improved = await client.improvePrompt(content);
+      if (improved) setDraft(improved);
     } catch (error) {
       setRequestError(visibleError(error));
     } finally {
@@ -576,6 +591,15 @@ export function App({ client = flowPilotApi }: AppProps) {
                     <span aria-live="polite">
                       {characterCount.toLocaleString()} / 4,000 characters
                     </span>
+                    <div className="composer-buttons">
+                    <Button
+                      design="Transparent"
+                      disabled={!draft.trim() || Boolean(pendingAction)}
+                      loading={pendingAction === "improving"}
+                      onClick={() => void improvePrompt()}
+                    >
+                      Improve prompt
+                    </Button>
                     <Button
                       type="Submit"
                       design="Emphasized"
@@ -584,6 +608,7 @@ export function App({ client = flowPilotApi }: AppProps) {
                     >
                       Send
                     </Button>
+                    </div>
                   </div>
                 </form>
               </main>

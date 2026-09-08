@@ -71,6 +71,7 @@ export interface FlowPilotApi {
     conversationId: string,
     content: string,
   ): Promise<ConversationDetail>;
+  improvePrompt(content: string): Promise<string>;
   listMcpServers?(): Promise<McpServerRecord[]>;
   upsertMcpServer?(
     serverId: string,
@@ -224,6 +225,14 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
           body: JSON.stringify({ content }),
         },
       );
+    },
+    async improvePrompt(content) {
+      const payload = await request<{ content: string }>("/api/prompt-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      return payload.content;
     },
     async listMcpServers() {
       const payload = await request<{ servers: McpServerRecord[] }>(

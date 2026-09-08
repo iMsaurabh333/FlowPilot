@@ -479,6 +479,8 @@ textarea {
   font-size: var(--sapFontSmallSize);
 }
 
+.composer-buttons { display: flex; gap: 0.5rem; }
+
 .account-details {
   min-width: 15rem;
   display: grid;
