@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { ChatAgent, ChatMessage, ChatTool } from "@flowpilot/agent-core";
 
 import type { AuthenticatedUser } from "../types.js";
+import type { ConversationPolicyService } from "../conversation-policy.js";
 import type { ConversationRecord, ConversationRepository } from "./types.js";
 
 export class ConversationNotFoundError extends Error {
@@ -16,6 +17,13 @@ export class ConversationBusyError extends Error {
   constructor() {
     super("Conversation already has an active run");
     this.name = "ConversationBusyError";
+  }
+}
+
+export class ConversationLimitError extends Error {
+  constructor() {
+    super("The configured conversation limit has been reached");
+    this.name = "ConversationLimitError";
   }
 }
 
@@ -56,19 +64,25 @@ export class ConversationService {
   readonly #agent: ChatAgent;
   readonly #tools:
     { resolve(user: AuthenticatedUser): Promise<ChatTool[]> } | undefined;
+  readonly #policy: ConversationPolicyService | undefined;
 
   constructor(
     repository: ConversationRepository,
     agent: ChatAgent,
     tools?: { resolve(user: AuthenticatedUser): Promise<ChatTool[]> },
+    policy?: ConversationPolicyService,
   ) {
     this.#repository = repository;
     this.#agent = agent;
     this.#tools = tools;
+    this.#policy = policy;
   }
 
   async create(user: AuthenticatedUser) {
-    return summary(await this.#repository.create(user));
+    const limit = (await this.#policy?.get())?.maxConversationsPerUser ?? 50;
+    const record = await this.#repository.create(user, limit);
+    if (!record) throw new ConversationLimitError();
+    return summary(record);
   }
 
   async list(user: AuthenticatedUser) {

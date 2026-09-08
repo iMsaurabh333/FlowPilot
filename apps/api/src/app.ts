@@ -4,6 +4,7 @@ import { z, ZodError } from "zod";
 import { createAuthentication } from "./auth.js";
 import {
   ConversationBusyError,
+  ConversationLimitError,
   ConversationNotFoundError,
   ConversationService,
   ModelInvocationError,
@@ -274,6 +275,10 @@ export function createApp(options: AppOptions) {
       }
       if (error instanceof ConversationBusyError) {
         response.status(409).json({ error: "conversation_busy" });
+        return;
+      }
+      if (error instanceof ConversationLimitError) {
+        response.status(409).json({ error: "conversation_limit_reached" });
         return;
       }
       if (error instanceof ModelInvocationError) {

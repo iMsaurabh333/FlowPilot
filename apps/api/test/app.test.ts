@@ -52,7 +52,11 @@ class MemoryConversationRepository implements ConversationRepository {
       : undefined;
   }
 
-  async create(user: AuthenticatedUser) {
+  async create(user: AuthenticatedUser, maxConversations: number) {
+    const ownedCount = [...this.records.values()].filter(
+      (record) => record.tenantId === user.tenantId && record.subject === user.subject,
+    ).length;
+    if (ownedCount >= maxConversations) return undefined;
     const now = new Date();
     const record: OwnedConversation = {
       id: randomUUID(),
@@ -167,7 +171,12 @@ describe("FlowPilot API", () => {
       async get() { return policy; },
       async update(input) { policy = input; return policy; },
     };
-    const conversations = new ConversationService(repository, agent);
+    const conversations = new ConversationService(
+      repository,
+      agent,
+      undefined,
+      conversationPolicy,
+    );
     app = createApp({ authentication, conversations, conversationPolicy });
   });
 
@@ -204,6 +213,15 @@ describe("FlowPilot API", () => {
       .set("x-test-user", "admin")
       .send({ maxConversationsPerUser: 75, maxRetainedTurns: 60 });
     expect(update.body).toEqual({ maxConversationsPerUser: 75, maxRetainedTurns: 60 });
+  });
+
+  it("enforces the configured conversation limit per authenticated user", async () => {
+    await conversationPolicy.update({ maxConversationsPerUser: 1, maxRetainedTurns: 40 });
+    expect((await request(app).post("/api/conversations")).status).toBe(201);
+
+    const limited = await request(app).post("/api/conversations");
+    expect(limited.status).toBe(409);
+    expect(limited.body).toEqual({ error: "conversation_limit_reached" });
   });
 
   it("creates a conversation and returns persisted model messages", async () => {

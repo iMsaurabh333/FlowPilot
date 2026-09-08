@@ -93,6 +93,8 @@ function visibleError(error: unknown) {
   switch (error.code) {
     case "conversation_busy":
       return "This conversation is already processing a message. Wait a moment and retry.";
+    case "conversation_limit_reached":
+      return "You have reached the configured conversation limit. Delete a conversation before creating another one.";
     case "model_unavailable":
       return "The assistant is temporarily unavailable. Your message was not lost; retry when ready.";
     case "not_found":

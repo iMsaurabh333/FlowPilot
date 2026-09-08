@@ -61,8 +61,17 @@ export class PostgresConversationRepository implements ConversationRepository {
     }
   }
 
-  async create(user: AuthenticatedUser) {
+  async create(user: AuthenticatedUser, maxConversations: number) {
     return this.#withIdentity(user, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        `${user.tenantId}\u0000${user.subject}`,
+      ]);
+      const count = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${this.#table}`,
+      );
+      if (Number(count.rows[0]?.count ?? 0) >= maxConversations) {
+        return undefined;
+      }
       const result = await client.query<ConversationRow>(
         `INSERT INTO ${this.#table}
           (id, thread_id, tenant_id, subject_id, title)
