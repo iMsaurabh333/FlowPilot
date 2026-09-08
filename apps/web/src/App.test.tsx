@@ -347,4 +347,17 @@ describe("FlowPilot chat interface", () => {
       ),
     ).toEqual([]);
   });
+
+  it("opens the reports workspace placeholder", async () => {
+    renderApp(api());
+
+    fireEvent.click(await screen.findByRole("button", { name: /Reports/ }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Reports" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Scheduled summaries")).toBeInTheDocument();
+    expect(screen.getByText("Export-ready formats")).toBeInTheDocument();
+    expect(screen.getByText("Reviewable scope")).toBeInTheDocument();
+  });
 });

@@ -33,7 +33,7 @@ type LoadState =
 
 type PendingAction = "creating" | "sending" | "improving" | "deleting" | undefined;
 
-type AppView = "chat" | "registry";
+type AppView = "chat" | "registry" | "reports";
 
 const starterPrompts = [
   {
@@ -57,6 +57,38 @@ const starterPrompts = [
       "Help me investigate an integration flow. I will provide the flow ID and the observed symptom.",
   },
 ] as const;
+
+function ReportsPlaceholder() {
+  return (
+    <main className="reports-page" aria-labelledby="reports-title">
+      <header className="reports-header">
+        <p className="section-label">Reporting workspace</p>
+        <h1 id="reports-title">Reports</h1>
+        <p>
+          Turn approved operational findings into shareable, scheduled reports.
+        </p>
+      </header>
+      <section className="reports-plan" aria-labelledby="reports-plan-title">
+        <p className="section-label">Planned next</p>
+        <h2 id="reports-plan-title">Reporting capabilities are being prepared</h2>
+        <div className="reports-capabilities">
+          <article>
+            <h3>Scheduled summaries</h3>
+            <p>Set a cadence for selected integration-flow and message-health views.</p>
+          </article>
+          <article>
+            <h3>Export-ready formats</h3>
+            <p>Download approved report data as Markdown, Excel, or HTML.</p>
+          </article>
+          <article>
+            <h3>Reviewable scope</h3>
+            <p>Confirm included sources and time ranges before a report is generated.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  );
+}
 
 function userInitials(user: CurrentUser) {
   const name = user.displayName?.trim() || user.subject;
@@ -412,6 +444,20 @@ export function App({ client = flowPilotApi }: AppProps) {
                 <small>Private troubleshooting</small>
               </span>
             </button>
+            <button
+              type="button"
+              className={`primary-nav-item${activeView === "reports" ? " active" : ""}`}
+              aria-current={activeView === "reports" ? "page" : undefined}
+              onClick={() => setActiveView("reports")}
+            >
+              <span className="nav-glyph" aria-hidden="true">
+                R
+              </span>
+              <span>
+                <strong>Reports</strong>
+                <small>Scheduled and export-ready</small>
+              </span>
+            </button>
             {user?.scopes.includes("ChatAdmin") && client.listMcpServers && (
               <button
                 type="button"
@@ -720,8 +766,10 @@ export function App({ client = flowPilotApi }: AppProps) {
                 </form>
               </main>
             </div>
-          ) : (
+          ) : activeView === "registry" ? (
             <McpRegistryView client={client} />
+          ) : (
+            <ReportsPlaceholder />
           )}
         </section>
       </div>

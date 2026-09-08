@@ -210,6 +210,70 @@ textarea {
   overflow: hidden;
 }
 
+.reports-page {
+  min-height: 100%;
+  overflow: auto;
+  padding: clamp(1.5rem, 5vw, 4rem);
+  background: var(--sapBackgroundColor);
+}
+
+.reports-header {
+  max-width: 48rem;
+}
+
+.reports-header h1,
+.reports-header p,
+.reports-plan h2,
+.reports-plan p,
+.reports-capabilities h3,
+.reports-capabilities p {
+  margin: 0;
+}
+
+.reports-header h1,
+.reports-plan h2,
+.reports-capabilities h3 {
+  font-family: var(--sapFontHeaderFamily);
+}
+
+.reports-header h1 {
+  margin-block: 0.25rem 0.75rem;
+  color: var(--sapPageHeader_TextColor);
+  font-size: var(--sapFontHeader2Size);
+}
+
+.reports-header > p:last-child,
+.reports-capabilities p {
+  color: var(--sapContent_LabelColor);
+  line-height: 1.5;
+}
+
+.reports-plan {
+  max-width: 68rem;
+  margin-block-start: clamp(2rem, 6vw, 4rem);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  background: var(--sapGroup_ContentBackground);
+  box-shadow: var(--sapContent_Shadow0);
+}
+
+.reports-plan h2 { margin-block: 0.25rem 1.5rem; font-size: var(--sapFontHeader3Size); }
+
+.reports-capabilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.reports-capabilities article {
+  padding: 1rem;
+  border-inline-start: 0.25rem solid var(--sapInformativeElementColor);
+  background: var(--sapTile_Background);
+}
+
+.reports-capabilities h3 { margin-block-end: 0.5rem; font-size: var(--sapFontHeader5Size); }
+
 .workspace {
   min-height: 0;
   height: 100%;
@@ -1053,6 +1117,8 @@ textarea {
   .registry-workspace {
     grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr);
   }
+
+  .reports-capabilities { grid-template-columns: 1fr; }
 
   .health-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
