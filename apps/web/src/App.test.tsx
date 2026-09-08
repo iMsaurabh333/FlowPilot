@@ -44,6 +44,7 @@ function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
     loadCurrentUser: vi.fn().mockResolvedValue(user),
     listConversations: vi.fn().mockResolvedValue([summary]),
     createConversation: vi.fn().mockResolvedValue(summary),
+    deleteConversation: vi.fn().mockResolvedValue(undefined),
     loadConversation: vi.fn().mockResolvedValue(detail),
     sendMessage: vi.fn().mockResolvedValue(detail),
     improvePrompt: vi.fn().mockResolvedValue("Improved prompt"),
@@ -186,6 +187,27 @@ describe("FlowPilot chat interface", () => {
       await screen.findByText(/assistant is temporarily unavailable/i),
     ).toBeInTheDocument();
     expect(input).toHaveProperty("value", "Retryable message");
+  });
+
+  it("asks for confirmation before deleting the active conversation", async () => {
+    const deleteConversation = vi.fn().mockResolvedValue(undefined);
+    renderApp(api({ deleteConversation }));
+
+    await screen.findByText("Check order 42");
+    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+
+    expect(
+      screen.getByRole("alertdialog", { name: "Delete this conversation?" }),
+    ).toBeInTheDocument();
+    expect(deleteConversation).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("alertdialog").querySelector("ui5-button[design='Negative']")!,
+    );
+    await waitFor(() =>
+      expect(deleteConversation).toHaveBeenCalledWith(summary.id),
+    );
+    expect(screen.getByText("Start a focused troubleshooting session")).toBeInTheDocument();
   });
 
   it("exposes landmarks and has no serious automated accessibility violations", async () => {

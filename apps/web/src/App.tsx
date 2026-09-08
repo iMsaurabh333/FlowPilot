@@ -32,7 +32,7 @@ type LoadState =
   | { status: "ready" }
   | { status: "error"; message: string };
 
-type PendingAction = "creating" | "sending" | "improving" | undefined;
+type PendingAction = "creating" | "sending" | "improving" | "deleting" | undefined;
 
 type AppView = "chat" | "registry";
 
@@ -127,6 +127,7 @@ export function App({ client = flowPilotApi }: AppProps) {
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [draft, setDraft] = useState("");
   const [requestError, setRequestError] = useState<string>();
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeView, setActiveView] = useState<AppView>("chat");
   const detailRequest = useRef(0);
@@ -189,7 +190,8 @@ export function App({ client = flowPilotApi }: AppProps) {
   const chooseConversation = async (conversationId: string) => {
     if (
       conversationId === activeConversation?.id ||
-      pendingAction === "sending"
+      pendingAction === "sending" ||
+      deleteConfirmationOpen
     ) {
       return;
     }
@@ -267,6 +269,27 @@ export function App({ client = flowPilotApi }: AppProps) {
     try {
       const improved = await client.improvePrompt(content);
       if (improved) setDraft(improved);
+    } catch (error) {
+      setRequestError(visibleError(error));
+    } finally {
+      setPendingAction(undefined);
+    }
+  };
+
+  const deleteConversation = async () => {
+    const conversationId = activeConversation?.id;
+    if (!conversationId || pendingAction) return;
+
+    setPendingAction("deleting");
+    setRequestError(undefined);
+    try {
+      await client.deleteConversation(conversationId);
+      const remaining = conversations.filter(({ id }) => id !== conversationId);
+      setConversations(remaining);
+      setActiveConversation(undefined);
+      setDraft("");
+      setDeleteConfirmationOpen(false);
+      if (remaining[0]) void chooseConversation(newestFirst(remaining)[0].id);
     } catch (error) {
       setRequestError(visibleError(error));
     } finally {
@@ -467,7 +490,49 @@ export function App({ client = flowPilotApi }: AppProps) {
                       {activeConversation?.title ?? "How can FlowPilot help?"}
                     </h1>
                   </div>
+                  {activeConversation && (
+                    <Button
+                      design="Transparent"
+                      disabled={Boolean(pendingAction)}
+                      onClick={() => setDeleteConfirmationOpen(true)}
+                    >
+                      Delete conversation
+                    </Button>
+                  )}
                 </header>
+
+                {deleteConfirmationOpen && activeConversation && (
+                  <section
+                    className="delete-confirmation"
+                    role="alertdialog"
+                    aria-labelledby="delete-confirmation-title"
+                    aria-describedby="delete-confirmation-description"
+                  >
+                    <div>
+                      <strong id="delete-confirmation-title">Delete this conversation?</strong>
+                      <p id="delete-confirmation-description">
+                        This removes it from your private conversation history. This cannot be undone.
+                      </p>
+                    </div>
+                    <div className="delete-confirmation-actions">
+                      <Button
+                        design="Transparent"
+                        disabled={Boolean(pendingAction)}
+                        onClick={() => setDeleteConfirmationOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        design="Negative"
+                        disabled={Boolean(pendingAction)}
+                        loading={pendingAction === "deleting"}
+                        onClick={() => void deleteConversation()}
+                      >
+                        Delete conversation
+                      </Button>
+                    </div>
+                  </section>
+                )}
 
                 {requestError && (
                   <MessageStrip

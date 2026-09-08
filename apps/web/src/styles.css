@@ -243,6 +243,20 @@ textarea {
   margin: 0;
 }
 
+.delete-confirmation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  background: var(--sapInformation_Background);
+}
+
+.delete-confirmation p { margin: 0.25rem 0 0; }
+
+.delete-confirmation-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
 .panel-header h2 {
   font-family: var(--sapFontHeaderFamily);
   font-size: var(--sapFontHeader5Size);

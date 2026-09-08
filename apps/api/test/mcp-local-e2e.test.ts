@@ -94,6 +94,9 @@ function conversationRepository(): ConversationRepository {
     async findOwned() {
       return conversation;
     },
+    async delete() {
+      return "deleted";
+    },
     async acquireRun() {
       return { status: "acquired", conversation };
     },

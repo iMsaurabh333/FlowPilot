@@ -82,6 +82,14 @@ class MemoryConversationRepository implements ConversationRepository {
     return this.#owned(user, conversationId);
   }
 
+  async delete(user: AuthenticatedUser, conversationId: string) {
+    const record = this.#owned(user, conversationId);
+    if (!record) return "not_found" as const;
+    if (record.activeRunId) return "busy" as const;
+    this.records.delete(conversationId);
+    return "deleted" as const;
+  }
+
   async acquireRun(
     user: AuthenticatedUser,
     conversationId: string,
@@ -281,12 +289,32 @@ describe("FlowPilot API", () => {
       .post(`/api/conversations/${conversationId}/messages`)
       .set("x-test-user", "b")
       .send({ content: "Attempted cross-user access" });
+    const deleteAsOtherUser = await request(app)
+      .delete(`/api/conversations/${conversationId}`)
+      .set("x-test-user", "b");
 
     expect(listAsOtherUser.body).toEqual({ conversations: [] });
     expect(readAsOtherUser.status).toBe(404);
     expect(readAsOtherUser.body).toEqual({ error: "not_found" });
     expect(writeAsOtherUser.status).toBe(404);
     expect(writeAsOtherUser.body).toEqual({ error: "not_found" });
+    expect(deleteAsOtherUser.status).toBe(404);
+    expect(deleteAsOtherUser.body).toEqual({ error: "not_found" });
+    expect(repository.records.has(conversationId)).toBe(true);
+  });
+
+  it("deletes an owned idle conversation", async () => {
+    const created = await request(app).post("/api/conversations");
+
+    const deleted = await request(app).delete(
+      `/api/conversations/${created.body.id}`,
+    );
+    const loaded = await request(app).get(
+      `/api/conversations/${created.body.id}`,
+    );
+
+    expect(deleted.status).toBe(204);
+    expect(loaded.status).toBe(404);
   });
 
   it("rejects invalid identifiers and message payloads", async () => {
@@ -349,5 +377,20 @@ describe("FlowPilot API", () => {
 
     expect(response.status).toBe(409);
     expect(response.body).toEqual({ error: "conversation_busy" });
+  });
+
+  it("does not delete a conversation with an active run", async () => {
+    const created = await request(app).post("/api/conversations");
+    const record = repository.records.get(created.body.id);
+    if (!record) throw new Error("Expected test conversation");
+    record.activeRunId = randomUUID();
+
+    const response = await request(app).delete(
+      `/api/conversations/${created.body.id}`,
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: "conversation_busy" });
+    expect(repository.records.has(created.body.id)).toBe(true);
   });
 });

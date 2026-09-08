@@ -66,6 +66,7 @@ export interface FlowPilotApi {
   loadCurrentUser(): Promise<CurrentUser>;
   listConversations(): Promise<ConversationSummary[]>;
   createConversation(): Promise<ConversationSummary>;
+  deleteConversation(conversationId: string): Promise<void>;
   loadConversation(conversationId: string): Promise<ConversationDetail>;
   sendMessage(
     conversationId: string,
@@ -210,6 +211,12 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       return request<ConversationSummary>("/api/conversations", {
         method: "POST",
       });
+    },
+    async deleteConversation(conversationId) {
+      await request<void>(
+        `/api/conversations/${encodeURIComponent(conversationId)}`,
+        { method: "DELETE" },
+      );
     },
     loadConversation(conversationId) {
       return request<ConversationDetail>(

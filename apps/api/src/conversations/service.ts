@@ -90,6 +90,12 @@ export class ConversationService {
     return (await this.#repository.list(user)).map(summary);
   }
 
+  async delete(user: AuthenticatedUser, conversationId: string) {
+    const result = await this.#repository.delete(user, conversationId);
+    if (result === "not_found") throw new ConversationNotFoundError();
+    if (result === "busy") throw new ConversationBusyError();
+  }
+
   async improvePrompt(content: string) {
     try {
       const improvePrompt = (

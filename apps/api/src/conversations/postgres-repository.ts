@@ -6,6 +6,7 @@ import { quoteIdentifier } from "../db/migrations.js";
 import type { AuthenticatedUser } from "../types.js";
 import type {
   ConversationRecord,
+  ConversationDeletion,
   ConversationRepository,
   RunAcquisition,
 } from "./types.js";
@@ -109,6 +110,28 @@ export class PostgresConversationRepository implements ConversationRepository {
         [conversationId],
       );
       return result.rows[0] ? toRecord(result.rows[0]) : undefined;
+    });
+  }
+
+  async delete(
+    user: AuthenticatedUser,
+    conversationId: string,
+  ): Promise<ConversationDeletion> {
+    return this.#withIdentity(user, async (client) => {
+      const deleted = await client.query(
+        `DELETE FROM ${this.#table}
+          WHERE id = $1 AND active_run_id IS NULL
+          RETURNING id`,
+        [conversationId],
+      );
+      if (deleted.rowCount) return "deleted";
+
+      const existing = await client.query<{ active_run_id: string | null }>(
+        `SELECT active_run_id FROM ${this.#table} WHERE id = $1`,
+        [conversationId],
+      );
+      if (!existing.rowCount) return "not_found";
+      return "busy";
     });
   }
 

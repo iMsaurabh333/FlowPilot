@@ -235,6 +235,17 @@ export function createApp(options: AppOptions) {
     response.status(200).json(conversation);
   });
 
+  app.delete("/api/conversations/:conversationId", async (request, response) => {
+    const conversationId = conversationIdSchema.parse(
+      request.params.conversationId,
+    );
+    await options.conversations.delete(
+      authenticatedUser(request),
+      conversationId,
+    );
+    response.status(204).end();
+  });
+
   app.post(
     "/api/conversations/:conversationId/messages",
     async (request, response) => {
