@@ -536,6 +536,23 @@ textarea {
   margin-block: 1.25rem;
 }
 
+.conversation-policy {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) repeat(2, minmax(12rem, 0.7fr)) auto;
+  align-items: end;
+  gap: 1rem;
+  padding: 1rem;
+  border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  background: var(--sapGroup_ContentBackground);
+}
+
+.conversation-policy h2,
+.conversation-policy p { margin: 0; }
+.conversation-policy > div > span,
+.conversation-policy label { display: grid; gap: 0.35rem; color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
+.conversation-policy input { min-height: 2rem; }
+
 .registry-metrics > div {
   display: grid;
   gap: 0.125rem;

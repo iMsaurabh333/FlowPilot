@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ApiError,
   type FlowPilotApi,
+  type ConversationPolicy,
   type McpServerInput,
   type McpServerRecord,
 } from "./api";
@@ -98,6 +99,7 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<string>();
   const [error, setError] = useState<string>();
+  const [conversationPolicy, setConversationPolicy] = useState<ConversationPolicy>();
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +123,17 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
         if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client.getConversationPolicy?.().then(
+      (policy) => !cancelled && setConversationPolicy(policy),
+      (caught) => !cancelled && setError(visibleAdminError(caught)),
+    );
     return () => {
       cancelled = true;
     };
@@ -229,6 +242,17 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
     if (selectedDraft) void saveServer(selectedDraft);
   };
 
+  const saveConversationPolicy = (event: FormEvent) => {
+    event.preventDefault();
+    if (!conversationPolicy || !client.updateConversationPolicy) return;
+    setPending("conversation-policy");
+    setError(undefined);
+    void client.updateConversationPolicy(conversationPolicy).then(
+      (saved) => setConversationPolicy(saved),
+      (caught) => setError(visibleAdminError(caught)),
+    ).finally(() => setPending(undefined));
+  };
+
   return (
     <main className="registry-page" aria-labelledby="mcp-admin-title">
       <header className="registry-page-header">
@@ -263,6 +287,43 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
           <span>Healthy</span>
         </div>
       </section>
+
+      {conversationPolicy && (
+        <form
+          className="conversation-policy"
+          aria-label="Conversation policy"
+          onSubmit={saveConversationPolicy}
+        >
+          <div>
+            <p className="section-label">Conversation policy</p>
+            <h2>Retention limits</h2>
+            <span>Limits apply to each user and keep chat history bounded.</span>
+          </div>
+          <label>
+            Maximum conversations per user
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={conversationPolicy.maxConversationsPerUser}
+              disabled={Boolean(pending)}
+              onChange={(event) => setConversationPolicy({ ...conversationPolicy, maxConversationsPerUser: Number(event.target.value) })}
+            />
+          </label>
+          <label>
+            Maximum retained turns per conversation
+            <input
+              type="number"
+              min="2"
+              max="500"
+              value={conversationPolicy.maxRetainedTurns}
+              disabled={Boolean(pending)}
+              onChange={(event) => setConversationPolicy({ ...conversationPolicy, maxRetainedTurns: Number(event.target.value) })}
+            />
+          </label>
+          <Button type="Submit" design="Emphasized" disabled={Boolean(pending)} loading={pending === "conversation-policy"}>Save limits</Button>
+        </form>
+      )}
 
       {error && (
         <MessageStrip

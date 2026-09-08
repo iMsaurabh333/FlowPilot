@@ -6,6 +6,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "../src/app.js";
+import type { ConversationPolicyService } from "../src/conversation-policy.js";
 import { ConversationService } from "../src/conversations/service.js";
 import type {
   ConversationRecord,
@@ -26,6 +27,12 @@ const users: Record<string, AuthenticatedUser> = {
     tenantId: "tenant-1",
     displayName: "User B",
     scopes: ["ChatUser"],
+  },
+  admin: {
+    subject: "admin",
+    tenantId: "tenant-1",
+    displayName: "Admin",
+    scopes: ["ChatUser", "ChatAdmin"],
   },
 };
 
@@ -150,12 +157,18 @@ describe("FlowPilot API", () => {
   let app: ReturnType<typeof createApp>;
   let repository: MemoryConversationRepository;
   let agent: FakeChatAgent;
+  let conversationPolicy: ConversationPolicyService;
 
   beforeEach(() => {
     repository = new MemoryConversationRepository();
     agent = new FakeChatAgent();
+    let policy = { maxConversationsPerUser: 50, maxRetainedTurns: 40 };
+    conversationPolicy = {
+      async get() { return policy; },
+      async update(input) { policy = input; return policy; },
+    };
     const conversations = new ConversationService(repository, agent);
-    app = createApp({ authentication, conversations });
+    app = createApp({ authentication, conversations, conversationPolicy });
   });
 
   it("exposes an unauthenticated health endpoint", async () => {
@@ -175,6 +188,22 @@ describe("FlowPilot API", () => {
       displayName: "User A",
       scopes: ["ChatUser"],
     });
+  });
+
+  it("lets administrators read and update conversation retention limits", async () => {
+    const forbidden = await request(app).get("/api/admin/conversation-policy");
+    expect(forbidden.status).toBe(403);
+
+    const read = await request(app)
+      .get("/api/admin/conversation-policy")
+      .set("x-test-user", "admin");
+    expect(read.body).toEqual({ maxConversationsPerUser: 50, maxRetainedTurns: 40 });
+
+    const update = await request(app)
+      .put("/api/admin/conversation-policy")
+      .set("x-test-user", "admin")
+      .send({ maxConversationsPerUser: 75, maxRetainedTurns: 60 });
+    expect(update.body).toEqual({ maxConversationsPerUser: 75, maxRetainedTurns: 60 });
   });
 
   it("creates a conversation and returns persisted model messages", async () => {

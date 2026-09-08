@@ -39,6 +39,11 @@ export interface McpServerInput {
   enabled?: boolean;
 }
 
+export interface ConversationPolicy {
+  maxConversationsPerUser: number;
+  maxRetainedTurns: number;
+}
+
 export interface ConversationSummary {
   id: string;
   title: string;
@@ -71,6 +76,8 @@ export interface FlowPilotApi {
     input: McpServerInput,
   ): Promise<McpServerRecord>;
   pingMcpServer?(serverId: string): Promise<McpServerRecord>;
+  getConversationPolicy?(): Promise<ConversationPolicy>;
+  updateConversationPolicy?(input: ConversationPolicy): Promise<ConversationPolicy>;
 }
 
 export class ApiError extends Error {
@@ -238,6 +245,16 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
         `/api/admin/mcp-servers/${encodeURIComponent(serverId)}/ping`,
         { method: "POST" },
       );
+    },
+    getConversationPolicy() {
+      return request<ConversationPolicy>("/api/admin/conversation-policy");
+    },
+    updateConversationPolicy(input) {
+      return request<ConversationPolicy>("/api/admin/conversation-policy", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
     },
   };
 }

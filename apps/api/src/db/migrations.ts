@@ -100,6 +100,31 @@ function migrations(schemaName: string) {
           WITH CHECK (current_setting('flowpilot.is_admin', true) = 'true');
       `,
     },
+    {
+      version: 3,
+      sql: `
+        CREATE TABLE ${schema}.conversation_policy (
+          singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+          max_conversations_per_user integer NOT NULL DEFAULT 50,
+          max_retained_turns integer NOT NULL DEFAULT 40,
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT conversation_policy_conversation_limit CHECK (max_conversations_per_user BETWEEN 1 AND 1000),
+          CONSTRAINT conversation_policy_turn_limit CHECK (max_retained_turns BETWEEN 2 AND 500)
+        );
+
+        INSERT INTO ${schema}.conversation_policy (singleton)
+        VALUES (true)
+        ON CONFLICT (singleton) DO NOTHING;
+
+        ALTER TABLE ${schema}.conversation_policy ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.conversation_policy FORCE ROW LEVEL SECURITY;
+
+        CREATE POLICY conversation_policy_admin_policy
+          ON ${schema}.conversation_policy
+          USING (current_setting('flowpilot.is_admin', true) = 'true')
+          WITH CHECK (current_setting('flowpilot.is_admin', true) = 'true');
+      `,
+    },
   ] as const;
 }
 

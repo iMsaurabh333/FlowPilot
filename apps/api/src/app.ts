@@ -13,12 +13,14 @@ import {
   McpRegistryError,
   McpRegistryService,
 } from "./mcp/registry.js";
+import type { ConversationPolicyService } from "./conversation-policy.js";
 import "./types.js";
 
 export interface AppOptions {
   authentication?: RequestHandler;
   conversations: ConversationService;
   registry?: McpRegistryService;
+  conversationPolicy?: ConversationPolicyService;
 }
 
 const conversationIdSchema = z.string().uuid();
@@ -41,6 +43,12 @@ const mcpServerInputSchema = z
   .strict();
 
 const serverIdSchema = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,62})$/u);
+const conversationPolicySchema = z
+  .object({
+    maxConversationsPerUser: z.number().int().min(1).max(1_000),
+    maxRetainedTurns: z.number().int().min(2).max(500),
+  })
+  .strict();
 
 function authenticatedUser(request: express.Request) {
   if (!request.flowpilotUser) {
@@ -118,6 +126,30 @@ export function createApp(options: AppOptions) {
   });
 
   const adminRegistry = requireScope(MCP_ADMIN_SCOPE);
+  app.get("/api/admin/conversation-policy", adminRegistry, async (_request, response, next) => {
+    if (!options.conversationPolicy) {
+      response.status(503).json({ error: "policy_unavailable" });
+      return;
+    }
+    try {
+      response.status(200).json(await options.conversationPolicy.get());
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.put("/api/admin/conversation-policy", adminRegistry, async (request, response, next) => {
+    if (!options.conversationPolicy) {
+      response.status(503).json({ error: "policy_unavailable" });
+      return;
+    }
+    try {
+      response.status(200).json(
+        await options.conversationPolicy.update(conversationPolicySchema.parse(request.body)),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
   app.get(
     "/api/admin/mcp-servers",
     adminRegistry,
