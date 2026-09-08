@@ -358,6 +358,16 @@ export class HttpMcpServerProbe implements McpServerProbe {
       return result("unhealthy", checkedAt, latency(), null, null, category);
     }
   }
+
+  async listTools(server: McpServerRecord) {
+    const headers = await this.#authResolver.resolve(server.authProfileRef);
+    if (!headers) return [];
+    const response = await this.#request(server, "tools/list", 9, {}, headers);
+    const tools = response.payload?.result?.tools;
+    return Array.isArray(tools)
+      ? tools.flatMap((tool) => isRecord(tool) && typeof tool.name === "string" ? [tool.name] : [])
+      : [];
+  }
 }
 
 export function createConfiguredMcpServerProbe(

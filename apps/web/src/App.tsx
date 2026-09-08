@@ -7,7 +7,6 @@ import { ShellBar } from "@ui5/webcomponents-react/ShellBar";
 import { TextArea } from "@ui5/webcomponents-react/TextArea";
 import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -220,10 +219,16 @@ export function App({ client = flowPilotApi }: AppProps) {
     [conversations],
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!activeConversation || detailLoading) return;
     const region = messageRegionRef.current;
-    if (region) region.scrollTop = region.scrollHeight;
+    if (!region) return;
+    const scroll = () => { region.scrollTop = region.scrollHeight; };
+    const frame = requestAnimationFrame(() => {
+      scroll();
+      requestAnimationFrame(scroll);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [activeConversation?.id, activeConversation?.messages.length, detailLoading]);
 
   const chooseConversation = async (
@@ -497,6 +502,7 @@ export function App({ client = flowPilotApi }: AppProps) {
                     <p>{orderedConversations.length} private conversations</p>
                   </div>
                   <Button
+                    className="conversation-new"
                     design="Emphasized"
                     disabled={Boolean(pendingAction)}
                     loading={pendingAction === "creating"}
@@ -529,16 +535,16 @@ export function App({ client = flowPilotApi }: AppProps) {
                             <span className="conversation-title">{conversation.title}</span>
                             <span className="conversation-updated">{formatDate(conversation.updatedAt)}</span>
                           </button>
-                          <Button
+                          <button
+                            type="button"
                             className="conversation-delete"
-                            design="Negative"
-                            tooltip="Delete conversation"
-                            accessibleName={`Delete ${conversation.title}`}
                             disabled={Boolean(pendingAction) || Boolean(conversationToDelete)}
                             onClick={() => setConversationToDelete(conversation)}
+                            aria-label={`Delete ${conversation.title}`}
+                            title="Delete conversation"
                           >
-                            🗑
-                          </Button>
+                            ×
+                          </button>
                         </li>
                       ))}
                     </ol>

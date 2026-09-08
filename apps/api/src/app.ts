@@ -203,6 +203,13 @@ export function createApp(options: AppOptions) {
       }
     },
   );
+  app.get("/api/admin/mcp-servers/:serverId/tools", adminRegistry, async (request, response, next) => {
+    if (!options.registry) return response.status(503).json({ error: "registry_unavailable" });
+    try {
+      const serverId = serverIdSchema.parse(request.params.serverId);
+      response.status(200).json({ tools: await options.registry.listTools(serverId) });
+    } catch (error) { next(error); }
+  });
 
   app.post("/api/conversations", async (request, response) => {
     const conversation = await options.conversations.create(

@@ -85,6 +85,7 @@ export interface FlowPilotApi {
     input: McpServerInput,
   ): Promise<McpServerRecord>;
   pingMcpServer?(serverId: string): Promise<McpServerRecord>;
+  listMcpServerTools?(serverId: string): Promise<string[]>;
   getConversationPolicy?(): Promise<ConversationPolicy>;
   updateConversationPolicy?(input: ConversationPolicy): Promise<ConversationPolicy>;
 }
@@ -268,6 +269,10 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
         `/api/admin/mcp-servers/${encodeURIComponent(serverId)}/ping`,
         { method: "POST" },
       );
+    },
+    async listMcpServerTools(serverId) {
+      const payload = await request<{ tools: string[] }>(`/api/admin/mcp-servers/${encodeURIComponent(serverId)}/tools`);
+      return payload.tools;
     },
     getConversationPolicy() {
       return request<ConversationPolicy>("/api/admin/conversation-policy");

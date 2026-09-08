@@ -297,6 +297,7 @@ textarea {
   padding: 1rem;
   border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
 }
+.conversation-new { min-width: 2.25rem; height: 2.25rem; }
 
 .panel-header h2,
 .panel-header p,
@@ -373,9 +374,22 @@ textarea {
 .conversation-updated { color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
 
 .conversation-delete {
+  width: 2.25rem;
+  height: 2.25rem;
   align-self: center;
   margin-inline-end: 0.5rem;
+  border: 0;
+  border-radius: var(--sapElement_BorderCornerRadius);
+  color: var(--sapNegativeTextColor);
+  background: transparent;
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
 }
+.conversation-delete:hover { background: transparent; color: var(--sapNegativeColor); }
+.conversation-delete:focus-visible { outline: 2px solid var(--sapContent_FocusColor); outline-offset: 1px; }
+.available-tools { display: grid; gap: 0.35rem; margin-block-start: 0.5rem; }
+.available-tools > div { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 
 .list-empty {
   margin: 0;
@@ -572,6 +586,7 @@ textarea {
   margin: 0.75rem 0 0;
   color: var(--sapContent_LabelColor);
   font-size: var(--sapFontSmallSize);
+  font-style: italic;
 }
 
 .tool-table {

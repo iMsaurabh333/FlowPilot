@@ -85,6 +85,7 @@ export interface McpProbeResult {
 
 export interface McpServerProbe {
   ping(server: McpServerRecord): Promise<McpProbeResult>;
+  listTools?(server: McpServerRecord): Promise<string[]>;
 }
 
 export interface McpRegistryRepository {
@@ -644,5 +645,13 @@ export class McpRegistryService {
     const checked = applyProbe(existing, await this.#probeRecord(existing));
     await this.#saveRecord(checked);
     return checked;
+  }
+
+  async listTools(serverId: string) {
+    validateServerId(serverId);
+    const server = await this.#findRecord(serverId);
+    if (!server) throw new McpRegistryError("not_found", "MCP server not found");
+    if (!this.#probe.listTools) throw new McpRegistryError("registry_unavailable");
+    return this.#probe.listTools(server);
   }
 }

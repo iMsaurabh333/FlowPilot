@@ -100,6 +100,7 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
   const [pending, setPending] = useState<string>();
   const [error, setError] = useState<string>();
   const [conversationPolicy, setConversationPolicy] = useState<ConversationPolicy>();
+  const [availableTools, setAvailableTools] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,6 +236,20 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
     } finally {
       setPending(undefined);
     }
+  };
+
+  const discoverTools = async (draft: AdminDraft) => {
+    if (!client.listMcpServerTools || !draft.server) return;
+    setPending(`${draft.key}:tools`);
+    try { setAvailableTools(await client.listMcpServerTools(draft.server.serverId)); }
+    catch (caught) { setError(visibleAdminError(caught)); }
+    finally { setPending(undefined); }
+  };
+
+  const addAllowedTool = (tool: string) => {
+    if (!selectedDraft) return;
+    const names = commaSeparated(selectedDraft.allowedToolNames);
+    if (!names.includes(tool)) updateDraft(selectedDraft.key, { allowedToolNames: [...names, tool].join(", ") });
   };
 
   const submitServer = (event: FormEvent) => {
@@ -485,8 +500,14 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                   Use the approved technical profile for FlowPilot MCP; no
                   secret is stored in the registry.
                 </span>
+                {selectedDraft.server && (
+                  <div className="available-tools">
+                    <Button type="Button" design="Transparent" disabled={Boolean(pending)} loading={pending === `${selectedDraft.key}:tools`} onClick={() => void discoverTools(selectedDraft)}>Discover available tools</Button>
+                    {availableTools.length > 0 && <div role="list" aria-label="Available MCP tools">{availableTools.map((tool) => <Button key={tool} type="Button" design="Transparent" onClick={() => addAllowedTool(tool)}>{tool}</Button>)}</div>}
+                  </div>
+                )}
               </label>
-              <label>
+              <label className="wide-field">
                 External port <span className="optional">Optional</span>
                 <input
                   type="number"
