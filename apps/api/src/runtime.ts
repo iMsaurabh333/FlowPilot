@@ -68,6 +68,7 @@ export async function createRuntime(
         authResolver: mcpAuth,
       }),
       conversationPolicy,
+      attachments,
     );
     const registry = new McpRegistryService(
       mcpRepository,

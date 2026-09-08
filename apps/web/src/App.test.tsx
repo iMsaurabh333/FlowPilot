@@ -167,6 +167,39 @@ describe("FlowPilot chat interface", () => {
     ).toBeInTheDocument();
   });
 
+  it("sends only explicitly selected text evidence with the next message", async () => {
+    const attachment = {
+      id: "attachment-1",
+      fileName: "failed-messages.txt",
+      contentType: "text/plain",
+      byteSize: 13,
+      createdAt: "2026-09-08T10:00:00.000Z",
+      expiresAt: "2026-10-08T10:00:00.000Z",
+    };
+    const sendMessage = vi.fn().mockResolvedValue(detail);
+    renderApp(
+      api({
+        listAttachments: vi.fn().mockResolvedValue([attachment]),
+        sendMessage,
+      }),
+    );
+
+    await screen.findByText("failed-messages.txt");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Use" }));
+    const input = composer();
+    Object.assign(input, { value: "Investigate this failure" });
+    fireEvent.input(input);
+    fireEvent.submit(screen.getByRole("form", { name: "Send a message" }));
+
+    await waitFor(() =>
+      expect(sendMessage).toHaveBeenCalledWith(
+        summary.id,
+        "Investigate this failure",
+        [attachment.id],
+      ),
+    );
+  });
+
   it("copies a starter prompt into a new conversation draft without sending", async () => {
     const createConversation = vi.fn().mockResolvedValue(summary);
     const sendMessage = vi.fn();
@@ -214,7 +247,11 @@ describe("FlowPilot chat interface", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() =>
-      expect(sendMessage).toHaveBeenCalledWith(summary.id, "Check delivery"),
+      expect(sendMessage).toHaveBeenCalledWith(
+        summary.id,
+        "Check delivery",
+        [],
+      ),
     );
     expect(await screen.findByText("Checking.")).toBeInTheDocument();
     expect(input).toHaveProperty("value", "");

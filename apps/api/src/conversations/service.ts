@@ -66,17 +66,32 @@ export class ConversationService {
   readonly #tools:
     { resolve(user: AuthenticatedUser): Promise<ChatTool[]> } | undefined;
   readonly #policy: ConversationPolicyService | undefined;
+  readonly #attachments:
+    | {
+        contextForPrompt(
+          user: AuthenticatedUser,
+          attachmentIds: string[],
+        ): Promise<string | undefined>;
+      }
+    | undefined;
 
   constructor(
     repository: ConversationRepository,
     agent: ChatAgent,
     tools?: { resolve(user: AuthenticatedUser): Promise<ChatTool[]> },
     policy?: ConversationPolicyService,
+    attachments?: {
+      contextForPrompt(
+        user: AuthenticatedUser,
+        attachmentIds: string[],
+      ): Promise<string | undefined>;
+    },
   ) {
     this.#repository = repository;
     this.#agent = agent;
     this.#tools = tools;
     this.#policy = policy;
+    this.#attachments = attachments;
   }
 
   async create(user: AuthenticatedUser) {
@@ -125,7 +140,12 @@ export class ConversationService {
     user: AuthenticatedUser,
     conversationId: string,
     content: string,
+    attachmentIds: string[] = [],
   ) {
+    const attachmentContext = await this.#attachments?.contextForPrompt(
+      user,
+      attachmentIds,
+    );
     const runId = randomUUID();
     const acquisition = await this.#repository.acquireRun(
       user,
@@ -142,15 +162,30 @@ export class ConversationService {
     let messages: ChatMessage[];
     let rolledOver = false;
     try {
-      messages = await this.#agent.sendMessage(
+      const sendMessage = (
+        this.#agent as ChatAgent & {
+          sendMessage: (
+            threadId: string,
+            message: string,
+            tools?: ChatTool[],
+            ephemeralContext?: string,
+          ) => Promise<ChatMessage[]>;
+        }
+      ).sendMessage;
+      messages = await sendMessage.call(
+        this.#agent,
         acquisition.conversation.threadId,
         content,
         await this.#tools?.resolve(user),
+        attachmentContext,
       );
       const maxTurns = (await this.#policy?.get())?.maxRetainedTurns ?? 40;
       const trimOldestTurn = (
         this.#agent as ChatAgent & {
-          trimOldestTurn?: (threadId: string, limit: number) => Promise<boolean>;
+          trimOldestTurn?: (
+            threadId: string,
+            limit: number,
+          ) => Promise<boolean>;
         }
       ).trimOldestTurn;
       rolledOver = trimOldestTurn
@@ -161,7 +196,9 @@ export class ConversationService {
           )
         : false;
       if (rolledOver) {
-        messages = await this.#agent.getMessages(acquisition.conversation.threadId);
+        messages = await this.#agent.getMessages(
+          acquisition.conversation.threadId,
+        );
       }
     } catch (error) {
       try {
@@ -185,6 +222,10 @@ export class ConversationService {
     if (!updated) {
       throw new ConversationNotFoundError();
     }
-    return { ...summary(updated), messages, rolledOver } satisfies ConversationDetail;
+    return {
+      ...summary(updated),
+      messages,
+      rolledOver,
+    } satisfies ConversationDetail;
   }
 }

@@ -34,6 +34,7 @@ const conversationIdSchema = z.string().uuid();
 const messageBodySchema = z
   .object({
     content: z.string().trim().min(1).max(4_000),
+    attachmentIds: z.array(z.string().uuid()).max(3).optional().default([]),
   })
   .strict();
 
@@ -388,11 +389,12 @@ export function createApp(options: AppOptions) {
       const conversationId = conversationIdSchema.parse(
         request.params.conversationId,
       );
-      const { content } = messageBodySchema.parse(request.body);
+      const { content, attachmentIds } = messageBodySchema.parse(request.body);
       const conversation = await options.conversations.sendMessage(
         authenticatedUser(request),
         conversationId,
         content,
+        attachmentIds,
       );
       response.status(200).json(conversation);
     },

@@ -179,6 +179,9 @@ export function App({ client = flowPilotApi }: AppProps) {
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<ConversationAttachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<string[]>(
+    [],
+  );
   const [requestError, setRequestError] = useState<string>();
   const [conversationToDelete, setConversationToDelete] =
     useState<ConversationSummary>();
@@ -233,6 +236,7 @@ export function App({ client = flowPilotApi }: AppProps) {
     const conversationId = activeConversation?.id;
     if (!conversationId) {
       setAttachments([]);
+      setSelectedAttachmentIds([]);
       return;
     }
     let cancelled = false;
@@ -345,7 +349,11 @@ export function App({ client = flowPilotApi }: AppProps) {
     setPendingAction("sending");
     setRequestError(undefined);
     try {
-      const detail = await client.sendMessage(conversationId, content);
+      const detail = await client.sendMessage(
+        conversationId,
+        content,
+        selectedAttachmentIds,
+      );
       setActiveConversation(detail);
       if (detail.rolledOver) {
         setRequestError(
@@ -356,6 +364,7 @@ export function App({ client = flowPilotApi }: AppProps) {
         newestFirst([detail, ...current.filter(({ id }) => id !== detail.id)]),
       );
       setDraft("");
+      setSelectedAttachmentIds([]);
     } catch (error) {
       setRequestError(visibleError(error));
     } finally {
@@ -404,11 +413,24 @@ export function App({ client = flowPilotApi }: AppProps) {
       setAttachments((current) =>
         current.filter(({ id }) => id !== attachmentId),
       );
+      setSelectedAttachmentIds((current) =>
+        current.filter((id) => id !== attachmentId),
+      );
     } catch (error) {
       setRequestError(visibleError(error));
     } finally {
       setPendingAction(undefined);
     }
+  };
+
+  const toggleAttachmentForMessage = (attachmentId: string) => {
+    setSelectedAttachmentIds((current) =>
+      current.includes(attachmentId)
+        ? current.filter((id) => id !== attachmentId)
+        : current.length < 3
+          ? [...current, attachmentId]
+          : current,
+    );
   };
 
   const deleteConversation = async () => {
@@ -894,6 +916,27 @@ export function App({ client = flowPilotApi }: AppProps) {
                       <ul className="attachment-list">
                         {attachments.map((attachment) => (
                           <li key={attachment.id}>
+                            {!attachment.contentType.startsWith("image/") && (
+                              <label className="attachment-use">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAttachmentIds.includes(
+                                    attachment.id,
+                                  )}
+                                  disabled={
+                                    Boolean(pendingAction) ||
+                                    (!selectedAttachmentIds.includes(
+                                      attachment.id,
+                                    ) &&
+                                      selectedAttachmentIds.length >= 3)
+                                  }
+                                  onChange={() =>
+                                    toggleAttachmentForMessage(attachment.id)
+                                  }
+                                />
+                                Use
+                              </label>
+                            )}
                             <a
                               href={`/api/attachments/${encodeURIComponent(attachment.id)}`}
                             >
@@ -919,6 +962,13 @@ export function App({ client = flowPilotApi }: AppProps) {
                     ) : (
                       <p className="attachment-status">
                         No attachments in this conversation.
+                      </p>
+                    )}
+                    {selectedAttachmentIds.length > 0 && (
+                      <p className="attachment-status">
+                        {selectedAttachmentIds.length} attachment
+                        {selectedAttachmentIds.length === 1 ? "" : "s"} selected
+                        for the next message.
                       </p>
                     )}
                   </section>

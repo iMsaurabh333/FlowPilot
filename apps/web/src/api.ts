@@ -86,6 +86,7 @@ export interface FlowPilotApi {
   sendMessage(
     conversationId: string,
     content: string,
+    attachmentIds?: string[],
   ): Promise<ConversationDetail>;
   improvePrompt(content: string): Promise<string>;
   listAttachments(conversationId: string): Promise<ConversationAttachment[]>;
@@ -247,13 +248,13 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
         `/api/conversations/${encodeURIComponent(conversationId)}`,
       );
     },
-    sendMessage(conversationId, content) {
+    sendMessage(conversationId, content, attachmentIds = []) {
       return request<ConversationDetail>(
         `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, attachmentIds }),
         },
       );
     },

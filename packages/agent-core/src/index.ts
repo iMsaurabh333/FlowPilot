@@ -46,6 +46,7 @@ export interface ChatAgent {
     threadId: string,
     content: string,
     tools?: ChatTool[],
+    ephemeralContext?: string,
   ): Promise<ChatMessage[]>;
 }
 
@@ -168,7 +169,8 @@ function messageProcessingLogsTable(
       const row = [
         safeTableCell(record.messageId),
         safeTableCell(record.status),
-        safeTableCell(record.integrationFlowName) ?? safeTableCell(record.integrationFlowId),
+        safeTableCell(record.integrationFlowName) ??
+          safeTableCell(record.integrationFlowId),
         safeTableCell(record.startedAt),
       ];
       if (row.some((cell) => cell === undefined)) return [];
@@ -290,9 +292,11 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
       .filter((index) => index >= 0);
     if (humanIndexes.length <= maxTurns) return false;
     const end = humanIndexes[1] ?? messages.length;
-    const removals = messages.slice(0, end).flatMap((message) =>
-      message.id ? [new RemoveMessage({ id: message.id })] : [],
-    );
+    const removals = messages
+      .slice(0, end)
+      .flatMap((message) =>
+        message.id ? [new RemoveMessage({ id: message.id })] : [],
+      );
     if (removals.length === 0) return false;
     await graph.updateState(graphConfig(threadId), { messages: removals });
     return true;
@@ -310,16 +314,28 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
       ]);
       return contentAsText(response.content).trim().slice(0, 4_000);
     },
-    async sendMessage(threadId, content, tools) {
+    async sendMessage(threadId, content, tools, ephemeralContext) {
       const invocationGraph = tools?.length ? createGraph(tools) : graph;
+      const contextMessage = ephemeralContext?.trim()
+        ? new SystemMessage({
+            id: randomUUID(),
+            content: ephemeralContext.trim(),
+          })
+        : undefined;
       await invocationGraph.invoke(
         {
           messages: [
             new HumanMessage({ id: randomUUID(), content: content.trim() }),
+            ...(contextMessage ? [contextMessage] : []),
           ],
         },
         graphConfig(threadId),
       );
+      if (contextMessage?.id) {
+        await invocationGraph.updateState(graphConfig(threadId), {
+          messages: [new RemoveMessage({ id: contextMessage.id })],
+        });
+      }
       return readMessages(threadId);
     },
   };

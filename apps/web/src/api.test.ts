@@ -143,7 +143,9 @@ describe("loadCurrentUser", () => {
 
     const [path, options] = fetcher.mock.calls[1];
     expect(path).toBe("/api/conversations/id%2Fwith%20spaces/messages");
-    expect(options?.body).toBe(JSON.stringify({ content: "Check 42" }));
+    expect(options?.body).toBe(
+      JSON.stringify({ content: "Check 42", attachmentIds: [] }),
+    );
   });
 
   it("deletes an encoded conversation identifier", async () => {

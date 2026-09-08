@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { AuthenticatedUser } from "../types.js";
+import { attachmentContext } from "./extractor.js";
 
 export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 export const ATTACHMENT_RETENTION_DAYS = 30;
@@ -157,5 +158,16 @@ export class AttachmentService {
     if (!(await this.#repository.delete(user, attachmentId))) {
       throw new AttachmentNotFoundError();
     }
+  }
+
+  async contextForPrompt(user: AuthenticatedUser, attachmentIds: string[]) {
+    const uniqueIds = [...new Set(attachmentIds)];
+    if (uniqueIds.length !== attachmentIds.length || uniqueIds.length > 3) {
+      throw new AttachmentValidationError();
+    }
+    const attachments = await Promise.all(
+      uniqueIds.map((attachmentId) => this.download(user, attachmentId)),
+    );
+    return attachmentContext(attachments);
   }
 }
