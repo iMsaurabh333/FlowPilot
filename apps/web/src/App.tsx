@@ -427,7 +427,10 @@ export function App({ client = flowPilotApi }: AppProps) {
         <aside className="primary-navigation">
           <div className="navigation-heading">
             <span className="navigation-mark" aria-hidden="true">
-              FP
+              <svg focusable="false" viewBox="0 0 32 32">
+                <path d="M8 9h10a6 6 0 0 1 0 12h-4v4" />
+                <path d="m12 17-4 4 4 4" />
+              </svg>
             </span>
             <div>
               <strong>Workspace</strong>
@@ -572,12 +575,14 @@ export function App({ client = flowPilotApi }: AppProps) {
                 </header>
 
                 {conversationToDelete && (
-                  <section
-                    className="delete-confirmation"
-                    role="alertdialog"
-                    aria-labelledby="delete-confirmation-title"
-                    aria-describedby="delete-confirmation-description"
-                  >
+                  <div className="delete-confirmation-backdrop">
+                    <section
+                      className="delete-confirmation"
+                      role="alertdialog"
+                      aria-modal="true"
+                      aria-labelledby="delete-confirmation-title"
+                      aria-describedby="delete-confirmation-description"
+                    >
                     <div>
                       <strong id="delete-confirmation-title">Delete this conversation?</strong>
                       <p id="delete-confirmation-description">
@@ -601,7 +606,8 @@ export function App({ client = flowPilotApi }: AppProps) {
                         Delete conversation
                       </Button>
                     </div>
-                  </section>
+                    </section>
+                  </div>
                 )}
 
                 {requestError && (

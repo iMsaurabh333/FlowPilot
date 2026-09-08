@@ -119,9 +119,17 @@ textarea {
 .navigation-mark {
   width: 2.5rem;
   height: 2.5rem;
-  background: var(--sapShell_InteractiveTextColor);
-  color: var(--sapShell_Background);
-  letter-spacing: 0.04em;
+  background: var(--sapBrandColor);
+}
+
+.navigation-mark svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: var(--sapContent_ContrastTextColor);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
 }
 
 .navigation-heading > div,
@@ -308,14 +316,27 @@ textarea {
   margin: 0;
 }
 
+.delete-confirmation-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--sapBackgroundColor) 45%, transparent);
+}
+
 .delete-confirmation {
+  width: min(32rem, 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
-  background: var(--sapInformation_Background);
+  border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  background: var(--sapGroup_ContentBackground);
+  box-shadow: var(--sapContent_Shadow4);
 }
 
 .delete-confirmation p { margin: 0.25rem 0 0; }
