@@ -191,7 +191,10 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
     setPending(pendingKey);
     setError(undefined);
     const input: McpServerInput = {
-      policyPresetId: "generic",
+      policyPresetId:
+        draft.authProfileRef === "technical:flowpilot-mcp-content"
+          ? "cloud-integration-content"
+          : "generic",
       displayName: draft.displayName,
       endpointUrl: draft.endpointUrl,
       externalPort: draft.externalPort.trim()

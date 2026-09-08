@@ -26,7 +26,7 @@ semantic fields defined by the pinned EDMX-derived contract.
   **Ping** must use the authenticated MCP protocol endpoint instead: authenticated
   `server/discover` for the 2026 protocol and initialize plus `ping` for the 2025
   compatibility path.
-- Two tools are registered:
+- In monitoring mode, five reviewed read-only tools are registered:
   - `search_message_processing_logs` performs a bounded HTTP `GET` against the
     fixed `FLOWPILOT_CLOUD_INTEGRATION_MPL` destination and returns normalized
     Message Processing Log metadata.
@@ -34,6 +34,17 @@ semantic fields defined by the pinned EDMX-derived contract.
     error details only when supplied the MessageGuid and a non-completed status
     from an approved log search. Completed and discarded messages are not
     queried.
+  - `list_message_processing_log_attachments`,
+    `get_message_processing_log_attachment`, and
+    `get_message_processing_log_custom_header_properties` retrieve data only
+    for an explicit MessageGuid.
+- Content mode (`MCP_MODE=content`) requires the separate `ContentInvoke` scope
+  and `FLOWPILOT_CLOUD_INTEGRATION_CONTENT` destination. It provides bounded
+  Integration Content reads and confirmation-bound plan execution for deploy,
+  undeploy, and configuration updates. Independent same-sequence plan rows run
+  with a maximum parallelism of four; later sequence values wait.
+- Content writes acquire an SAP CSRF token and session cookie only for the
+  upstream request. Neither is returned, logged, or persisted.
 - No resources, prompts, sampling, elicitation, roots, or subscriptions are
   exposed.
 
@@ -50,8 +61,10 @@ npm run build --prefix servers/flowpilot-mcp-cloud-integration
 
 For a manual local process, set `MCP_AUTH_MODE=mock` and set `MCP_MOCK_TOKEN` to a
 throwaway value of at least 32 characters. Mock mode refuses to start when
-`NODE_ENV=production`. A live tool call additionally requires a bound Destination
-service and the `FLOWPILOT_CLOUD_INTEGRATION_MPL` destination. Never reuse or
+`NODE_ENV=production`. A live monitoring call requires a bound Destination
+service and the `FLOWPILOT_CLOUD_INTEGRATION_MPL` destination. Content mode
+instead requires `FLOWPILOT_CLOUD_INTEGRATION_CONTENT`, with only the SAP
+Integration Content permissions needed by its approved tools. Never reuse or
 commit a real token.
 
 Default listener: `127.0.0.1:4100`. A public listener requires:

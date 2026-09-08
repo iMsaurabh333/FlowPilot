@@ -40,7 +40,7 @@ const messageBodySchema = z
 
 const mcpServerInputSchema = z
   .object({
-    policyPresetId: z.enum(["generic"]).optional(),
+    policyPresetId: z.enum(["generic", "cloud-integration-content"]).optional(),
     displayName: z.string().trim().min(1).max(120).optional(),
     endpointUrl: z.string().trim().min(1).max(2_048).optional(),
     externalPort: z.number().int().min(1).max(65_535).nullable().optional(),

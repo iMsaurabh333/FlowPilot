@@ -10,7 +10,7 @@ export type McpHealthState =
 
 export interface McpServerRecord {
   serverId: string;
-  policyPresetId: "generic";
+  policyPresetId: "generic" | "cloud-integration-content";
   displayName: string;
   endpointUrl: string;
   mcpPath: string;

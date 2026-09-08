@@ -123,6 +123,33 @@ modules:
         - npm run build
         - npm prune --omit=dev
 
+  - name: flowpilot-mcp-cloud-integration-content
+    type: nodejs
+    path: servers/flowpilot-mcp-cloud-integration
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_MODE: content
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+      - name: flowpilot-destination
+      - name: flowpilot-logs
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
 resources:
   - name: flowpilot-auth
     type: org.cloudfoundry.managed-service

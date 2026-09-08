@@ -18,7 +18,7 @@ export const MCP_HEALTH_STATES = [
 ] as const;
 export type McpHealthState = (typeof MCP_HEALTH_STATES)[number];
 
-export const MCP_POLICY_PRESET_IDS = ["generic"] as const;
+export const MCP_POLICY_PRESET_IDS = ["generic", "cloud-integration-content"] as const;
 export type McpPolicyPresetId = (typeof MCP_POLICY_PRESET_IDS)[number];
 
 export interface ApprovedMcpPolicyPreset {
@@ -39,7 +39,14 @@ export const APPROVED_MCP_POLICY_PRESETS: Record<
     allowExternalPort: true,
     allowedPath: MCP_DEFAULT_PATH,
     allowedAuthProfilePattern:
-      /^(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp)$/u,
+      /^(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp(?:-content)?)$/u,
+  },
+  "cloud-integration-content": {
+    policyPresetId: "cloud-integration-content",
+    requiredScopes: ["ContentInvoke"],
+    allowExternalPort: true,
+    allowedPath: MCP_DEFAULT_PATH,
+    allowedAuthProfilePattern: /^technical:flowpilot-mcp-content$/u,
   },
 };
 
@@ -255,7 +262,7 @@ function storedPolicyPreset(value: unknown): McpPolicyPresetId {
     value === "cloud-integration-content" ||
     value === "event-mesh"
   ) {
-    return "generic";
+    return value === "cloud-integration-content" ? "cloud-integration-content" : "generic";
   }
   throw new McpRegistryError(
     "registry_unavailable",

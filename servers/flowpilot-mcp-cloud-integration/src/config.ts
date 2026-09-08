@@ -1,4 +1,5 @@
 export type McpAuthMode = "xsuaa" | "mock";
+export type McpMode = "monitoring" | "content";
 
 export interface McpServerConfig {
   allowedHosts?: string[];
@@ -7,6 +8,7 @@ export interface McpServerConfig {
   host: string;
   port: number;
   publicUrl: URL;
+  mode?: McpMode;
 }
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
@@ -25,6 +27,12 @@ function parseAuthMode(value: string | undefined): McpAuthMode {
     return mode;
   }
   throw new Error(`Unsupported MCP_AUTH_MODE: ${mode}`);
+}
+
+function parseMode(value: string | undefined): McpMode {
+  const mode = value ?? "monitoring";
+  if (mode === "monitoring" || mode === "content") return mode;
+  throw new Error(`Unsupported MCP_MODE: ${mode}`);
 }
 
 function parseHostnameList(
@@ -123,5 +131,6 @@ export function loadMcpServerConfig(
     host,
     port,
     publicUrl,
+    ...(environment.MCP_MODE === undefined ? {} : { mode: parseMode(environment.MCP_MODE) }),
   };
 }

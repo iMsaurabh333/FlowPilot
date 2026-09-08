@@ -12,12 +12,15 @@ import {
 } from "@modelcontextprotocol/server";
 
 import {
+  MCP_CONTENT_INVOKE_SCOPE,
   MCP_INVOKE_SCOPE,
   MCP_PATH,
   MCP_PROTOCOL_VERSIONS,
   MCP_SERVER_NAME,
   MCP_SERVER_VERSION,
 } from "./constants.js";
+import { createContentMcpServer } from "./content.js";
+import type { McpMode } from "./config.js";
 import { createCloudIntegrationMcpServer } from "./mcp.js";
 import type { MessageProcessingLogsConnectorLike } from "./mpl.js";
 
@@ -27,6 +30,7 @@ export interface McpAppOptions {
   authorizationServerUrl: URL;
   connector?: MessageProcessingLogsConnectorLike;
   host?: string;
+  mode?: McpMode;
   reportError?: (error: Error) => void;
   resourceServerUrl: URL;
   verifier: OAuthTokenVerifier;
@@ -84,6 +88,8 @@ function safeRequestErrorHandler(
 }
 
 export function createMcpApp(options: McpAppOptions): McpAppRuntime {
+  const mode = options.mode ?? "monitoring";
+  const requiredScope = mode === "content" ? MCP_CONTENT_INVOKE_SCOPE : MCP_INVOKE_SCOPE;
   const reportError = options.reportError ?? defaultErrorReporter;
   const app = createMcpExpressApp({
     host: options.host ?? "127.0.0.1",
@@ -100,9 +106,9 @@ export function createMcpApp(options: McpAppOptions): McpAppRuntime {
   const resourceMetadata: OAuthProtectedResourceMetadata = {
     resource: options.resourceServerUrl.href,
     authorization_servers: [options.authorizationServerUrl.href],
-    scopes_supported: [MCP_INVOKE_SCOPE],
+    scopes_supported: [requiredScope],
     bearer_methods_supported: ["header"],
-    resource_name: "FlowPilot Cloud Integration MCP server",
+    resource_name: mode === "content" ? "FlowPilot Cloud Integration Content MCP server" : "FlowPilot Cloud Integration MCP server",
   };
 
   app.get(resourceMetadataPath, (_request, response) => {
@@ -132,10 +138,10 @@ export function createMcpApp(options: McpAppOptions): McpAppRuntime {
 
   const handler = createMcpHandler(
     ({ authInfo }) => {
-      if (!authInfo?.scopes.includes(MCP_INVOKE_SCOPE)) {
+      if (!authInfo?.scopes.includes(requiredScope)) {
         throw new Error("Authenticated MCP context is missing");
       }
-      return createCloudIntegrationMcpServer({ connector: options.connector });
+      return mode === "content" ? createContentMcpServer() : createCloudIntegrationMcpServer({ connector: options.connector });
     },
     {
       legacy: "stateless",
@@ -145,7 +151,7 @@ export function createMcpApp(options: McpAppOptions): McpAppRuntime {
   const nodeHandler = toNodeHandler(handler, { onerror: reportError });
   const authenticate = requireBearerAuth({
     verifier: options.verifier,
-    requiredScopes: [MCP_INVOKE_SCOPE],
+    requiredScopes: [requiredScope],
     resourceMetadataUrl,
   });
 

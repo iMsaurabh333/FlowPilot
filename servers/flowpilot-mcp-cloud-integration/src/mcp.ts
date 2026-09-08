@@ -10,6 +10,7 @@ import {
   MCP_SERVER_VERSION,
 } from "./constants.js";
 import { createConfiguredMessageProcessingLogsConnector } from "./destination.js";
+import { MonitoringDetailsClient } from "./monitoring-details.js";
 import {
   MessageProcessingLogsError,
   MPL_DEFAULT_LIMIT,
@@ -122,6 +123,16 @@ const errorInformationOutputSchema = fromJsonSchema<MessageProcessingLogErrorInf
   },
 });
 
+const monitoringDetailsInputSchema = fromJsonSchema<Record<string, unknown>>({
+  type: "object",
+  additionalProperties: false,
+  required: ["messageId"],
+  properties: {
+    messageId: { type: "string", minLength: 1, maxLength: 256 },
+    attachmentId: { type: "string", minLength: 1, maxLength: 256 },
+  },
+});
+
 export interface CloudIntegrationMcpServerOptions {
   connector?: MessageProcessingLogsConnectorLike;
 }
@@ -142,6 +153,7 @@ export function createCloudIntegrationMcpServer(
 ): McpServer {
   const connector =
     options.connector ?? createConfiguredMessageProcessingLogsConnector();
+  const details = new MonitoringDetailsClient();
   const server = new McpServer(
     {
       name: MCP_SERVER_NAME,
@@ -217,6 +229,54 @@ export function createCloudIntegrationMcpServer(
         return safeToolError(error);
       }
     },
+  );
+
+  const detailTool = (
+    name: string,
+    title: string,
+    description: string,
+    operation: (args: Record<string, unknown>) => Promise<unknown>,
+  ) =>
+    server.registerTool(
+      name,
+      {
+        title,
+        description,
+        inputSchema: monitoringDetailsInputSchema,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (args) => {
+        try {
+          const value = await operation(args);
+          return { content: [{ type: "text", text: JSON.stringify(value) }] };
+        } catch (error: unknown) {
+          return safeToolError(error);
+        }
+      },
+    );
+
+  detailTool(
+    "list_message_processing_log_attachments",
+    "List Message Processing Log Attachments",
+    "Return bounded attachment metadata for one Message Processing Log.",
+    (args) => details.attachments(args.messageId),
+  );
+  detailTool(
+    "get_message_processing_log_attachment",
+    "Get Message Processing Log Attachment",
+    "Return one explicitly identified Message Processing Log attachment.",
+    (args) => details.attachment(args.messageId, args.attachmentId),
+  );
+  detailTool(
+    "get_message_processing_log_custom_header_properties",
+    "Get Message Processing Log Custom Header Properties",
+    "Return custom header properties for one Message Processing Log.",
+    (args) => details.customHeaders(args.messageId),
   );
 
   return server;

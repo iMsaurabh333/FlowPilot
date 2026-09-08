@@ -7,6 +7,11 @@
       "name": "$XSAPPNAME.McpInvoke",
       "description": "Invoke the FlowPilot MCP service",
       "grant-as-authority-to-apps": ["$XSAPPNAME(application,flowpilot)"]
+    },
+    {
+      "name": "$XSAPPNAME.ContentInvoke",
+      "description": "Invoke the FlowPilot Cloud Integration Content MCP service",
+      "grant-as-authority-to-apps": ["$XSAPPNAME(application,flowpilot)"]
     }
   ]
 }

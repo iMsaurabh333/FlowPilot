@@ -2,15 +2,17 @@ import { createConfiguredAuthentication } from "./auth.js";
 import { createMcpApp } from "./app.js";
 import { loadMcpServerConfig } from "./config.js";
 import { MCP_SERVER_NAME } from "./constants.js";
+import { MCP_CONTENT_INVOKE_SCOPE, MCP_INVOKE_SCOPE } from "./constants.js";
 
 async function main(): Promise<void> {
   const config = loadMcpServerConfig();
-  const authentication = createConfiguredAuthentication(config.authMode);
+  const authentication = createConfiguredAuthentication(config.authMode, process.env, config.mode === "content" ? MCP_CONTENT_INVOKE_SCOPE : MCP_INVOKE_SCOPE);
   const runtime = createMcpApp({
     allowedHosts: config.allowedHosts,
     allowedOrigins: config.allowedOrigins,
     authorizationServerUrl: authentication.authorizationServerUrl,
     host: config.host,
+    mode: config.mode,
     resourceServerUrl: config.publicUrl,
     verifier: authentication.verifier,
   });

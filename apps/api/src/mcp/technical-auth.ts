@@ -1,6 +1,7 @@
 import type { McpAuthProfileResolver } from "./probe.js";
 
 const MCP_TECHNICAL_AUTH_PROFILE = "technical:flowpilot-mcp";
+const MCP_CONTENT_TECHNICAL_AUTH_PROFILE = "technical:flowpilot-mcp-content";
 const TOKEN_TIMEOUT_MS = 5_000;
 const TOKEN_CACHE_TTL_MS = 4 * 60_000;
 
@@ -102,7 +103,7 @@ export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
   readonly #scopeBinding: McpScopeBinding | undefined;
   readonly #request: TechnicalTokenRequester;
   readonly #now: () => number;
-  #token: { value: string; expiresAt: number } | undefined;
+  #tokens = new Map<string, { value: string; expiresAt: number }>();
 
   constructor(
     environment: NodeJS.ProcessEnv = process.env,
@@ -116,15 +117,17 @@ export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
 
   async resolve(authProfileRef: string) {
     if (
-      authProfileRef !== MCP_TECHNICAL_AUTH_PROFILE ||
+      (authProfileRef !== MCP_TECHNICAL_AUTH_PROFILE &&
+        authProfileRef !== MCP_CONTENT_TECHNICAL_AUTH_PROFILE) ||
       !this.#binding ||
       !this.#scopeBinding
     ) {
       return undefined;
     }
     const now = this.#now();
-    if (this.#token && this.#token.expiresAt > now) {
-      return { Authorization: `Bearer ${this.#token.value}` };
+    const cached = this.#tokens.get(authProfileRef);
+    if (cached && cached.expiresAt > now) {
+      return { Authorization: `Bearer ${cached.value}` };
     }
 
     const controller = new AbortController();
@@ -141,7 +144,11 @@ export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
         },
         body: new URLSearchParams({
           grant_type: "client_credentials",
-          scope: `${this.#scopeBinding.xsappname}.McpInvoke`,
+          scope: `${this.#scopeBinding.xsappname}.${
+            authProfileRef === MCP_CONTENT_TECHNICAL_AUTH_PROFILE
+              ? "ContentInvoke"
+              : "McpInvoke"
+          }`,
         }).toString(),
         signal: controller.signal,
       });
@@ -155,11 +162,11 @@ export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
             TOKEN_CACHE_TTL_MS,
           )
         : TOKEN_CACHE_TTL_MS;
-      this.#token = {
+      this.#tokens.set(authProfileRef, {
         value: text(payload.access_token)!,
         expiresAt: now + ttl,
-      };
-      return { Authorization: `Bearer ${this.#token.value}` };
+      });
+      return { Authorization: `Bearer ${this.#tokens.get(authProfileRef)!.value}` };
     } catch {
       return undefined;
     } finally {

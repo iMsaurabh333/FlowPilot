@@ -3,6 +3,7 @@ import xsenv from "@sap/xsenv";
 import {
   MessageProcessingLogsConnector,
   MessageProcessingLogsError,
+  CONTENT_DESTINATION_NAME,
   MPL_DESTINATION_NAME,
   type DestinationResolver,
   type ResolvedDestination,
@@ -282,7 +283,7 @@ export class DestinationServiceResolver implements DestinationResolver {
   }
 
   async resolve(name: string): Promise<ResolvedDestination> {
-    if (name !== MPL_DESTINATION_NAME) {
+    if (name !== MPL_DESTINATION_NAME && name !== CONTENT_DESTINATION_NAME) {
       throw new MessageProcessingLogsError(
         "destination_unavailable",
         "The requested destination is not approved",
@@ -367,4 +368,8 @@ export function createConfiguredMessageProcessingLogsConnector(
     fetchImpl: options.fetchImpl,
     resolver: new DestinationServiceResolver({ fetchImpl: options.fetchImpl }),
   });
+}
+
+export function createConfiguredDestinationResolver(): DestinationResolver {
+  return new DestinationServiceResolver();
 }

@@ -63,6 +63,7 @@ function createDefaultXsuaaValidator(): ValidateXsuaaToken {
 
 export function createXsuaaTokenVerifier(
   validateToken: ValidateXsuaaToken = createDefaultXsuaaValidator(),
+  requiredScope: string = MCP_INVOKE_SCOPE,
 ): OAuthTokenVerifier {
   return {
     async verifyAccessToken(token: string): Promise<AuthInfo> {
@@ -90,8 +91,8 @@ export function createXsuaaTokenVerifier(
       return {
         token,
         clientId: context.getClientId(),
-        scopes: context.checkLocalScope(MCP_INVOKE_SCOPE)
-          ? [MCP_INVOKE_SCOPE]
+        scopes: context.checkLocalScope(requiredScope)
+          ? [requiredScope]
           : [],
         expiresAt,
       };
@@ -110,6 +111,7 @@ function tokensMatch(actual: string, expected: string): boolean {
 
 export function createMockTokenVerifier(
   environment: NodeJS.ProcessEnv = process.env,
+  requiredScope: string = MCP_INVOKE_SCOPE,
 ): OAuthTokenVerifier {
   if (environment.NODE_ENV === "production") {
     throw new Error("Mock MCP authentication cannot run in production");
@@ -129,7 +131,7 @@ export function createMockTokenVerifier(
       return {
         token,
         clientId: "flowpilot-local-mcp-client",
-        scopes: [MCP_INVOKE_SCOPE],
+        scopes: [requiredScope],
         expiresAt: Math.floor(Date.now() / 1_000) + 300,
       };
     },
@@ -158,6 +160,7 @@ function parseAuthorizationServerUrl(value: string): URL {
 export function createConfiguredAuthentication(
   mode: McpAuthMode,
   environment: NodeJS.ProcessEnv = process.env,
+  requiredScope: string = MCP_INVOKE_SCOPE,
 ): McpAuthentication {
   if (mode === "mock") {
     const port = Number(environment.PORT ?? "4100");
@@ -166,7 +169,7 @@ export function createConfiguredAuthentication(
         environment.MCP_AUTHORIZATION_SERVER_URL ??
           `http://127.0.0.1:${port}/mock-authorization-server`,
       ),
-      verifier: createMockTokenVerifier(environment),
+      verifier: createMockTokenVerifier(environment, requiredScope),
     };
   }
 
@@ -176,7 +179,7 @@ export function createConfiguredAuthentication(
       environment.MCP_AUTHORIZATION_SERVER_URL ?? authorizationServerUrl.href,
     ),
     verifier: createXsuaaTokenVerifier((token) =>
-      createSecurityContext(service, { jwt: token }),
+      createSecurityContext(service, { jwt: token }), requiredScope,
     ),
   };
 }
