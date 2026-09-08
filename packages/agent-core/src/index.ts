@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import {
   HumanMessage,
+  RemoveMessage,
   SystemMessage,
   type BaseMessage,
   type MessageContent,
@@ -27,6 +28,7 @@ export interface ChatMessage {
 
 export interface ChatAgent {
   getMessages(threadId: string): Promise<ChatMessage[]>;
+  trimOldestTurn(threadId: string, maxTurns: number): Promise<boolean>;
   sendMessage(
     threadId: string,
     content: string,
@@ -178,8 +180,27 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
       .filter((message): message is ChatMessage => message !== undefined);
   };
 
+  const trimOldestTurn = async (threadId: string, maxTurns: number) => {
+    const snapshot = await graph.getState(graphConfig(threadId));
+    const messages: BaseMessage[] = Array.isArray(snapshot.values.messages)
+      ? (snapshot.values.messages as BaseMessage[])
+      : [];
+    const humanIndexes = messages
+      .map((message, index) => (message.getType() === "human" ? index : -1))
+      .filter((index) => index >= 0);
+    if (humanIndexes.length <= maxTurns) return false;
+    const end = humanIndexes[1] ?? messages.length;
+    const removals = messages.slice(0, end).flatMap((message) =>
+      message.id ? [new RemoveMessage({ id: message.id })] : [],
+    );
+    if (removals.length === 0) return false;
+    await graph.updateState(graphConfig(threadId), { messages: removals });
+    return true;
+  };
+
   return {
     getMessages: readMessages,
+    trimOldestTurn,
     async sendMessage(threadId, content, tools) {
       const invocationGraph = tools?.length ? createGraph(tools) : graph;
       await invocationGraph.invoke(

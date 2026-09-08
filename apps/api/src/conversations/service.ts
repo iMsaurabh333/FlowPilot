@@ -43,6 +43,7 @@ export interface ConversationSummary {
 
 export interface ConversationDetail extends ConversationSummary {
   messages: ChatMessage[];
+  rolledOver?: boolean;
 }
 
 function summary(record: ConversationRecord): ConversationSummary {
@@ -119,12 +120,29 @@ export class ConversationService {
     }
 
     let messages: ChatMessage[];
+    let rolledOver = false;
     try {
       messages = await this.#agent.sendMessage(
         acquisition.conversation.threadId,
         content,
         await this.#tools?.resolve(user),
       );
+      const maxTurns = (await this.#policy?.get())?.maxRetainedTurns ?? 40;
+      const trimOldestTurn = (
+        this.#agent as ChatAgent & {
+          trimOldestTurn?: (threadId: string, limit: number) => Promise<boolean>;
+        }
+      ).trimOldestTurn;
+      rolledOver = trimOldestTurn
+        ? await trimOldestTurn.call(
+            this.#agent,
+            acquisition.conversation.threadId,
+            maxTurns,
+          )
+        : false;
+      if (rolledOver) {
+        messages = await this.#agent.getMessages(acquisition.conversation.threadId);
+      }
     } catch (error) {
       try {
         await this.#repository.releaseRun(user, conversationId, runId);
@@ -147,6 +165,6 @@ export class ConversationService {
     if (!updated) {
       throw new ConversationNotFoundError();
     }
-    return { ...summary(updated), messages } satisfies ConversationDetail;
+    return { ...summary(updated), messages, rolledOver } satisfies ConversationDetail;
   }
 }

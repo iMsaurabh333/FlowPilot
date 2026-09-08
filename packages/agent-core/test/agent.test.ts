@@ -91,4 +91,19 @@ describe("FlowPilot chat graph", () => {
       { role: "user", content: "Check logs" },
     ]);
   });
+
+  it("removes the oldest completed turn when retention is exceeded", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: ["one", "two", "three"] }),
+    });
+    await agent.sendMessage("rolling-thread", "first");
+    await agent.sendMessage("rolling-thread", "second");
+    await agent.sendMessage("rolling-thread", "third");
+
+    expect(await agent.trimOldestTurn("rolling-thread", 2)).toBe(true);
+    expect((await agent.getMessages("rolling-thread")).map(({ content }) => content)).toEqual([
+      "second", "two", "third", "three",
+    ]);
+  });
 });

@@ -245,6 +245,9 @@ export function App({ client = flowPilotApi }: AppProps) {
     try {
       const detail = await client.sendMessage(conversationId, content);
       setActiveConversation(detail);
+      if (detail.rolledOver) {
+        setRequestError("Conversation history limit reached. The oldest turn was removed.");
+      }
       setConversations((current) =>
         newestFirst([detail, ...current.filter(({ id }) => id !== detail.id)]),
       );

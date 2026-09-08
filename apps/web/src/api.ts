@@ -59,6 +59,7 @@ export interface ChatMessage {
 
 export interface ConversationDetail extends ConversationSummary {
   messages: ChatMessage[];
+  rolledOver?: boolean;
 }
 
 export interface FlowPilotApi {
