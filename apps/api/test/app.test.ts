@@ -6,6 +6,11 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "../src/app.js";
+import {
+  AttachmentService,
+  type AttachmentRepository,
+  type StoredAttachment,
+} from "../src/attachments/service.js";
 import type { ConversationPolicyService } from "../src/conversation-policy.js";
 import { ConversationService } from "../src/conversations/service.js";
 import type {
@@ -54,7 +59,8 @@ class MemoryConversationRepository implements ConversationRepository {
 
   async create(user: AuthenticatedUser, maxConversations: number) {
     const ownedCount = [...this.records.values()].filter(
-      (record) => record.tenantId === user.tenantId && record.subject === user.subject,
+      (record) =>
+        record.tenantId === user.tenantId && record.subject === user.subject,
     ).length;
     if (ownedCount >= maxConversations) return undefined;
     const now = new Date();
@@ -132,6 +138,62 @@ class MemoryConversationRepository implements ConversationRepository {
   }
 }
 
+class MemoryAttachmentRepository implements AttachmentRepository {
+  readonly records = new Map<string, StoredAttachment>();
+  readonly #conversations: MemoryConversationRepository;
+
+  constructor(conversations: MemoryConversationRepository) {
+    this.#conversations = conversations;
+  }
+
+  #owns(user: AuthenticatedUser, conversationId: string) {
+    const conversation = this.#conversations.records.get(conversationId);
+    return (
+      conversation?.tenantId === user.tenantId &&
+      conversation.subject === user.subject
+    );
+  }
+
+  async create(user: AuthenticatedUser, attachment: StoredAttachment) {
+    if (!this.#owns(user, attachment.conversationId)) return false;
+    this.records.set(attachment.id, attachment);
+    return true;
+  }
+
+  async list(user: AuthenticatedUser, conversationId: string) {
+    if (!this.#owns(user, conversationId)) return undefined;
+    return [...this.records.values()]
+      .filter((attachment) => attachment.conversationId === conversationId)
+      .map(({ content: _content, ...attachment }) => attachment);
+  }
+
+  async find(user: AuthenticatedUser, attachmentId: string) {
+    const attachment = this.records.get(attachmentId);
+    return attachment && this.#owns(user, attachment.conversationId)
+      ? attachment
+      : undefined;
+  }
+
+  async delete(user: AuthenticatedUser, attachmentId: string) {
+    const attachment = await this.find(user, attachmentId);
+    if (!attachment) return false;
+    this.records.delete(attachmentId);
+    return true;
+  }
+
+  async purgeExpired(user: AuthenticatedUser, conversationId: string) {
+    if (!this.#owns(user, conversationId)) return;
+    for (const attachment of this.records.values()) {
+      if (
+        attachment.conversationId === conversationId &&
+        attachment.expiresAt <= new Date()
+      ) {
+        this.records.delete(attachment.id);
+      }
+    }
+  }
+}
+
 class FakeChatAgent implements ChatAgent {
   readonly messages = new Map<string, ChatMessage[]>();
   failNext = false;
@@ -172,16 +234,23 @@ const authentication: RequestHandler = (incoming, _response, next) => {
 describe("FlowPilot API", () => {
   let app: ReturnType<typeof createApp>;
   let repository: MemoryConversationRepository;
+  let attachments: MemoryAttachmentRepository;
   let agent: FakeChatAgent;
   let conversationPolicy: ConversationPolicyService;
 
   beforeEach(() => {
     repository = new MemoryConversationRepository();
+    attachments = new MemoryAttachmentRepository(repository);
     agent = new FakeChatAgent();
     let policy = { maxConversationsPerUser: 50, maxRetainedTurns: 40 };
     conversationPolicy = {
-      async get() { return policy; },
-      async update(input) { policy = input; return policy; },
+      async get() {
+        return policy;
+      },
+      async update(input) {
+        policy = input;
+        return policy;
+      },
     };
     const conversations = new ConversationService(
       repository,
@@ -189,7 +258,12 @@ describe("FlowPilot API", () => {
       undefined,
       conversationPolicy,
     );
-    app = createApp({ authentication, conversations, conversationPolicy });
+    app = createApp({
+      authentication,
+      conversations,
+      conversationPolicy,
+      attachments: new AttachmentService(attachments),
+    });
   });
 
   it("exposes an unauthenticated health endpoint", async () => {
@@ -218,17 +292,26 @@ describe("FlowPilot API", () => {
     const read = await request(app)
       .get("/api/admin/conversation-policy")
       .set("x-test-user", "admin");
-    expect(read.body).toEqual({ maxConversationsPerUser: 50, maxRetainedTurns: 40 });
+    expect(read.body).toEqual({
+      maxConversationsPerUser: 50,
+      maxRetainedTurns: 40,
+    });
 
     const update = await request(app)
       .put("/api/admin/conversation-policy")
       .set("x-test-user", "admin")
       .send({ maxConversationsPerUser: 75, maxRetainedTurns: 60 });
-    expect(update.body).toEqual({ maxConversationsPerUser: 75, maxRetainedTurns: 60 });
+    expect(update.body).toEqual({
+      maxConversationsPerUser: 75,
+      maxRetainedTurns: 60,
+    });
   });
 
   it("enforces the configured conversation limit per authenticated user", async () => {
-    await conversationPolicy.update({ maxConversationsPerUser: 1, maxRetainedTurns: 40 });
+    await conversationPolicy.update({
+      maxConversationsPerUser: 1,
+      maxRetainedTurns: 40,
+    });
     expect((await request(app).post("/api/conversations")).status).toBe(201);
 
     const limited = await request(app).post("/api/conversations");
@@ -315,6 +398,75 @@ describe("FlowPilot API", () => {
 
     expect(deleted.status).toBe(204);
     expect(loaded.status).toBe(404);
+  });
+
+  it("stores approved attachments privately and exposes only owned metadata", async () => {
+    const created = await request(app).post("/api/conversations");
+    const attachment = await request(app)
+      .post(`/api/conversations/${created.body.id}/attachments`)
+      .set("content-type", "application/octet-stream")
+      .set("x-file-name", "failed-messages.txt")
+      .set("x-file-content-type", "text/plain")
+      .send("MPL-42 failed");
+
+    expect(attachment.status).toBe(201);
+    expect(attachment.body).toMatchObject({
+      fileName: "failed-messages.txt",
+      contentType: "text/plain",
+      byteSize: 13,
+    });
+    expect(attachment.body).toHaveProperty("expiresAt");
+
+    const list = await request(app).get(
+      `/api/conversations/${created.body.id}/attachments`,
+    );
+    expect(list.body.attachments).toEqual([
+      expect.objectContaining({ id: attachment.body.id }),
+    ]);
+
+    const otherUserList = await request(app)
+      .get(`/api/conversations/${created.body.id}/attachments`)
+      .set("x-test-user", "b");
+    const otherUserDownload = await request(app)
+      .get(`/api/attachments/${attachment.body.id}`)
+      .set("x-test-user", "b");
+    expect(otherUserList.status).toBe(404);
+    expect(otherUserDownload.status).toBe(404);
+
+    const download = await request(app).get(
+      `/api/attachments/${attachment.body.id}`,
+    );
+    expect(download.status).toBe(200);
+    expect(download.headers["content-disposition"]).toBe(
+      'attachment; filename="failed-messages.txt"',
+    );
+    expect(download.headers["cache-control"]).toBe("private, no-store");
+    expect(download.text).toBe("MPL-42 failed");
+  });
+
+  it("rejects unsafe attachment metadata and removes an owned attachment", async () => {
+    const created = await request(app).post("/api/conversations");
+    const unsafe = await request(app)
+      .post(`/api/conversations/${created.body.id}/attachments`)
+      .set("content-type", "application/octet-stream")
+      .set("x-file-name", "../secrets.txt")
+      .set("x-file-content-type", "text/plain")
+      .send("nope");
+    expect(unsafe.status).toBe(400);
+
+    const attachment = await request(app)
+      .post(`/api/conversations/${created.body.id}/attachments`)
+      .set("content-type", "application/octet-stream")
+      .set("x-file-name", "evidence.csv")
+      .set("x-file-content-type", "text/csv")
+      .send("id,status\n42,failed");
+    const deleted = await request(app).delete(
+      `/api/attachments/${attachment.body.id}`,
+    );
+    expect(deleted.status).toBe(204);
+    expect(
+      (await request(app).get(`/api/attachments/${attachment.body.id}`)).status,
+    ).toBe(404);
   });
 
   it("rejects invalid identifiers and message payloads", async () => {

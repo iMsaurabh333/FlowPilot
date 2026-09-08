@@ -125,6 +125,48 @@ function migrations(schemaName: string) {
           WITH CHECK (current_setting('flowpilot.is_admin', true) = 'true');
       `,
     },
+    {
+      version: 4,
+      sql: `
+        CREATE TABLE ${schema}.conversation_attachments (
+          id uuid PRIMARY KEY,
+          conversation_id uuid NOT NULL REFERENCES ${schema}.conversations(id) ON DELETE CASCADE,
+          tenant_id text NOT NULL,
+          subject_id text NOT NULL,
+          file_name text NOT NULL,
+          content_type text NOT NULL,
+          byte_size integer NOT NULL,
+          payload bytea NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          expires_at timestamptz NOT NULL,
+          CONSTRAINT conversation_attachments_file_name_length CHECK (char_length(file_name) BETWEEN 1 AND 120),
+          CONSTRAINT conversation_attachments_content_type CHECK (content_type IN (
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'image/jpeg', 'image/png', 'text/csv', 'text/plain'
+          )),
+          CONSTRAINT conversation_attachments_byte_size CHECK (byte_size BETWEEN 1 AND 5242880),
+          CONSTRAINT conversation_attachments_expiry CHECK (expires_at > created_at)
+        );
+
+        CREATE INDEX conversation_attachments_owner_conversation_idx
+          ON ${schema}.conversation_attachments (tenant_id, subject_id, conversation_id, created_at DESC);
+        CREATE INDEX conversation_attachments_expiry_idx
+          ON ${schema}.conversation_attachments (expires_at);
+
+        ALTER TABLE ${schema}.conversation_attachments ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.conversation_attachments FORCE ROW LEVEL SECURITY;
+        CREATE POLICY conversation_attachments_owner_policy
+          ON ${schema}.conversation_attachments
+          USING (
+            tenant_id = current_setting('flowpilot.tenant_id', true) AND
+            subject_id = current_setting('flowpilot.subject_id', true)
+          )
+          WITH CHECK (
+            tenant_id = current_setting('flowpilot.tenant_id', true) AND
+            subject_id = current_setting('flowpilot.subject_id', true)
+          );
+      `,
+    },
   ] as const;
 }
 

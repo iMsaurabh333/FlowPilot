@@ -3,6 +3,8 @@ import { createChatModel, loadModelConfig } from "@flowpilot/model-adapters";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
 import { createApp } from "./app.js";
+import { PostgresAttachmentRepository } from "./attachments/postgres-repository.js";
+import { AttachmentService } from "./attachments/service.js";
 import { PostgresConversationPolicyService } from "./conversation-policy.js";
 import { PostgresConversationRepository } from "./conversations/postgres-repository.js";
 import { ConversationService } from "./conversations/service.js";
@@ -52,6 +54,9 @@ export async function createRuntime(
       model,
     });
     const repository = new PostgresConversationRepository(pool);
+    const attachments = new AttachmentService(
+      new PostgresAttachmentRepository(pool),
+    );
     const conversationPolicy = new PostgresConversationPolicyService(pool);
     const mcpRepository = new PostgresMcpRegistryRepository(pool);
     const mcpAuth = createConfiguredMcpAuthProfileResolver(environment);
@@ -70,7 +75,12 @@ export async function createRuntime(
     );
 
     return {
-      app: createApp({ conversations, registry, conversationPolicy }),
+      app: createApp({
+        conversations,
+        registry,
+        conversationPolicy,
+        attachments,
+      }),
       async close() {
         await pool.end();
       },

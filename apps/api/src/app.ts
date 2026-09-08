@@ -3,6 +3,11 @@ import { z, ZodError } from "zod";
 
 import { createAuthentication } from "./auth.js";
 import {
+  AttachmentNotFoundError,
+  AttachmentService,
+  AttachmentValidationError,
+} from "./attachments/service.js";
+import {
   ConversationBusyError,
   ConversationLimitError,
   ConversationNotFoundError,
@@ -22,6 +27,7 @@ export interface AppOptions {
   conversations: ConversationService;
   registry?: McpRegistryService;
   conversationPolicy?: ConversationPolicyService;
+  attachments?: AttachmentService;
 }
 
 const conversationIdSchema = z.string().uuid();
@@ -127,30 +133,42 @@ export function createApp(options: AppOptions) {
   });
 
   const adminRegistry = requireScope(MCP_ADMIN_SCOPE);
-  app.get("/api/admin/conversation-policy", adminRegistry, async (_request, response, next) => {
-    if (!options.conversationPolicy) {
-      response.status(503).json({ error: "policy_unavailable" });
-      return;
-    }
-    try {
-      response.status(200).json(await options.conversationPolicy.get());
-    } catch (error) {
-      next(error);
-    }
-  });
-  app.put("/api/admin/conversation-policy", adminRegistry, async (request, response, next) => {
-    if (!options.conversationPolicy) {
-      response.status(503).json({ error: "policy_unavailable" });
-      return;
-    }
-    try {
-      response.status(200).json(
-        await options.conversationPolicy.update(conversationPolicySchema.parse(request.body)),
-      );
-    } catch (error) {
-      next(error);
-    }
-  });
+  app.get(
+    "/api/admin/conversation-policy",
+    adminRegistry,
+    async (_request, response, next) => {
+      if (!options.conversationPolicy) {
+        response.status(503).json({ error: "policy_unavailable" });
+        return;
+      }
+      try {
+        response.status(200).json(await options.conversationPolicy.get());
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+  app.put(
+    "/api/admin/conversation-policy",
+    adminRegistry,
+    async (request, response, next) => {
+      if (!options.conversationPolicy) {
+        response.status(503).json({ error: "policy_unavailable" });
+        return;
+      }
+      try {
+        response
+          .status(200)
+          .json(
+            await options.conversationPolicy.update(
+              conversationPolicySchema.parse(request.body),
+            ),
+          );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
   app.get(
     "/api/admin/mcp-servers",
     adminRegistry,
@@ -203,13 +221,22 @@ export function createApp(options: AppOptions) {
       }
     },
   );
-  app.get("/api/admin/mcp-servers/:serverId/tools", adminRegistry, async (request, response, next) => {
-    if (!options.registry) return response.status(503).json({ error: "registry_unavailable" });
-    try {
-      const serverId = serverIdSchema.parse(request.params.serverId);
-      response.status(200).json({ tools: await options.registry.listTools(serverId) });
-    } catch (error) { next(error); }
-  });
+  app.get(
+    "/api/admin/mcp-servers/:serverId/tools",
+    adminRegistry,
+    async (request, response, next) => {
+      if (!options.registry)
+        return response.status(503).json({ error: "registry_unavailable" });
+      try {
+        const serverId = serverIdSchema.parse(request.params.serverId);
+        response
+          .status(200)
+          .json({ tools: await options.registry.listTools(serverId) });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   app.post("/api/conversations", async (request, response) => {
     const conversation = await options.conversations.create(
@@ -242,16 +269,118 @@ export function createApp(options: AppOptions) {
     response.status(200).json(conversation);
   });
 
-  app.delete("/api/conversations/:conversationId", async (request, response) => {
-    const conversationId = conversationIdSchema.parse(
-      request.params.conversationId,
-    );
-    await options.conversations.delete(
-      authenticatedUser(request),
-      conversationId,
-    );
-    response.status(204).end();
+  app.get(
+    "/api/conversations/:conversationId/attachments",
+    async (request, response, next) => {
+      if (!options.attachments)
+        return response.status(503).json({ error: "attachments_unavailable" });
+      try {
+        const conversationId = conversationIdSchema.parse(
+          request.params.conversationId,
+        );
+        response.status(200).json({
+          attachments: await options.attachments.list(
+            authenticatedUser(request),
+            conversationId,
+          ),
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/conversations/:conversationId/attachments",
+    express.raw({ type: "application/octet-stream", limit: "5mb" }),
+    async (request, response, next) => {
+      if (!options.attachments)
+        return response.status(503).json({ error: "attachments_unavailable" });
+      try {
+        const conversationId = conversationIdSchema.parse(
+          request.params.conversationId,
+        );
+        const fileName = request.header("x-file-name");
+        const contentType = request.header("x-file-content-type");
+        if (!fileName || !contentType || !Buffer.isBuffer(request.body)) {
+          response.status(400).json({ error: "invalid_request" });
+          return;
+        }
+        const attachment = await options.attachments.create(
+          authenticatedUser(request),
+          conversationId,
+          {
+            fileName,
+            contentType,
+            content: request.body,
+          },
+        );
+        response.status(201).json(attachment);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.get("/api/attachments/:attachmentId", async (request, response, next) => {
+    if (!options.attachments)
+      return response.status(503).json({ error: "attachments_unavailable" });
+    try {
+      const attachmentId = conversationIdSchema.parse(
+        request.params.attachmentId,
+      );
+      const attachment = await options.attachments.download(
+        authenticatedUser(request),
+        attachmentId,
+      );
+      response
+        .status(200)
+        .set({
+          "Content-Type": attachment.contentType,
+          "Content-Length": String(attachment.byteSize),
+          "Content-Disposition": `attachment; filename="${attachment.fileName}"`,
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "private, no-store",
+        })
+        .send(attachment.content);
+    } catch (error) {
+      next(error);
+    }
   });
+
+  app.delete(
+    "/api/attachments/:attachmentId",
+    async (request, response, next) => {
+      if (!options.attachments)
+        return response.status(503).json({ error: "attachments_unavailable" });
+      try {
+        const attachmentId = conversationIdSchema.parse(
+          request.params.attachmentId,
+        );
+        await options.attachments.delete(
+          authenticatedUser(request),
+          attachmentId,
+        );
+        response.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.delete(
+    "/api/conversations/:conversationId",
+    async (request, response) => {
+      const conversationId = conversationIdSchema.parse(
+        request.params.conversationId,
+      );
+      await options.conversations.delete(
+        authenticatedUser(request),
+        conversationId,
+      );
+      response.status(204).end();
+    },
+  );
 
   app.post(
     "/api/conversations/:conversationId/messages",
@@ -295,6 +424,14 @@ export function createApp(options: AppOptions) {
       }
       if (error instanceof ConversationNotFoundError) {
         response.status(404).json({ error: "not_found" });
+        return;
+      }
+      if (error instanceof AttachmentNotFoundError) {
+        response.status(404).json({ error: "not_found" });
+        return;
+      }
+      if (error instanceof AttachmentValidationError) {
+        response.status(400).json({ error: "invalid_request" });
         return;
       }
       if (error instanceof ConversationBusyError) {
