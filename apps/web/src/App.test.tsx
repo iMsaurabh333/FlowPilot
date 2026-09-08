@@ -47,12 +47,16 @@ const toolDetail = {
       id: "message-3",
       role: "assistant" as const,
       content: "One failed message was found.",
-      sources: [{ label: "Cloud Integration monitoring · Message Processing Logs" }],
-      tables: [{
-        title: "Message Processing Logs",
-        columns: ["Message ID", "Status", "Integration flow", "Started"],
-        rows: [["message-1", "FAILED", "Orders", "2026-09-08T10:00:00.000Z"]],
-      }],
+      sources: [
+        { label: "Cloud Integration monitoring · Message Processing Logs" },
+      ],
+      tables: [
+        {
+          title: "Message Processing Logs",
+          columns: ["Message ID", "Status", "Integration flow", "Started"],
+          rows: [["message-1", "FAILED", "Orders", "2026-09-08T10:00:00.000Z"]],
+        },
+      ],
     },
   ],
 };
@@ -66,6 +70,9 @@ function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
     loadConversation: vi.fn().mockResolvedValue(detail),
     sendMessage: vi.fn().mockResolvedValue(detail),
     improvePrompt: vi.fn().mockResolvedValue("Improved prompt"),
+    listAttachments: vi.fn().mockResolvedValue([]),
+    uploadAttachment: vi.fn(),
+    deleteAttachment: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -129,6 +136,35 @@ describe("FlowPilot chat interface", () => {
       await screen.findByText("Describe what you need to investigate"),
     ).toBeInTheDocument();
     expect(composer()).not.toHaveAttribute("disabled");
+  });
+
+  it("uploads private evidence without sending it to the model", async () => {
+    const uploadAttachment = vi.fn().mockResolvedValue({
+      id: "attachment-1",
+      fileName: "failed-messages.txt",
+      contentType: "text/plain",
+      byteSize: 13,
+      createdAt: "2026-09-08T10:00:00.000Z",
+      expiresAt: "2026-10-08T10:00:00.000Z",
+    });
+    const sendMessage = vi.fn();
+    renderApp(api({ uploadAttachment, sendMessage }));
+
+    await screen.findByText("Check order 42");
+    const input = screen.getByLabelText("Attach file");
+    const file = new File(["MPL-42 failed"], "failed-messages.txt", {
+      type: "text/plain",
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() =>
+      expect(uploadAttachment).toHaveBeenCalledWith(summary.id, file),
+    );
+    expect(await screen.findByText("failed-messages.txt")).toBeInTheDocument();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/not sent to the model automatically/i),
+    ).toBeInTheDocument();
   });
 
   it("copies a starter prompt into a new conversation draft without sending", async () => {
@@ -219,10 +255,16 @@ describe("FlowPilot chat interface", () => {
   it("shows the MCP source and an accessible MPL result table", async () => {
     renderApp(api({ loadConversation: vi.fn().mockResolvedValue(toolDetail) }));
 
-    expect(await screen.findByText(/Source: Cloud Integration monitoring/)).toBeInTheDocument();
-    const table = screen.getByRole("table", { name: "Message Processing Logs" });
+    expect(
+      await screen.findByText(/Source: Cloud Integration monitoring/),
+    ).toBeInTheDocument();
+    const table = screen.getByRole("table", {
+      name: "Message Processing Logs",
+    });
     expect(table).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Status" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "FAILED" })).toBeInTheDocument();
   });
 
@@ -252,7 +294,9 @@ describe("FlowPilot chat interface", () => {
     await waitFor(() =>
       expect(deleteConversation).toHaveBeenCalledWith(summary.id),
     );
-    expect(screen.getByText("Start a focused troubleshooting session")).toBeInTheDocument();
+    expect(
+      screen.getByText("Start a focused troubleshooting session"),
+    ).toBeInTheDocument();
   });
 
   it("exposes landmarks and has no serious automated accessibility violations", async () => {
@@ -356,8 +400,8 @@ describe("FlowPilot chat interface", () => {
     expect(
       await screen.findByRole("heading", { name: "Reports" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Scheduled summaries")).toBeInTheDocument();
-    expect(screen.getByText("Export-ready formats")).toBeInTheDocument();
-    expect(screen.getByText("Reviewable scope")).toBeInTheDocument();
+    expect(screen.getByText("Planned jobs")).toBeInTheDocument();
+    expect(screen.getByText("Evidence collection")).toBeInTheDocument();
+    expect(screen.getByText("Generated reports")).toBeInTheDocument();
   });
 });

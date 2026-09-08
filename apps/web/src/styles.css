@@ -266,7 +266,10 @@ textarea {
   box-shadow: var(--sapContent_Shadow0);
 }
 
-.reports-plan h2 { margin-block: 0.25rem 1.5rem; font-size: var(--sapFontHeader3Size); }
+.reports-plan h2 {
+  margin-block: 0.25rem 1.5rem;
+  font-size: var(--sapFontHeader3Size);
+}
 
 .reports-capabilities {
   display: grid;
@@ -280,7 +283,10 @@ textarea {
   background: var(--sapTile_Background);
 }
 
-.reports-capabilities h3 { margin-block-end: 0.5rem; font-size: var(--sapFontHeader5Size); }
+.reports-capabilities h3 {
+  margin-block-end: 0.5rem;
+  font-size: var(--sapFontHeader5Size);
+}
 
 .workspace {
   min-height: 0;
@@ -305,7 +311,10 @@ textarea {
   padding: 1rem;
   border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
 }
-.conversation-new { min-width: 2.25rem; height: 2.25rem; }
+.conversation-new {
+  min-width: 2.25rem;
+  height: 2.25rem;
+}
 
 .panel-header h2,
 .panel-header p,
@@ -339,9 +348,15 @@ textarea {
   box-shadow: var(--sapContent_Shadow4);
 }
 
-.delete-confirmation p { margin: 0.25rem 0 0; }
+.delete-confirmation p {
+  margin: 0.25rem 0 0;
+}
 
-.delete-confirmation-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.delete-confirmation-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
 
 .panel-header h2 {
   font-family: var(--sapFontHeaderFamily);
@@ -359,7 +374,11 @@ textarea {
   overflow: auto;
 }
 
-.conversation-list { margin: 0; padding: 0; list-style: none; }
+.conversation-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 
 .conversation-entry {
   display: flex;
@@ -380,7 +399,9 @@ textarea {
   cursor: pointer;
 }
 
-.conversation-select:hover { background: var(--sapList_Hover_Background); }
+.conversation-select:hover {
+  background: var(--sapList_Hover_Background);
+}
 
 .conversation-entry.active .conversation-select {
   background: var(--sapList_SelectionBackgroundColor);
@@ -388,11 +409,20 @@ textarea {
 }
 
 .conversation-title,
-.conversation-updated { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-updated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.conversation-title { font-weight: var(--sapFontBoldWeight); }
+.conversation-title {
+  font-weight: var(--sapFontBoldWeight);
+}
 
-.conversation-updated { color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
+.conversation-updated {
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
 
 .conversation-delete {
   width: 2.25rem;
@@ -407,10 +437,24 @@ textarea {
   line-height: 1;
   cursor: pointer;
 }
-.conversation-delete:hover { background: transparent; color: var(--sapNegativeColor); }
-.conversation-delete:focus-visible { outline: 2px solid var(--sapContent_FocusColor); outline-offset: 1px; }
-.available-tools { display: grid; gap: 0.35rem; margin-block-start: 0.5rem; }
-.available-tools > div { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.conversation-delete:hover {
+  background: transparent;
+  color: var(--sapNegativeColor);
+}
+.conversation-delete:focus-visible {
+  outline: 2px solid var(--sapContent_FocusColor);
+  outline-offset: 1px;
+}
+.available-tools {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-start: 0.5rem;
+}
+.available-tools > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
 
 .list-empty {
   margin: 0;
@@ -617,10 +661,28 @@ textarea {
   border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
 }
 
-.tool-table table { width: 100%; border-collapse: collapse; font-size: var(--sapFontSmallSize); }
-.tool-table caption { padding: 0.5rem; color: var(--sapContent_LabelColor); font-weight: var(--sapFontBoldWeight); text-align: left; }
-.tool-table th, .tool-table td { padding: 0.5rem; border-block-start: var(--sapList_BorderWidth) solid var(--sapList_BorderColor); text-align: left; white-space: nowrap; }
-.tool-table th { background: var(--sapList_HeaderBackground); }
+.tool-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sapFontSmallSize);
+}
+.tool-table caption {
+  padding: 0.5rem;
+  color: var(--sapContent_LabelColor);
+  font-weight: var(--sapFontBoldWeight);
+  text-align: left;
+}
+.tool-table th,
+.tool-table td {
+  padding: 0.5rem;
+  border-block-start: var(--sapList_BorderWidth) solid
+    var(--sapList_BorderColor);
+  text-align: left;
+  white-space: nowrap;
+}
+.tool-table th {
+  background: var(--sapList_HeaderBackground);
+}
 
 .composer {
   grid-row: 4;
@@ -632,6 +694,89 @@ textarea {
 
 .composer-input {
   width: 100%;
+}
+
+.attachments {
+  margin-block-end: 0.75rem;
+  padding: 0.75rem;
+  border: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
+  border-radius: 0.5rem;
+}
+
+.attachments-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.attachments h2,
+.attachments p {
+  margin: 0;
+}
+
+.attachments h2 {
+  font-size: var(--sapFontHeader5Size);
+}
+
+.attachments-heading p,
+.attachment-status,
+.attachment-list span {
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.attachment-picker {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  padding: 0.375rem 0.75rem;
+  border: var(--sapButton_BorderWidth) solid var(--sapButton_BorderColor);
+  border-radius: var(--sapButton_BorderCornerRadius);
+  color: var(--sapButton_TextColor);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.attachment-picker input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.attachment-picker:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.attachment-list {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.attachment-list a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-list button {
+  border: 0;
+  background: transparent;
+  color: var(--sapNegativeTextColor);
+  cursor: pointer;
+  font-size: 1.25rem;
 }
 
 .composer-actions {
@@ -647,7 +792,10 @@ textarea {
   font-size: var(--sapFontSmallSize);
 }
 
-.composer-buttons { display: flex; gap: 0.5rem; }
+.composer-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
 
 .account-details {
   min-width: 15rem;
@@ -718,10 +866,19 @@ textarea {
 }
 
 .conversation-policy h2,
-.conversation-policy p { margin: 0; }
+.conversation-policy p {
+  margin: 0;
+}
 .conversation-policy > div > span,
-.conversation-policy label { display: grid; gap: 0.35rem; color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
-.conversation-policy input { min-height: 2rem; }
+.conversation-policy label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--sapContent_LabelColor);
+  font-size: var(--sapFontSmallSize);
+}
+.conversation-policy input {
+  min-height: 2rem;
+}
 
 .registry-metrics > div {
   display: grid;
@@ -1154,7 +1311,9 @@ textarea {
     grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr);
   }
 
-  .reports-capabilities { grid-template-columns: 1fr; }
+  .reports-capabilities {
+    grid-template-columns: 1fr;
+  }
 
   .health-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -40,6 +40,10 @@ The MVP includes authenticated chat, PostgreSQL-backed isolated history, a Groq-
 
 The MVP includes only a narrow administrator MCP registry screen. It excludes end-user registration of arbitrary MCP URLs, an unrestricted network target editor, state-changing business tools, a vector database, cross-subaccount SaaS tenancy, and a general-purpose production administration console.
 
+## Planned reporting control center
+
+Reports will be a controlled planning and execution workspace rather than a passive export tab. A user will begin from a reviewed static prompt, make the job scope explicit, run approved collection through APIs and MCP servers, and generate a report from the job's collected data. Attachments remain private conversation evidence; they are not implicitly included in a report or model prompt.
+
 ## Success criteria
 
 - Two simultaneous users cannot read or address each other's conversations.

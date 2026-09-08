@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -17,6 +18,7 @@ import {
 import {
   ApiError,
   flowPilotApi,
+  type ConversationAttachment,
   type ConversationDetail,
   type ConversationSummary,
   type CurrentUser,
@@ -30,7 +32,14 @@ type LoadState =
   | { status: "ready" }
   | { status: "error"; message: string };
 
-type PendingAction = "creating" | "sending" | "improving" | "deleting" | undefined;
+type PendingAction =
+  | "creating"
+  | "sending"
+  | "improving"
+  | "deleting"
+  | "uploading"
+  | "deleting_attachment"
+  | undefined;
 
 type AppView = "chat" | "registry" | "reports";
 
@@ -64,24 +73,36 @@ function ReportsPlaceholder() {
         <p className="section-label">Reporting workspace</p>
         <h1 id="reports-title">Reports</h1>
         <p>
-          Turn approved operational findings into shareable, scheduled reports.
+          Plan approved jobs, collect operational evidence, and generate a
+          report from the resulting data.
         </p>
       </header>
       <section className="reports-plan" aria-labelledby="reports-plan-title">
         <p className="section-label">Planned next</p>
-        <h2 id="reports-plan-title">Reporting capabilities are being prepared</h2>
+        <h2 id="reports-plan-title">
+          Reporting capabilities are being prepared
+        </h2>
         <div className="reports-capabilities">
           <article>
-            <h3>Scheduled summaries</h3>
-            <p>Set a cadence for selected integration-flow and message-health views.</p>
+            <h3>Planned jobs</h3>
+            <p>
+              Start from a reviewed static prompt and make the job scope
+              explicit before it runs.
+            </p>
           </article>
           <article>
-            <h3>Export-ready formats</h3>
-            <p>Download approved report data as Markdown, Excel, or HTML.</p>
+            <h3>Evidence collection</h3>
+            <p>
+              Collect bounded data through approved APIs and MCP servers, with a
+              reviewable execution record.
+            </p>
           </article>
           <article>
-            <h3>Reviewable scope</h3>
-            <p>Confirm included sources and time ranges before a report is generated.</p>
+            <h3>Generated reports</h3>
+            <p>
+              Generate a report from the job's collected data after its sources
+              and time range are confirmed.
+            </p>
           </article>
         </div>
       </section>
@@ -156,6 +177,8 @@ export function App({ client = flowPilotApi }: AppProps) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<ConversationAttachment[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [requestError, setRequestError] = useState<string>();
   const [conversationToDelete, setConversationToDelete] =
     useState<ConversationSummary>();
@@ -206,6 +229,30 @@ export function App({ client = flowPilotApi }: AppProps) {
     };
   }, [client, reloadKey]);
 
+  useEffect(() => {
+    const conversationId = activeConversation?.id;
+    if (!conversationId) {
+      setAttachments([]);
+      return;
+    }
+    let cancelled = false;
+    setAttachmentsLoading(true);
+    void client
+      .listAttachments(conversationId)
+      .then((available) => {
+        if (!cancelled) setAttachments(available);
+      })
+      .catch((error) => {
+        if (!cancelled) setRequestError(visibleError(error));
+      })
+      .finally(() => {
+        if (!cancelled) setAttachmentsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeConversation?.id, client]);
+
   const signedInName = user?.displayName?.trim() || user?.subject || "User";
   const characterCount = draft.length;
   const canSend =
@@ -223,13 +270,19 @@ export function App({ client = flowPilotApi }: AppProps) {
     if (!activeConversation || detailLoading) return;
     const region = messageRegionRef.current;
     if (!region) return;
-    const scroll = () => { region.scrollTop = region.scrollHeight; };
+    const scroll = () => {
+      region.scrollTop = region.scrollHeight;
+    };
     const frame = requestAnimationFrame(() => {
       scroll();
       requestAnimationFrame(scroll);
     });
     return () => cancelAnimationFrame(frame);
-  }, [activeConversation?.id, activeConversation?.messages.length, detailLoading]);
+  }, [
+    activeConversation?.id,
+    activeConversation?.messages.length,
+    detailLoading,
+  ]);
 
   const chooseConversation = async (
     conversationId: string,
@@ -295,7 +348,9 @@ export function App({ client = flowPilotApi }: AppProps) {
       const detail = await client.sendMessage(conversationId, content);
       setActiveConversation(detail);
       if (detail.rolledOver) {
-        setRequestError("Conversation history limit reached. The oldest turn was removed.");
+        setRequestError(
+          "Conversation history limit reached. The oldest turn was removed.",
+        );
       }
       setConversations((current) =>
         newestFirst([detail, ...current.filter(({ id }) => id !== detail.id)]),
@@ -316,6 +371,39 @@ export function App({ client = flowPilotApi }: AppProps) {
     try {
       const improved = await client.improvePrompt(content);
       if (improved) setDraft(improved);
+    } catch (error) {
+      setRequestError(visibleError(error));
+    } finally {
+      setPendingAction(undefined);
+    }
+  };
+
+  const uploadAttachment = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    const conversationId = activeConversation?.id;
+    if (!file || !conversationId || pendingAction) return;
+    setPendingAction("uploading");
+    setRequestError(undefined);
+    try {
+      const attachment = await client.uploadAttachment(conversationId, file);
+      setAttachments((current) => [attachment, ...current]);
+    } catch (error) {
+      setRequestError(visibleError(error));
+    } finally {
+      setPendingAction(undefined);
+    }
+  };
+
+  const deleteAttachment = async (attachmentId: string) => {
+    if (pendingAction) return;
+    setPendingAction("deleting_attachment");
+    setRequestError(undefined);
+    try {
+      await client.deleteAttachment(attachmentId);
+      setAttachments((current) =>
+        current.filter(({ id }) => id !== attachmentId),
+      );
     } catch (error) {
       setRequestError(visibleError(error));
     } finally {
@@ -532,17 +620,32 @@ export function App({ client = flowPilotApi }: AppProps) {
                           <button
                             type="button"
                             className="conversation-select"
-                            aria-current={conversation.id === activeConversation?.id ? "page" : undefined}
-                            onClick={() => void chooseConversation(conversation.id)}
+                            aria-current={
+                              conversation.id === activeConversation?.id
+                                ? "page"
+                                : undefined
+                            }
+                            onClick={() =>
+                              void chooseConversation(conversation.id)
+                            }
                           >
-                            <span className="conversation-title">{conversation.title}</span>
-                            <span className="conversation-updated">{formatDate(conversation.updatedAt)}</span>
+                            <span className="conversation-title">
+                              {conversation.title}
+                            </span>
+                            <span className="conversation-updated">
+                              {formatDate(conversation.updatedAt)}
+                            </span>
                           </button>
                           <button
                             type="button"
                             className="conversation-delete"
-                            disabled={Boolean(pendingAction) || Boolean(conversationToDelete)}
-                            onClick={() => setConversationToDelete(conversation)}
+                            disabled={
+                              Boolean(pendingAction) ||
+                              Boolean(conversationToDelete)
+                            }
+                            onClick={() =>
+                              setConversationToDelete(conversation)
+                            }
                             aria-label={`Delete ${conversation.title}`}
                             title="Delete conversation"
                           >
@@ -583,29 +686,32 @@ export function App({ client = flowPilotApi }: AppProps) {
                       aria-labelledby="delete-confirmation-title"
                       aria-describedby="delete-confirmation-description"
                     >
-                    <div>
-                      <strong id="delete-confirmation-title">Delete this conversation?</strong>
-                      <p id="delete-confirmation-description">
-                        Delete “{conversationToDelete.title}” from your private conversation history? This cannot be undone.
-                      </p>
-                    </div>
-                    <div className="delete-confirmation-actions">
-                      <Button
-                        design="Transparent"
-                        disabled={Boolean(pendingAction)}
-                        onClick={() => setConversationToDelete(undefined)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        design="Negative"
-                        disabled={Boolean(pendingAction)}
-                        loading={pendingAction === "deleting"}
-                        onClick={() => void deleteConversation()}
-                      >
-                        Delete conversation
-                      </Button>
-                    </div>
+                      <div>
+                        <strong id="delete-confirmation-title">
+                          Delete this conversation?
+                        </strong>
+                        <p id="delete-confirmation-description">
+                          Delete “{conversationToDelete.title}” from your
+                          private conversation history? This cannot be undone.
+                        </p>
+                      </div>
+                      <div className="delete-confirmation-actions">
+                        <Button
+                          design="Transparent"
+                          disabled={Boolean(pendingAction)}
+                          onClick={() => setConversationToDelete(undefined)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          design="Negative"
+                          disabled={Boolean(pendingAction)}
+                          loading={pendingAction === "deleting"}
+                          onClick={() => void deleteConversation()}
+                        >
+                          Delete conversation
+                        </Button>
+                      </div>
                     </section>
                   </div>
                 )}
@@ -620,7 +726,11 @@ export function App({ client = flowPilotApi }: AppProps) {
                   </MessageStrip>
                 )}
 
-                <section ref={messageRegionRef} className="message-region" aria-label="Chat content">
+                <section
+                  ref={messageRegionRef}
+                  className="message-region"
+                  aria-label="Chat content"
+                >
                   {detailLoading ? (
                     <div className="loading-detail" role="status">
                       <BusyIndicator active size="M" delay={0} />
@@ -694,28 +804,45 @@ export function App({ client = flowPilotApi }: AppProps) {
                           </div>
                           {message.role === "assistant" && message.sources && (
                             <p className="message-sources">
-                              Source: {message.sources.map(({ label }) => label).join(" · ")}
+                              Source:{" "}
+                              {message.sources
+                                .map(({ label }) => label)
+                                .join(" · ")}
                             </p>
                           )}
-                          {message.role === "assistant" && message.tables?.map((table) => (
-                            <div className="tool-table" key={`${message.id}-${table.title}`}>
-                              <table>
-                                <caption>{table.title}</caption>
-                                <thead>
-                                  <tr>
-                                    {table.columns.map((column) => <th key={column} scope="col">{column}</th>)}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {table.rows.map((row, rowIndex) => (
-                                    <tr key={`${message.id}-${rowIndex}`}>
-                                      {row.map((cell, cellIndex) => <td key={`${message.id}-${rowIndex}-${table.columns[cellIndex]}`}>{cell ?? "—"}</td>)}
+                          {message.role === "assistant" &&
+                            message.tables?.map((table) => (
+                              <div
+                                className="tool-table"
+                                key={`${message.id}-${table.title}`}
+                              >
+                                <table>
+                                  <caption>{table.title}</caption>
+                                  <thead>
+                                    <tr>
+                                      {table.columns.map((column) => (
+                                        <th key={column} scope="col">
+                                          {column}
+                                        </th>
+                                      ))}
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ))}
+                                  </thead>
+                                  <tbody>
+                                    {table.rows.map((row, rowIndex) => (
+                                      <tr key={`${message.id}-${rowIndex}`}>
+                                        {row.map((cell, cellIndex) => (
+                                          <td
+                                            key={`${message.id}-${rowIndex}-${table.columns[cellIndex]}`}
+                                          >
+                                            {cell ?? "—"}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ))}
                         </li>
                       ))}
                     </ol>
@@ -734,6 +861,67 @@ export function App({ client = flowPilotApi }: AppProps) {
                   aria-label="Send a message"
                   onSubmit={submitMessage}
                 >
+                  <section
+                    className="attachments"
+                    aria-labelledby="attachments-title"
+                  >
+                    <div className="attachments-heading">
+                      <div>
+                        <h2 id="attachments-title">Private attachments</h2>
+                        <p>
+                          TXT, CSV, XLSX, PNG, or JPEG up to 5 MiB. Files expire
+                          after 30 days and are not sent to the model
+                          automatically.
+                        </p>
+                      </div>
+                      <label className="attachment-picker">
+                        <span>Attach file</span>
+                        <input
+                          type="file"
+                          accept=".txt,.csv,.xlsx,image/png,image/jpeg"
+                          disabled={
+                            !activeConversation || Boolean(pendingAction)
+                          }
+                          onChange={uploadAttachment}
+                        />
+                      </label>
+                    </div>
+                    {attachmentsLoading ? (
+                      <span className="attachment-status" role="status">
+                        Loading attachments…
+                      </span>
+                    ) : attachments.length ? (
+                      <ul className="attachment-list">
+                        {attachments.map((attachment) => (
+                          <li key={attachment.id}>
+                            <a
+                              href={`/api/attachments/${encodeURIComponent(attachment.id)}`}
+                            >
+                              {attachment.fileName}
+                            </a>
+                            <span>
+                              {Math.ceil(attachment.byteSize / 1024)} KB ·
+                              expires {formatDate(attachment.expiresAt)}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={Boolean(pendingAction)}
+                              onClick={() =>
+                                void deleteAttachment(attachment.id)
+                              }
+                              aria-label={`Remove ${attachment.fileName}`}
+                            >
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="attachment-status">
+                        No attachments in this conversation.
+                      </p>
+                    )}
+                  </section>
                   <TextArea
                     className="composer-input"
                     accessibleName="Message"
@@ -757,22 +945,22 @@ export function App({ client = flowPilotApi }: AppProps) {
                       {characterCount.toLocaleString()} / 4,000 characters
                     </span>
                     <div className="composer-buttons">
-                    <Button
-                      design="Transparent"
-                      disabled={!draft.trim() || Boolean(pendingAction)}
-                      loading={pendingAction === "improving"}
-                      onClick={() => void improvePrompt()}
-                    >
-                      Improve prompt
-                    </Button>
-                    <Button
-                      type="Submit"
-                      design="Emphasized"
-                      disabled={!canSend}
-                      loading={pendingAction === "sending"}
-                    >
-                      Send
-                    </Button>
+                      <Button
+                        design="Transparent"
+                        disabled={!draft.trim() || Boolean(pendingAction)}
+                        loading={pendingAction === "improving"}
+                        onClick={() => void improvePrompt()}
+                      >
+                        Improve prompt
+                      </Button>
+                      <Button
+                        type="Submit"
+                        design="Emphasized"
+                        disabled={!canSend}
+                        loading={pendingAction === "sending"}
+                      >
+                        Send
+                      </Button>
                     </div>
                   </div>
                 </form>

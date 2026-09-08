@@ -68,6 +68,15 @@ export interface ConversationDetail extends ConversationSummary {
   rolledOver?: boolean;
 }
 
+export interface ConversationAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  byteSize: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface FlowPilotApi {
   loadCurrentUser(): Promise<CurrentUser>;
   listConversations(): Promise<ConversationSummary[]>;
@@ -79,6 +88,12 @@ export interface FlowPilotApi {
     content: string,
   ): Promise<ConversationDetail>;
   improvePrompt(content: string): Promise<string>;
+  listAttachments(conversationId: string): Promise<ConversationAttachment[]>;
+  uploadAttachment(
+    conversationId: string,
+    file: File,
+  ): Promise<ConversationAttachment>;
+  deleteAttachment(attachmentId: string): Promise<void>;
   listMcpServers?(): Promise<McpServerRecord[]>;
   upsertMcpServer?(
     serverId: string,
@@ -87,7 +102,9 @@ export interface FlowPilotApi {
   pingMcpServer?(serverId: string): Promise<McpServerRecord>;
   listMcpServerTools?(serverId: string): Promise<string[]>;
   getConversationPolicy?(): Promise<ConversationPolicy>;
-  updateConversationPolicy?(input: ConversationPolicy): Promise<ConversationPolicy>;
+  updateConversationPolicy?(
+    input: ConversationPolicy,
+  ): Promise<ConversationPolicy>;
 }
 
 export class ApiError extends Error {
@@ -248,6 +265,32 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       });
       return payload.content;
     },
+    async listAttachments(conversationId) {
+      const payload = await request<{ attachments: ConversationAttachment[] }>(
+        `/api/conversations/${encodeURIComponent(conversationId)}/attachments`,
+      );
+      return payload.attachments;
+    },
+    uploadAttachment(conversationId, file) {
+      return request<ConversationAttachment>(
+        `/api/conversations/${encodeURIComponent(conversationId)}/attachments`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "X-File-Name": file.name,
+            "X-File-Content-Type": file.type,
+          },
+          body: file,
+        },
+      );
+    },
+    async deleteAttachment(attachmentId) {
+      await request<void>(
+        `/api/attachments/${encodeURIComponent(attachmentId)}`,
+        { method: "DELETE" },
+      );
+    },
     async listMcpServers() {
       const payload = await request<{ servers: McpServerRecord[] }>(
         "/api/admin/mcp-servers",
@@ -271,7 +314,9 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       );
     },
     async listMcpServerTools(serverId) {
-      const payload = await request<{ tools: string[] }>(`/api/admin/mcp-servers/${encodeURIComponent(serverId)}/tools`);
+      const payload = await request<{ tools: string[] }>(
+        `/api/admin/mcp-servers/${encodeURIComponent(serverId)}/tools`,
+      );
       return payload.tools;
     },
     getConversationPolicy() {
