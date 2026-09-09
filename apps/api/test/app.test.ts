@@ -197,6 +197,7 @@ class MemoryAttachmentRepository implements AttachmentRepository {
 class FakeChatAgent implements ChatAgent {
   readonly messages = new Map<string, ChatMessage[]>();
   failNext = false;
+  failWith: unknown;
 
   async getMessages(threadId: string) {
     return this.messages.get(threadId) ?? [];
@@ -207,6 +208,11 @@ class FakeChatAgent implements ChatAgent {
   }
 
   async sendMessage(threadId: string, content: string) {
+    if (this.failWith !== undefined) {
+      const error = this.failWith;
+      this.failWith = undefined;
+      throw error;
+    }
     if (this.failNext) {
       this.failNext = false;
       throw new Error("Synthetic model failure");
@@ -512,6 +518,26 @@ describe("FlowPilot API", () => {
     expect(failed.status).toBe(502);
     expect(failed.body).toEqual({ error: "model_unavailable" });
     expect(retried.status).toBe(200);
+  });
+
+  it("reports a provider quota failure with its safe retry time", async () => {
+    const created = await request(app).post("/api/conversations");
+    agent.failWith = Object.assign(new Error("Provider quota exceeded"), {
+      name: "RateLimitQuotaExhaustedError",
+      status: 429,
+      headers: { "retry-after": "120" },
+    });
+
+    const failed = await request(app)
+      .post(`/api/conversations/${created.body.id}/messages`)
+      .send({ content: "Check order 123" });
+
+    expect(failed.status).toBe(429);
+    expect(failed.headers["retry-after"]).toBe("120");
+    expect(failed.body).toEqual({
+      error: "model_quota_exhausted",
+      retryAfterSeconds: 120,
+    });
   });
 
   it("rejects concurrent runs for the same conversation", async () => {

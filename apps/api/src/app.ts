@@ -112,6 +112,56 @@ function safeModelFailureDetails(error: ModelInvocationError) {
   };
 }
 
+interface PublicModelFailure {
+  error: "model_unavailable" | "model_rate_limited" | "model_quota_exhausted";
+  retryAfterSeconds?: number;
+}
+
+function headerValue(value: unknown, name: string): string | undefined {
+  if (typeof value === "object" && value !== null && "get" in value && typeof value.get === "function") {
+    const result = value.get(name);
+    return typeof result === "string" ? result : undefined;
+  }
+  if (typeof value !== "object" || value === null) return undefined;
+  const match = Object.entries(value).find(([key]) => key.toLowerCase() === name);
+  return typeof match?.[1] === "string" ? match[1] : undefined;
+}
+
+function boundedRetryAfterSeconds(value: unknown): number | undefined {
+  const headers = typeof value === "object" && value !== null && "headers" in value
+    ? (value as { headers: unknown }).headers
+    : undefined;
+  const milliseconds = Number(headerValue(headers, "retry-after-ms"));
+  if (Number.isFinite(milliseconds) && milliseconds > 0 && milliseconds <= 86_400_000) return Math.ceil(milliseconds / 1_000);
+  const retryAfter = headerValue(headers, "retry-after");
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds > 0 && seconds <= 86_400) return Math.ceil(seconds);
+  if (retryAfter) {
+    const dateMilliseconds = Date.parse(retryAfter) - Date.now();
+    if (Number.isFinite(dateMilliseconds) && dateMilliseconds > 0 && dateMilliseconds <= 86_400_000) return Math.ceil(dateMilliseconds / 1_000);
+  }
+  const reset = headerValue(headers, "x-ratelimit-reset-requests");
+  const resetMatch = reset?.match(/^(\d+(?:\.\d+)?)(ms|s|m|h)$/iu);
+  if (!resetMatch) return undefined;
+  const multiplier = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 }[resetMatch[2]!.toLowerCase() as "ms" | "s" | "m" | "h"];
+  const resetMilliseconds = Number(resetMatch[1]) * multiplier;
+  return Number.isFinite(resetMilliseconds) && resetMilliseconds > 0 && resetMilliseconds <= 86_400_000
+    ? Math.ceil(resetMilliseconds / 1_000)
+    : undefined;
+}
+
+function publicModelFailure(error: ModelInvocationError): PublicModelFailure {
+  const cause = error.cause;
+  const status = httpErrorStatus(cause);
+  if (status !== 429) return { error: "model_unavailable" };
+  const causeName = cause instanceof Error ? cause.name : "";
+  const retryAfterSeconds = boundedRetryAfterSeconds(cause);
+  return {
+    error: /quotaexhausted/iu.test(causeName) ? "model_quota_exhausted" : "model_rate_limited",
+    ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
+  };
+}
+
 export function createApp(options: AppOptions) {
   const app = express();
   app.disable("x-powered-by");
@@ -452,7 +502,9 @@ export function createApp(options: AppOptions) {
             ...safeModelFailureDetails(error),
           }),
         );
-        response.status(502).json({ error: "model_unavailable" });
+        const publicFailure = publicModelFailure(error);
+        if (publicFailure.retryAfterSeconds) response.set("Retry-After", String(publicFailure.retryAfterSeconds));
+        response.status(publicFailure.error === "model_unavailable" ? 502 : 429).json(publicFailure);
         return;
       }
       if (error instanceof McpRegistryError) {

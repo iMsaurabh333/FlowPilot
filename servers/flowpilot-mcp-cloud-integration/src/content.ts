@@ -8,6 +8,7 @@ const MAX_ITEMS = 100;
 const MAX_BYTES = 256 * 1024;
 const TIMEOUT_MS = 15_000;
 const PARALLELISM = 4;
+const DEFAULT_DEPLOY_VERSION = "active";
 type Operation = "deploy" | "undeploy" | "update_configuration";
 interface PlanRow { operation: Operation; artifactId: string; version?: string; configurationName?: string; configurationValue?: string; sequence?: number; }
 
@@ -41,7 +42,7 @@ function parsePlan(value: unknown): PlanRow[] {
       if (!Number.isSafeInteger(raw.sequence) || (raw.sequence as number) < 1 || (raw.sequence as number) > 10_000) throw new Error("Invalid sequence");
       row.sequence = raw.sequence as number;
     }
-    if (row.operation === "deploy" && !row.version) throw new Error("Deploy requires an explicit version");
+    if (row.operation === "deploy" && !row.version) row.version = DEFAULT_DEPLOY_VERSION;
     if (row.operation === "update_configuration" && (!row.version || !row.configurationName || row.configurationValue === undefined)) throw new Error("Configuration update requires version, name, and value");
     return row;
   });
@@ -88,15 +89,24 @@ function ok(value: unknown): CallToolResult { return { content: [{ type: "text",
 function fail(error: unknown): CallToolResult { return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "content_request_failed", message: error instanceof Error ? error.message : "Request failed" }) }] }; }
 const readInput = fromJsonSchema<Record<string, unknown>>({ type: "object", additionalProperties: false, properties: { artifactId: { type: "string", maxLength: 256 }, packageId: { type: "string", maxLength: 256 }, version: { type: "string", maxLength: 256 }, limit: { type: "integer", minimum: 1, maximum: MAX_ITEMS } } });
 const planInput = fromJsonSchema<Record<string, unknown>>({ type: "object", additionalProperties: false, required: ["operations"], properties: { operations: { type: "array", minItems: 1, maxItems: 100, items: { type: "object" } }, confirmation: { type: "string", minLength: 64, maxLength: 64 } } });
+const deployInput = fromJsonSchema<Record<string, unknown>>({ type: "object", additionalProperties: false, required: ["artifactId"], properties: { artifactId: { type: "string", minLength: 1, maxLength: 256, description: "The integration flow ID to deploy." }, version: { type: "string", minLength: 1, maxLength: 256, description: "Optional. Defaults to the flow's active version." } } });
 
 export function createContentMcpServer(client = new ContentClient()): McpServer {
-  const server = new McpServer({ name: "flowpilot-cloud-integration-content", version: MCP_SERVER_VERSION }, { capabilities: {}, instructions: "Reviewed SAP Cloud Integration content operations only.", supportedProtocolVersions: [...MCP_PROTOCOL_VERSIONS] });
+  const server = new McpServer({ name: "flowpilot-cloud-integration-content", version: MCP_SERVER_VERSION }, { capabilities: {}, instructions: "Use deploy_integration_flow when the user asks to deploy a flow. It needs only the integration flow ID; the active version is used unless the user specifically supplies another version.", supportedProtocolVersions: [...MCP_PROTOCOL_VERSIONS] });
   const read = (name: string, title: string, handler: (args: Record<string, unknown>) => Promise<unknown>) => server.registerTool(name, { title, inputSchema: readInput, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => { try { return ok(await handler(args)); } catch (error) { return fail(error); } });
   read("list_integration_packages", "List Integration Packages", (args) => client.listPackages(args.limit));
   read("list_package_integration_flows", "List Package Integration Flows", (args) => client.listPackageFlows(args.packageId, args.limit));
   read("get_deployed_integration_artifact", "Get Deployed Artifact", (args) => client.getArtifact(args.artifactId));
   read("list_integration_flow_configurations", "List Flow Configurations", (args) => client.configurations(args.artifactId, args.version, args.limit));
   read("list_integration_flow_resources", "List Flow Resources", (args) => client.resources(args.artifactId, args.version, args.limit));
+  server.registerTool("deploy_integration_flow", { title: "Deploy Integration Flow", description: "Start deployment of an integration flow. Provide only the integration flow ID; the active version is deployed by default.", inputSchema: deployInput, annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } }, async (args) => {
+    try {
+      const artifactId = safe(args.artifactId, "artifact ID");
+      const version = args.version === undefined ? DEFAULT_DEPLOY_VERSION : safe(args.version, "version");
+      const result = await client.deploy({ operation: "deploy", artifactId, version });
+      return ok({ artifactId, version, deploymentStarted: true, result });
+    } catch (error) { return fail(error); }
+  });
   server.registerTool("validate_integration_flow_plan", { title: "Validate Integration Flow Plan", inputSchema: planInput, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => { try { const plan = parsePlan(args); return ok({ operations: plan, confirmation: confirmation(plan), parallelism: PARALLELISM }); } catch (error) { return fail(error); } });
   server.registerTool("execute_integration_flow_plan", { title: "Execute Integration Flow Plan", inputSchema: planInput, annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } }, async (args) => {
     try {

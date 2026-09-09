@@ -148,6 +148,14 @@ function visibleError(error: unknown) {
       return "You have reached the configured conversation limit. Delete a conversation before creating another one.";
     case "model_unavailable":
       return "The assistant is temporarily unavailable. Your message was not lost; retry when ready.";
+    case "model_quota_exhausted":
+      return error.retryAfterSeconds
+        ? `The model provider's quota is exhausted. Try again in about ${formatRetryDelay(error.retryAfterSeconds)}.`
+        : "The model provider's quota is exhausted. Try again after the provider quota is available.";
+    case "model_rate_limited":
+      return error.retryAfterSeconds
+        ? `The model provider is rate-limiting requests. Try again in about ${formatRetryDelay(error.retryAfterSeconds)}.`
+        : "The model provider is rate-limiting requests. Please try again shortly.";
     case "not_found":
       return "This conversation is no longer available. Refresh the conversation list.";
     case "invalid_request":
@@ -161,6 +169,12 @@ function visibleError(error: unknown) {
         ? "Your session or permission is no longer valid. Refresh the page and sign in again."
         : "FlowPilot could not complete the request. Please try again.";
   }
+}
+
+function formatRetryDelay(seconds: number) {
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? "" : "s"}`;
+  const minutes = Math.ceil(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
 }
 
 export interface AppProps {

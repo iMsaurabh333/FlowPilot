@@ -4,9 +4,15 @@ import { AIMessage } from "@langchain/core/messages";
 import { MemorySaver } from "@langchain/langgraph";
 import { describe, expect, it } from "vitest";
 
-import { createChatAgent } from "../src/index.js";
+import { DEFAULT_SYSTEM_PROMPT, createChatAgent } from "../src/index.js";
 
 describe("FlowPilot chat graph", () => {
+  it("includes the maintained business-language rules in the default prompt", () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      '"Find the status of sales order 123" means search Message Processing Logs with applicationMessageId "123".',
+    );
+  });
+
   it("persists independent message histories by server thread id", async () => {
     const agent = createChatAgent({
       checkpointer: new MemorySaver(),

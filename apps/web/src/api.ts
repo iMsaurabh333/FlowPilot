@@ -111,12 +111,14 @@ export interface FlowPilotApi {
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  readonly retryAfterSeconds: number | undefined;
 
-  constructor(status: number, code = "request_failed") {
+  constructor(status: number, code = "request_failed", retryAfterSeconds?: number) {
     super(`FlowPilot request failed (${status})`);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -132,6 +134,12 @@ function errorCode(payload: unknown) {
     return payload.error;
   }
   return "request_failed";
+}
+
+function retryAfterSeconds(payload: unknown) {
+  if (typeof payload !== "object" || payload === null || !("retryAfterSeconds" in payload)) return undefined;
+  const value = payload.retryAfterSeconds;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 86_400 ? value : undefined;
 }
 
 async function responsePayload(response: Response) {
@@ -205,7 +213,7 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
 
     const payload = await responsePayload(response);
     if (!response.ok) {
-      throw new ApiError(response.status, errorCode(payload));
+      throw new ApiError(response.status, errorCode(payload), retryAfterSeconds(payload));
     }
     return payload as T;
   };
@@ -222,7 +230,7 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       captureCsrfToken(response);
       const payload = await responsePayload(response);
       if (!response.ok) {
-        throw new ApiError(response.status, errorCode(payload));
+        throw new ApiError(response.status, errorCode(payload), retryAfterSeconds(payload));
       }
       return payload as CurrentUser;
     },

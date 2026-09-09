@@ -17,6 +17,7 @@ import {
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import type { BaseCheckpointSaver } from "@langchain/langgraph-checkpoint";
 import { tool } from "@langchain/core/tools";
+import { FLOWPILOT_PROMPT_GUIDELINES } from "./prompt-guidelines.js";
 
 export type ChatMessageRole = "user" | "assistant";
 
@@ -64,9 +65,11 @@ export interface ChatAgentOptions {
   maxContextMessages?: number;
 }
 
-const defaultSystemPrompt = `You are FlowPilot, a concise operational troubleshooting assistant.
+export const DEFAULT_SYSTEM_PROMPT = `You are FlowPilot, a concise operational troubleshooting assistant.
 State uncertainty clearly. Do not claim to have checked a system unless a tool result is present.
-Do not invent transaction status, identifiers, logs, or remediation results.`;
+Do not invent transaction status, identifiers, logs, or remediation results.
+
+${FLOWPILOT_PROMPT_GUIDELINES}`;
 
 function contentAsText(content: MessageContent) {
   if (typeof content === "string") {
@@ -189,7 +192,7 @@ function messageProcessingLogsTable(
 
 export function createChatAgent(options: ChatAgentOptions): ChatAgent {
   const maxContextMessages = Math.max(2, options.maxContextMessages ?? 12);
-  const systemPrompt = options.systemPrompt ?? defaultSystemPrompt;
+  const systemPrompt = options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
 
   const createGraph = (chatTools: ChatTool[] = []) => {
     const langChainTools = chatTools.map((chatTool) =>

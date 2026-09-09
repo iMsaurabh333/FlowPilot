@@ -289,6 +289,23 @@ describe("FlowPilot chat interface", () => {
     expect(input).toHaveProperty("value", "Retryable message");
   });
 
+  it("explains provider quota exhaustion and its retry delay", async () => {
+    const sendMessage = vi
+      .fn()
+      .mockRejectedValue(new ApiError(429, "model_quota_exhausted", 120));
+    renderApp(api({ sendMessage }));
+
+    await screen.findByText("Check order 42");
+    const input = composer();
+    Object.assign(input, { value: "Retryable message" });
+    fireEvent.input(input);
+    fireEvent.submit(screen.getByRole("form", { name: "Send a message" }));
+
+    expect(
+      await screen.findByText(/quota is exhausted\. Try again in about 2 minutes/i),
+    ).toBeInTheDocument();
+  });
+
   it("shows the MCP source and an accessible MPL result table", async () => {
     renderApp(api({ loadConversation: vi.fn().mockResolvedValue(toolDetail) }));
 

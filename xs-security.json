@@ -2,7 +2,10 @@
   "xsappname": "flowpilot",
   "tenant-mode": "dedicated",
   "description": "FlowPilot application security",
-  "authorities": ["$XSAPPNAME(application,flowpilot-mcp).McpInvoke"],
+  "authorities": [
+    "$XSAPPNAME(application,flowpilot-mcp).McpInvoke",
+    "$XSAPPNAME(application,flowpilot-mcp).ContentInvoke"
+  ],
   "scopes": [
     {
       "name": "$XSAPPNAME.ChatUser",
