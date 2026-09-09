@@ -28,6 +28,11 @@ function optionalFilter(value: unknown): string | undefined {
   return value;
 }
 function quote(value: string): string { return "'" + value.replaceAll("'", "''") + "'"; }
+function cookieHeader(headers: Headers): string | null {
+  const values = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? (headers.get("set-cookie") ? [headers.get("set-cookie")!] : []);
+  const cookies = values.map((value) => value.split(";", 1)[0].trim()).filter(Boolean);
+  return cookies.length > 0 ? cookies.join("; ") : null;
+}
 function entity(id: string, version?: string): string {
   return version === undefined ? "IntegrationDesigntimeArtifacts(" + quote(id) + ")" : "IntegrationDesigntimeArtifacts(Id=" + quote(id) + ",Version=" + quote(version) + ")";
 }
@@ -79,7 +84,7 @@ export class ContentClient {
         const tokenResponse = await this.#fetch(candidate, { method: "GET", headers: csrfHeaders, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
         token = tokenResponse.headers.get("x-csrf-token");
         if (tokenResponse.ok && token) {
-          cookie = tokenResponse.headers.get("set-cookie");
+          cookie = cookieHeader(tokenResponse.headers);
           break;
         }
         attempts.push(`${candidate.pathname}: HTTP ${tokenResponse.status}${token ? " (invalid token response)" : " (token missing)"}`);

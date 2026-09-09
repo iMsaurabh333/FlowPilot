@@ -23,7 +23,7 @@ describe("Content client", () => {
       if (requests.length === 1) {
         return new Response("", {
           status: 200,
-          headers: { "x-csrf-token": "csrf-token", "set-cookie": "session=1" },
+          headers: { "x-csrf-token": "csrf-token", "set-cookie": "session=1; Path=/; HttpOnly" },
         });
       }
       return new Response("{}", { status: 202, headers: { "content-type": "application/json" } });
