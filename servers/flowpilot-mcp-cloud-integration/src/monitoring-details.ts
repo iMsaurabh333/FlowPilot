@@ -22,6 +22,8 @@ export class MonitoringDetailsClient {
     if (Buffer.byteLength(body, "utf8") > MAX_BYTES) throw new Error("SAP response is too large");
     return JSON.parse(body);
   }
+  messageStatus(messageId: unknown) { return this.#get("MessageProcessingLogs(" + quote(safe(messageId, "message ID")) + ")"); }
+  messageLog(messageId: unknown) { return this.#get("MessageProcessingLogs(" + quote(safe(messageId, "message ID")) + ")?$expand=AdapterAttributes"); }
   attachments(messageId: unknown) { return this.#get("MessageProcessingLogs(" + quote(safe(messageId, "message ID")) + ")/Attachments"); }
   attachment(messageId: unknown, attachmentId: unknown) { return this.#get("MessageProcessingLogs(" + quote(safe(messageId, "message ID")) + ")/Attachments(" + quote(safe(attachmentId, "attachment ID")) + ")"); }
   customHeaders(messageId: unknown) { return this.#get("MessageProcessingLogs(" + quote(safe(messageId, "message ID")) + ")/CustomHeaderProperties"); }

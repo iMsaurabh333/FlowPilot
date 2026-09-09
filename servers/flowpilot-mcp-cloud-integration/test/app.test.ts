@@ -308,7 +308,7 @@ describe("authenticated Streamable HTTP MCP server", () => {
 
     await client.connect(transport);
     const listed = await client.listTools();
-    expect(listed.tools).toHaveLength(5);
+    expect(listed.tools).toHaveLength(8);
     expect(listed.tools[0]).toMatchObject({
       name: "search_message_processing_logs",
       annotations: {

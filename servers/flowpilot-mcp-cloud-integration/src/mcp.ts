@@ -261,6 +261,33 @@ export function createCloudIntegrationMcpServer(
     );
 
   detailTool(
+    "get_message_status",
+    "Get Message Status",
+    "Return the current status for one CPI MessageGuid. Do not use a sales order, purchase order, invoice, or other business-document ID here; use find_message_by_application_id for those IDs.",
+    (args) => details.messageStatus(args.messageId),
+  );
+  detailTool(
+    "get_message_log",
+    "Get Message Log",
+    "Return detailed Message Processing Log metadata and adapter attributes for one CPI MessageGuid.",
+    (args) => details.messageLog(args.messageId),
+  );
+  server.registerTool(
+    "find_message_by_application_id",
+    {
+      title: "Find Message by Application ID",
+      description: "Find Message Processing Logs for a sales order, purchase order, invoice, or other business-document ID. The value is sent as the exact ApplicationMessageId filter.",
+      inputSchema: fromJsonSchema<Record<string, unknown>>({ type: "object", additionalProperties: false, required: ["applicationMessageId"], properties: { applicationMessageId: { type: "string", minLength: 1, maxLength: 256 }, limit: { type: "integer", minimum: 1, maximum: MPL_MAX_LIMIT, default: MPL_DEFAULT_LIMIT } } }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      try {
+        const result = await connector.search({ applicationMessageId: args.applicationMessageId, limit: args.limit });
+        return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+      } catch (error: unknown) { return safeToolError(error); }
+    },
+  );
+  detailTool(
     "list_message_processing_log_attachments",
     "List Message Processing Log Attachments",
     "Return bounded attachment metadata for one Message Processing Log.",
