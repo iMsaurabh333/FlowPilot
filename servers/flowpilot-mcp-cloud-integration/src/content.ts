@@ -67,7 +67,10 @@ export class ContentClient {
     const headers = new Headers(destination.headers);
     headers.set("Accept", "application/json");
     if (csrf) {
-      const tokenResponse = await this.#fetch(url, { method: "HEAD", headers: { ...destination.headers, "X-CSRF-Token": "Fetch" }, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const csrfUrl = new URL(url);
+      csrfUrl.pathname = csrfUrl.pathname.replace(/\/[^/]*$/u, "/");
+      csrfUrl.search = "";
+      const tokenResponse = await this.#fetch(csrfUrl, { method: "GET", headers: { ...destination.headers, Accept: "application/json", "X-CSRF-Token": "Fetch" }, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
       const token = tokenResponse.headers.get("x-csrf-token");
       if (!tokenResponse.ok || !token) throw new Error("SAP CSRF token acquisition failed");
       headers.set("X-CSRF-Token", token);
@@ -85,10 +88,11 @@ export class ContentClient {
   getArtifact(id: unknown) { return this.#request("IntegrationRuntimeArtifacts(" + quote(safe(id, "artifact ID")) + ")"); }
   listDeployedArtifacts(value: unknown) { return this.#request("IntegrationRuntimeArtifacts?$top=" + limit(value)).then(rows); }
   configurations(id: unknown, version: unknown, value: unknown, filter?: unknown) {
-    const query = new URLSearchParams({ "$top": String(limit(value)), "$format": "json" });
+    const requestedLimit = limit(value);
+    const query = new URLSearchParams({ "$format": "json" });
     const requestedFilter = optionalFilter(filter);
     if (requestedFilter) query.set("$filter", requestedFilter);
-    return this.#request(entity(safe(id, "artifact ID"), version === undefined ? DEFAULT_DEPLOY_VERSION : safe(version, "version")) + "/Configurations?" + query).then(rows);
+    return this.#request(entity(safe(id, "artifact ID"), version === undefined ? DEFAULT_DEPLOY_VERSION : safe(version, "version")) + "/Configurations?" + query).then((response) => rows(response).slice(0, requestedLimit));
   }
   configurationCount(id: unknown, version: unknown) { return this.#request(entity(safe(id, "artifact ID"), version === undefined ? DEFAULT_DEPLOY_VERSION : safe(version, "version")) + "/Configurations/$count"); }
   resources(id: unknown, version: unknown, value: unknown) { return this.#request(entity(safe(id, "artifact ID"), version === undefined ? DEFAULT_DEPLOY_VERSION : safe(version, "version")) + "/Resources?$top=" + limit(value)).then(rows); }
