@@ -61,6 +61,19 @@ const toolDetail = {
   ],
 };
 
+const markdownTableDetail = {
+  ...detail,
+  messages: [
+    ...detail.messages,
+    {
+      id: "message-4",
+      role: "assistant" as const,
+      content:
+        "**External parameters for integration flow `iflow1`**\n\n| ParameterKey | ParameterValue | DataType |\n| --- | --- | --- |\n| param1 | 11 | xsd:string |\n| SAP_ProfileId | iflmap | xsd:string |",
+    },
+  ],
+};
+
 function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
   return {
     loadCurrentUser: vi.fn().mockResolvedValue(user),
@@ -320,6 +333,16 @@ describe("FlowPilot chat interface", () => {
       screen.getByRole("columnheader", { name: "Status" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "FAILED" })).toBeInTheDocument();
+  });
+
+  it("renders Markdown response tables as formatted data tables", async () => {
+    renderApp(api({ loadConversation: vi.fn().mockResolvedValue(markdownTableDetail) }));
+
+    expect(await screen.findByText(/External parameters for integration flow/)).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Response data" });
+    expect(table).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "ParameterKey" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "iflmap" })).toBeInTheDocument();
   });
 
   it("asks for confirmation before deleting the active conversation", async () => {

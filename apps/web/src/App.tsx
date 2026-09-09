@@ -25,6 +25,7 @@ import {
   type FlowPilotApi,
 } from "./api";
 import { McpRegistryView } from "./McpRegistryView";
+import { MessageContent } from "./MessageContent";
 import "./styles.css";
 
 type LoadState =
@@ -836,7 +837,7 @@ export function App({ client = flowPilotApi }: AppProps) {
                               : "FlowPilot"}
                           </div>
                           <div className="message-content">
-                            {message.content}
+                            <MessageContent content={message.content} />
                           </div>
                           {message.role === "assistant" && message.sources && (
                             <p className="message-sources">

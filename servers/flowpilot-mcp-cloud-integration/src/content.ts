@@ -70,11 +70,22 @@ export class ContentClient {
       const csrfUrl = new URL(url);
       csrfUrl.pathname = csrfUrl.pathname.replace(/\/[^/]*$/u, "/");
       csrfUrl.search = "";
-      const tokenResponse = await this.#fetch(csrfUrl, { method: "GET", headers: { ...destination.headers, Accept: "application/json", "X-CSRF-Token": "Fetch" }, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
-      const token = tokenResponse.headers.get("x-csrf-token");
-      if (!tokenResponse.ok || !token) throw new Error("SAP CSRF token acquisition failed");
+      const collectionUrl = new URL("IntegrationDesigntimeArtifacts?$top=1&$format=json", csrfUrl);
+      const csrfHeaders = { ...destination.headers, Accept: "application/json", "X-CSRF-Token": "Fetch" };
+      const attempts: string[] = [];
+      let token: string | null = null;
+      let cookie: string | null = null;
+      for (const candidate of [csrfUrl, collectionUrl]) {
+        const tokenResponse = await this.#fetch(candidate, { method: "GET", headers: csrfHeaders, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
+        token = tokenResponse.headers.get("x-csrf-token");
+        if (tokenResponse.ok && token) {
+          cookie = tokenResponse.headers.get("set-cookie");
+          break;
+        }
+        attempts.push(`${candidate.pathname}: HTTP ${tokenResponse.status}${token ? " (invalid token response)" : " (token missing)"}`);
+      }
+      if (!token) throw new Error("SAP CSRF token acquisition failed: " + attempts.join("; "));
       headers.set("X-CSRF-Token", token);
-      const cookie = tokenResponse.headers.get("set-cookie");
       if (cookie) headers.set("Cookie", cookie);
     }
     const response = await this.#fetch(url, { ...init, headers, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
