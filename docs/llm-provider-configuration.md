@@ -91,18 +91,53 @@ Changing an installed provider requires updating these non-secret settings and s
 
 ## Application retrieval pattern
 
-At startup or first use, the backend:
+At first model use, the backend:
 
 1. discovers the bound Credential Store service through `VCAP_SERVICES`;
-2. authenticates to Credential Store with the binding credentials;
-3. requests only the configured credential name;
-4. keeps the returned provider key in process memory for a short configured cache period;
-5. passes the key directly to the selected server-side model adapter;
-6. never serializes or logs the key.
+2. authenticates to Credential Store with the binding credentials (mTLS or basic authentication, according to the binding);
+3. requests only the configured password credential name in the `flowpilot` namespace;
+4. decrypts the JWE response using the binding's client private key and accepts only the expected credential value;
+5. keeps the returned provider key in process memory for a short configured cache period;
+6. passes the key directly to the selected server-side model adapter;
+7. never serializes or logs the key.
+
+The API implementation uses Node's built-in HTTPS and cryptography primitives for this read path. It enforces the Credential Store payload algorithms `RSA-OAEP-256` and `A256GCM`, requires HTTPS, and does not log response bodies or binding values. The request is injectable in tests so encrypted-provider behavior can be verified without a live service or billable model call.
 
 Cloud Foundry service bindings deliver credentials to the application runtime and require an application restart or restage when binding data changes. See [Cloud Foundry service bindings](https://docs.cloudfoundry.org/devguide/services/application-binding.html). SAP Credential Store contents can be rotated independently; FlowPilot's short-lived in-memory cache must refresh them without requiring a code deployment.
 
 Do not use ordinary Cloud Foundry environment variables for provider keys. Cloud Foundry specifically advises using service bindings rather than environment variables for security-sensitive credentials. See the [Cloud Foundry manifest security guidance](https://docs.cloudfoundry.org/devguide/deploy-apps/manifest-attributes.html#env-block).
+
+## Checkpoint 4 design lock
+
+The following is the implementation contract for the first deployed LLM slice. It is intentionally provider-neutral and keeps the deployment boundary explicit.
+
+### Binding contract
+
+- The MTA will own one managed service named `flowpilot-credentials` (`credstore` / `trial`).
+- Only `flowpilot-api` will require the service. AppRouter, the web module, and browser code will never receive this binding.
+- The API will discover the binding from `VCAP_SERVICES` by service label and normalize the binding shape before calling Credential Store. It will not depend on a service-instance GUID or a trial-account-specific name.
+- Authentication to Credential Store will use only credentials delivered by the binding. No Credential Store client secret, token, or endpoint will be committed to Git or copied into ordinary MTA properties.
+
+### Provider-reference contract
+
+`MODEL_PROVIDER` is the only provider selector. It must be one of the installed, server-side allowlisted adapters: `groq`, `openai`, or `anthropic`. Each provider maps to a fixed Credential Store reference; the browser cannot supply a provider, credential name, endpoint, or model ID.
+
+| Provider | Namespace | Type | Credential name |
+| --- | --- | --- | --- |
+| `groq` | `flowpilot` | `Password` | `groq-api-key` |
+| `openai` | `flowpilot` | `Password` | `openai-api-key` |
+| `anthropic` | `flowpilot` | `Password` | `anthropic-api-key` |
+
+The username is metadata only and is not used as the provider API key. The password value is held in memory only long enough for the model adapter and is never returned by an API, serialized, logged, hashed, or written to disk.
+
+### Failure, cache, and local-development rules
+
+- In Cloud Foundry, a missing binding, unreadable credential, unsupported provider, or expired Credential Store token is a fail-closed model configuration error. The API may remain available for authentication and health checks, but chat requests return a generic service-unavailable response without revealing the cause or secret.
+- Each API instance may cache one resolved provider key in memory for a short bounded TTL (initial target: five minutes). Expiry causes a fresh Credential Store read; rotation must not require a code deployment.
+- Cloud Foundry deployments must not use `GROQ_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` environment variables. Those names remain a local-only development/test seam and are rejected or ignored in the production runtime path.
+- Automated tests inject credentials or a fake model directly; they never call a billable provider or Credential Store.
+
+This contract is locked for implementation. Any change to service ownership, credential names, provider allowlisting, or failure behavior requires a new design decision and review.
 
 ## Local development
 
