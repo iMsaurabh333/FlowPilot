@@ -44,6 +44,51 @@ export interface ConversationPolicy {
   maxRetainedTurns: number;
 }
 
+export type ReportJobStatus = "scheduled" | "running" | "succeeded" | "attention" | "failed";
+
+export interface ReportJobSummary {
+  id: string;
+  title: string;
+  sourceToolNames: string[];
+  scheduleActive: boolean;
+  actionPlanId: string | null;
+  scheduledFor: string;
+  recurrenceRule: string | null;
+  status: ReportJobStatus;
+  lastRunStatus: Extract<ReportJobStatus, "succeeded" | "attention" | "failed"> | null;
+  finalReportHtml: string | null;
+  errorLog: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateReportJobInput {
+  title: string;
+  reportPrompt: string;
+  sourceToolNames?: string[];
+  scheduledFor: string;
+  recurrenceRule?: string | null;
+  actionPlanId?: string | null;
+}
+
+export interface ReportActionPlanPreview {
+  id: string;
+  source: string;
+  plan: string;
+  revision: number;
+  status: "draft" | "approved";
+  steps: Array<{ tool: string; arguments: Record<string, unknown> }>;
+}
+
+export interface ApprovedPlanExecutionResult {
+  html: string;
+  status: "succeeded" | "attention";
+}
+
+export type ReportExportFormat = "html" | "markdown" | "xlsx";
+export interface ReportSource { name: string; description: string; }
+export interface ReportJobRun { id: string; reportJobId: string; status: "succeeded" | "attention" | "failed"; attemptCount: number; finalReportHtml: string | null; errorLog: string | null; startedAt: string | null; completedAt: string; }
+
 export interface ConversationSummary {
   id: string;
   title: string;
@@ -88,6 +133,19 @@ export interface FlowPilotApi {
   listMcpServerTools?(serverId: string): Promise<string[]>;
   getConversationPolicy?(): Promise<ConversationPolicy>;
   updateConversationPolicy?(input: ConversationPolicy): Promise<ConversationPolicy>;
+  listReportJobs?(): Promise<ReportJobSummary[]>;
+  createReportJob?(input: CreateReportJobInput): Promise<ReportJobSummary>;
+  runReportJob?(jobId: string): Promise<ReportJobSummary>;
+  previewReportActionPlan?(fileName: string, contentBase64: string): Promise<ReportActionPlanPreview>;
+  updateReportActionPlan?(planId: string, plan: string): Promise<ReportActionPlanPreview>;
+  approveReportActionPlan?(planId: string, revision: number): Promise<ReportActionPlanPreview>;
+  executeApprovedActionPlan?(planId: string): Promise<ApprovedPlanExecutionResult>;
+  regenerateReportActionPlan?(planId: string): Promise<ReportActionPlanPreview>;
+  downloadReportJob?(jobId: string, format: ReportExportFormat): Promise<void>;
+  listReportSources?(): Promise<ReportSource[]>;
+  listReportJobRuns?(jobId: string): Promise<ReportJobRun[]>;
+  deleteReportJob?(jobId: string): Promise<void>;
+  setReportScheduleActive?(jobId: string, active: boolean): Promise<ReportJobSummary>;
 }
 
 export class ApiError extends Error {
@@ -283,6 +341,59 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
+    },
+    async listReportJobs() {
+      const payload = await request<{ jobs: ReportJobSummary[] }>("/api/reports/jobs");
+      return payload.jobs;
+    },
+    async listReportSources() {
+      const payload = await request<{ sources: ReportSource[] }>("/api/reports/sources");
+      return payload.sources;
+    },
+    async listReportJobRuns(jobId) { return (await request<{ runs: ReportJobRun[] }>(`/api/reports/jobs/${encodeURIComponent(jobId)}/runs`)).runs; },
+    async deleteReportJob(jobId) { await request<void>(`/api/reports/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }); },
+    setReportScheduleActive(jobId, active) { return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}/schedule-active`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }) }); },
+    createReportJob(input) {
+      return request<ReportJobSummary>("/api/reports/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    },
+    runReportJob(jobId) {
+      return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}/run`, {
+        method: "POST",
+      });
+    },
+    previewReportActionPlan(fileName, contentBase64) {
+      return request<ReportActionPlanPreview>("/api/reports/action-plan-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName, contentBase64 }),
+      });
+    },
+    updateReportActionPlan(planId, plan) {
+      return request<ReportActionPlanPreview>(`/api/reports/action-plans/${encodeURIComponent(planId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan }) });
+    },
+    approveReportActionPlan(planId, revision) {
+      return request<ReportActionPlanPreview>(`/api/reports/action-plans/${encodeURIComponent(planId)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision }) });
+    },
+    executeApprovedActionPlan(planId) {
+      return request<ApprovedPlanExecutionResult>(`/api/reports/action-plans/${encodeURIComponent(planId)}/execute`, { method: "POST" });
+    },
+    regenerateReportActionPlan(planId) {
+      return request<ReportActionPlanPreview>(`/api/reports/action-plans/${encodeURIComponent(planId)}/regenerate`, { method: "POST" });
+    },
+    async downloadReportJob(jobId, format) {
+      const response = await fetcher(`/api/reports/jobs/${encodeURIComponent(jobId)}/export?format=${encodeURIComponent(format)}`, { credentials: "same-origin", headers: { Accept: "application/octet-stream" } });
+      if (!response.ok) throw new ApiError(response.status, errorCode(await responsePayload(response)));
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = response.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/u)?.[1] ?? `flowpilot-report.${format === "markdown" ? "md" : format}`;
+      anchor.click();
+      URL.revokeObjectURL(url);
     },
   };
 }

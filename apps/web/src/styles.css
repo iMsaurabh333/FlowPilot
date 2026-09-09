@@ -282,6 +282,86 @@ textarea {
 
 .reports-capabilities h3 { margin-block-end: 0.5rem; font-size: var(--sapFontHeader5Size); }
 
+.reports-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.report-header-actions { display: flex; gap: 0.25rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.report-job-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 52rem;
+  padding: 1.25rem;
+  border: 1px solid var(--sapGroup_ContentBorderColor);
+  border-radius: 0.75rem;
+  background: var(--sapGroup_ContentBackground);
+}
+
+.report-job-form label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--sapTextColor);
+  font-weight: 600;
+}
+.report-source-picker { display: grid; gap: 0.5rem; margin: 0; padding: 0.75rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.5rem; }
+.report-source-picker > p, .report-source-picker > small { margin: 0; color: var(--sapContent_LabelColor); }
+.report-source-picker > label { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+.report-source-picker span { display: grid; gap: 0.15rem; }
+.report-source-picker small { color: var(--sapContent_LabelColor); }
+
+.report-job-form input,
+.report-job-form select {
+  min-height: 2.5rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--sapField_BorderColor);
+  border-radius: 0.25rem;
+  color: var(--sapField_TextColor);
+  background: var(--sapField_Background);
+  font: inherit;
+}
+
+.report-job-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.report-error { color: var(--sapNegativeTextColor); }
+.reports-empty { padding: 2rem; border: 1px dashed var(--sapGroup_ContentBorderColor); border-radius: 0.75rem; }
+.reports-next { color: var(--sapContent_LabelColor); }
+.report-job-list { display: grid; gap: 0.5rem; max-width: 60rem; padding: 0; list-style: none; }
+.report-job-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.875rem 1rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.5rem; background: var(--sapGroup_ContentBackground); }
+.report-job-row > div { display: grid; gap: 0.2rem; }
+.report-job-select { display: grid; gap: 0.2rem; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.report-job-select:hover strong { color: var(--sapLinkColor); text-decoration: underline; }
+.report-job-row small { color: var(--sapContent_LabelColor); }
+.report-status, .report-marker { display: inline-block; width: 0.65rem; height: 0.65rem; border-radius: 50%; }
+.report-status.scheduled { background: var(--sapNeutralElementColor); }
+.report-status.running { background: var(--sapInformativeElementColor); }
+.report-status.succeeded { background: var(--sapPositiveElementColor); }
+.report-status.attention { background: var(--sapCriticalElementColor); }
+.report-status.failed { background: var(--sapNegativeElementColor); }
+.report-status.paused { background: var(--sapNeutralElementColor); }
+.report-marker.red { background: var(--sapNegativeElementColor); box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--sapNegativeElementColor) 20%, transparent); }
+.report-marker.orange { background: var(--sapCriticalElementColor); }
+.report-marker.yellow { background: #d9b300; }
+.report-status-label { color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
+.report-detail { display: grid; gap: 1rem; max-width: 60rem; margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.75rem; background: var(--sapGroup_ContentBackground); }
+.report-detail header, .report-detail-actions { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.report-export-picker { display: grid; gap: 0.15rem; color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
+.report-export-picker select { min-height: 2rem; border: 1px solid var(--sapField_BorderColor); border-radius: 0.25rem; background: var(--sapField_Background); color: var(--sapField_TextColor); }
+.report-preview { width: 100%; min-height: 26rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.5rem; background: white; }
+.report-preview-empty { padding: 2rem; border: 1px dashed var(--sapGroup_ContentBorderColor); border-radius: 0.5rem; color: var(--sapContent_LabelColor); }
+.report-roadblock { padding: 0.75rem; border-radius: 0.5rem; background: var(--sapCriticalBackground); }
+.report-roadblock pre { overflow: auto; white-space: pre-wrap; font: var(--sapFontSmallSize) var(--sapFontFamily); }
+.report-run-history { display: grid; gap: 0.5rem; padding-inline-start: 1.25rem; }
+.report-run-history li { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+.report-plan-preview { display: grid; gap: 1rem; max-width: 60rem; margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.75rem; background: var(--sapGroup_ContentBackground); }
+.report-plan-preview header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.report-plan-grid { display: grid; gap: 0.75rem; }
+.report-plan-editor { display: grid; gap: 0.4rem; font-weight: 600; }
+.report-plan-grid details { padding: 0.75rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.5rem; }
+.report-plan-grid pre { overflow: auto; white-space: pre-wrap; font: var(--sapFontSmallSize) var(--sapFontFamily); }
+
 .workspace {
   min-height: 0;
   height: 100%;

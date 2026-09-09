@@ -31,6 +31,7 @@ modules:
       MODEL_MAX_OUTPUT_TOKENS: "1024"
       MODEL_TIMEOUT_MS: "30000"
       MODEL_MAX_RETRIES: "2"
+      REPORT_SCHEDULER_ACTION_URL: ${default-url}/internal/reports/dispatch
     provides:
       - name: flowpilot-api-binding
         properties:
@@ -42,6 +43,7 @@ modules:
       - name: flowpilot-logs
       - name: flowpilot-postgres
       - name: flowpilot-credentials
+      - name: flowpilot-jobscheduler
     build-parameters:
       builder: custom
       commands:
@@ -160,6 +162,14 @@ resources:
     parameters:
       service: credstore
       service-plan: trial
+
+  - name: flowpilot-jobscheduler
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: jobscheduler
+      service-plan: free
+      config:
+        authentication: xsuaa
 
   - name: flowpilot-mcp-auth
     type: org.cloudfoundry.managed-service

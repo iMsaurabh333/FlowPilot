@@ -89,6 +89,28 @@ export function createXsuaaAuthentication(): RequestHandler {
   };
 }
 
+export function createSchedulerAuthentication(): RequestHandler {
+  const bindings = xsenv.getServices({ xsuaa: { name: "flowpilot-auth" } });
+  const credentials = bindings.xsuaa as ConstructorParameters<typeof XsuaaService>[0];
+  const service = new XsuaaService(credentials);
+  return async (request, response, next) => {
+    try {
+      const context = await createSecurityContext(service, { req: request });
+      if (!context.checkLocalScope("ReportScheduler")) {
+        response.status(403).json({ error: "forbidden" });
+        return;
+      }
+      next();
+    } catch (error) {
+      if (error instanceof errors.ValidationError) {
+        response.status(401).json({ error: "unauthenticated" });
+        return;
+      }
+      next(error);
+    }
+  };
+}
+
 export function createAuthentication(): RequestHandler {
   const mode = process.env.AUTH_MODE ?? "xsuaa";
   if (mode === "mock") {

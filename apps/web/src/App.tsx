@@ -23,6 +23,7 @@ import {
   type FlowPilotApi,
 } from "./api";
 import { McpRegistryView } from "./McpRegistryView";
+import { ReportsView } from "./ReportsView";
 import "./styles.css";
 
 type LoadState =
@@ -56,38 +57,6 @@ const starterPrompts = [
       "Help me investigate an integration flow. I will provide the flow ID and the observed symptom.",
   },
 ] as const;
-
-function ReportsPlaceholder() {
-  return (
-    <main className="reports-page" aria-labelledby="reports-title">
-      <header className="reports-header">
-        <p className="section-label">Reporting workspace</p>
-        <h1 id="reports-title">Reports</h1>
-        <p>
-          Turn approved operational findings into shareable, scheduled reports.
-        </p>
-      </header>
-      <section className="reports-plan" aria-labelledby="reports-plan-title">
-        <p className="section-label">Planned next</p>
-        <h2 id="reports-plan-title">Reporting capabilities are being prepared</h2>
-        <div className="reports-capabilities">
-          <article>
-            <h3>Scheduled summaries</h3>
-            <p>Set a cadence for selected integration-flow and message-health views.</p>
-          </article>
-          <article>
-            <h3>Export-ready formats</h3>
-            <p>Download approved report data as Markdown, Excel, or HTML.</p>
-          </article>
-          <article>
-            <h3>Reviewable scope</h3>
-            <p>Confirm included sources and time ranges before a report is generated.</p>
-          </article>
-        </div>
-      </section>
-    </main>
-  );
-}
 
 function userInitials(user: CurrentUser) {
   const name = user.displayName?.trim() || user.subject;
@@ -781,7 +750,7 @@ export function App({ client = flowPilotApi }: AppProps) {
           ) : activeView === "registry" ? (
             <McpRegistryView client={client} />
           ) : (
-            <ReportsPlaceholder />
+            <ReportsView client={client} />
           )}
         </section>
       </div>

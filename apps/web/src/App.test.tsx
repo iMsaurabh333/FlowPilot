@@ -348,16 +348,15 @@ describe("FlowPilot chat interface", () => {
     ).toEqual([]);
   });
 
-  it("opens the reports workspace placeholder", async () => {
-    renderApp(api());
+  it("opens the report-job workspace", async () => {
+    renderApp(api({ listReportJobs: vi.fn().mockResolvedValue([]) }));
 
     fireEvent.click(await screen.findByRole("button", { name: /Reports/ }));
 
     expect(
       await screen.findByRole("heading", { name: "Reports" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Scheduled summaries")).toBeInTheDocument();
-    expect(screen.getByText("Export-ready formats")).toBeInTheDocument();
-    expect(screen.getByText("Reviewable scope")).toBeInTheDocument();
+    expect(await screen.findByText("No report jobs yet")).toBeInTheDocument();
+    expect(document.querySelector('ui5-button[accessible-name="Schedule report job"]')).toBeInTheDocument();
   });
 });

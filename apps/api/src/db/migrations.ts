@@ -125,6 +125,146 @@ function migrations(schemaName: string) {
           WITH CHECK (current_setting('flowpilot.is_admin', true) = 'true');
       `,
     },
+    {
+      version: 4,
+      sql: `
+        CREATE TABLE ${schema}.report_jobs (
+          id uuid PRIMARY KEY,
+          tenant_id text NOT NULL,
+          subject_id text NOT NULL,
+          title text NOT NULL,
+          report_prompt text NOT NULL,
+          scheduled_for timestamptz NOT NULL,
+          recurrence_rule text,
+          status text NOT NULL DEFAULT 'scheduled',
+          active_run_id uuid,
+          attempt_count integer NOT NULL DEFAULT 0,
+          final_report_html text,
+          error_log text,
+          started_at timestamptz,
+          completed_at timestamptz,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT report_jobs_title_length CHECK (char_length(title) BETWEEN 1 AND 120),
+          CONSTRAINT report_jobs_prompt_length CHECK (char_length(report_prompt) BETWEEN 1 AND 12000),
+          CONSTRAINT report_jobs_status CHECK (status IN ('scheduled', 'running', 'succeeded', 'attention', 'failed')),
+          CONSTRAINT report_jobs_attempt_count CHECK (attempt_count BETWEEN 0 AND 3),
+          CONSTRAINT report_jobs_run_state CHECK (
+            (status = 'running' AND active_run_id IS NOT NULL AND started_at IS NOT NULL) OR
+            (status <> 'running' AND active_run_id IS NULL)
+          )
+        );
+
+        CREATE INDEX report_jobs_owner_schedule_idx
+          ON ${schema}.report_jobs (tenant_id, subject_id, scheduled_for ASC, created_at DESC);
+
+        ALTER TABLE ${schema}.report_jobs ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.report_jobs FORCE ROW LEVEL SECURITY;
+
+        CREATE POLICY report_jobs_owner_policy
+          ON ${schema}.report_jobs
+          USING (
+            tenant_id = current_setting('flowpilot.tenant_id', true) AND
+            subject_id = current_setting('flowpilot.subject_id', true)
+          )
+          WITH CHECK (
+            tenant_id = current_setting('flowpilot.tenant_id', true) AND
+            subject_id = current_setting('flowpilot.subject_id', true)
+          );
+      `,
+    },
+    {
+      version: 5,
+      sql: `
+        ALTER POLICY report_jobs_owner_policy ON ${schema}.report_jobs
+          USING (
+            current_setting('flowpilot.scheduler', true) = 'true' OR
+            (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))
+          )
+          WITH CHECK (
+            current_setting('flowpilot.scheduler', true) = 'true' OR
+            (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))
+          );
+      `,
+    },
+    {
+      version: 6,
+      sql: `
+        CREATE TABLE ${schema}.report_action_plans (
+          id uuid PRIMARY KEY,
+          tenant_id text NOT NULL,
+          subject_id text NOT NULL,
+          source_document text NOT NULL,
+          plan_text text NOT NULL,
+          revision integer NOT NULL DEFAULT 1,
+          status text NOT NULL DEFAULT 'draft',
+          approved_at timestamptz,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT report_action_plans_status CHECK (status IN ('draft', 'approved')),
+          CONSTRAINT report_action_plans_revision CHECK (revision >= 1),
+          CONSTRAINT report_action_plans_approval CHECK ((status = 'approved' AND approved_at IS NOT NULL) OR (status = 'draft' AND approved_at IS NULL))
+        );
+        CREATE INDEX report_action_plans_owner_updated_idx ON ${schema}.report_action_plans (tenant_id, subject_id, updated_at DESC);
+        ALTER TABLE ${schema}.report_action_plans ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.report_action_plans FORCE ROW LEVEL SECURITY;
+        CREATE POLICY report_action_plans_owner_policy ON ${schema}.report_action_plans
+          USING (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))
+          WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
+      `,
+    },
+    {
+      version: 7,
+      sql: `ALTER TABLE ${schema}.report_action_plans ADD COLUMN steps jsonb NOT NULL DEFAULT '[]'::jsonb;`,
+    },
+    {
+      version: 8,
+      sql: `
+        ALTER TABLE ${schema}.report_action_plans
+          ADD COLUMN execution_status text,
+          ADD COLUMN final_report_html text,
+          ADD COLUMN error_log text,
+          ADD COLUMN executed_at timestamptz,
+          ADD CONSTRAINT report_action_plans_execution_status CHECK (execution_status IS NULL OR execution_status IN ('succeeded', 'attention'));
+      `,
+    },
+    {
+      version: 9,
+      sql: `ALTER TABLE ${schema}.report_jobs ADD COLUMN action_plan_id uuid REFERENCES ${schema}.report_action_plans(id) ON DELETE RESTRICT;`,
+    },
+    {
+      version: 10,
+      sql: `ALTER TABLE ${schema}.report_jobs ADD COLUMN last_run_status text CHECK (last_run_status IS NULL OR last_run_status IN ('succeeded', 'attention', 'failed'));`,
+    },
+    {
+      version: 11,
+      sql: `ALTER TABLE ${schema}.report_jobs ADD COLUMN source_tool_names text[] NOT NULL DEFAULT '{}';`,
+    },
+    {
+      version: 12,
+      sql: `
+        CREATE TABLE ${schema}.report_job_runs (
+          id uuid PRIMARY KEY, report_job_id uuid NOT NULL REFERENCES ${schema}.report_jobs(id) ON DELETE CASCADE,
+          tenant_id text NOT NULL, subject_id text NOT NULL, status text NOT NULL,
+          attempt_count integer NOT NULL, final_report_html text, error_log text,
+          started_at timestamptz, completed_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX report_job_runs_owner_completed_idx ON ${schema}.report_job_runs (tenant_id, subject_id, completed_at DESC);
+        ALTER TABLE ${schema}.report_job_runs ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.report_job_runs FORCE ROW LEVEL SECURITY;
+        CREATE POLICY report_job_runs_owner_policy ON ${schema}.report_job_runs
+          USING (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))
+          WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
+      `,
+    },
+    {
+      version: 13,
+      sql: `ALTER TABLE ${schema}.report_jobs ADD COLUMN scheduler_job_id text;`,
+    },
+    {
+      version: 14,
+      sql: `ALTER TABLE ${schema}.report_jobs ADD COLUMN schedule_active boolean NOT NULL DEFAULT true;`,
+    },
   ] as const;
 }
 

@@ -15,6 +15,13 @@
     {
       "name": "$XSAPPNAME.ChatAdmin",
       "description": "Administer FlowPilot runtime configuration"
+    },
+    {
+      "name": "$XSAPPNAME.ReportScheduler",
+      "description": "Allow SAP Job Scheduling Service to dispatch stored report jobs",
+      "grant-as-authority-to-apps": [
+        "$XSSERVICENAME(flowpilot-jobscheduler)"
+      ]
     }
   ],
   "role-templates": [
