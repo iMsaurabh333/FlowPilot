@@ -265,6 +265,59 @@ function migrations(schemaName: string) {
       version: 14,
       sql: `ALTER TABLE ${schema}.report_jobs ADD COLUMN schedule_active boolean NOT NULL DEFAULT true;`,
     },
+    {
+      version: 15,
+      sql: `
+        CREATE TABLE IF NOT EXISTS ${schema}.report_jobs (
+          id uuid PRIMARY KEY,
+          tenant_id text NOT NULL,
+          subject_id text NOT NULL,
+          title text NOT NULL,
+          report_prompt text NOT NULL,
+          source_tool_names text[] NOT NULL DEFAULT '{}',
+          action_plan_id uuid,
+          scheduled_for timestamptz NOT NULL,
+          recurrence_rule text,
+          status text NOT NULL DEFAULT 'scheduled',
+          last_run_status text,
+          schedule_active boolean NOT NULL DEFAULT true,
+          scheduler_job_id text,
+          active_run_id uuid,
+          attempt_count integer NOT NULL DEFAULT 0,
+          final_report_html text,
+          error_log text,
+          started_at timestamptz,
+          completed_at timestamptz,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT report_jobs_title_length CHECK (char_length(title) BETWEEN 1 AND 120),
+          CONSTRAINT report_jobs_prompt_length CHECK (char_length(report_prompt) BETWEEN 1 AND 12000),
+          CONSTRAINT report_jobs_status CHECK (status IN ('scheduled', 'running', 'succeeded', 'attention', 'failed')),
+          CONSTRAINT report_jobs_last_run_status CHECK (last_run_status IS NULL OR last_run_status IN ('succeeded', 'attention', 'failed')),
+          CONSTRAINT report_jobs_attempt_count CHECK (attempt_count BETWEEN 0 AND 3),
+          CONSTRAINT report_jobs_run_state CHECK ((status = 'running' AND active_run_id IS NOT NULL AND started_at IS NOT NULL) OR (status <> 'running' AND active_run_id IS NULL))
+        );
+        CREATE INDEX IF NOT EXISTS report_jobs_owner_schedule_idx ON ${schema}.report_jobs (tenant_id, subject_id, scheduled_for ASC, created_at DESC);
+        ALTER TABLE ${schema}.report_jobs ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.report_jobs FORCE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS report_jobs_owner_policy ON ${schema}.report_jobs;
+        CREATE POLICY report_jobs_owner_policy ON ${schema}.report_jobs
+          USING (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true)))
+          WITH CHECK (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true)));
+        CREATE TABLE IF NOT EXISTS ${schema}.report_job_runs (
+          id uuid PRIMARY KEY, report_job_id uuid NOT NULL REFERENCES ${schema}.report_jobs(id) ON DELETE CASCADE,
+          tenant_id text NOT NULL, subject_id text NOT NULL, status text NOT NULL, attempt_count integer NOT NULL,
+          final_report_html text, error_log text, started_at timestamptz, completed_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS report_job_runs_owner_completed_idx ON ${schema}.report_job_runs (tenant_id, subject_id, completed_at DESC);
+        ALTER TABLE ${schema}.report_job_runs ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.report_job_runs FORCE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS report_job_runs_owner_policy ON ${schema}.report_job_runs;
+        CREATE POLICY report_job_runs_owner_policy ON ${schema}.report_job_runs
+          USING (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))
+          WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
+      `,
+    },
   ] as const;
 }
 
