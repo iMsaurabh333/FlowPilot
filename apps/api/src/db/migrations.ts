@@ -347,6 +347,35 @@ export async function runMigrations(pool: Pool, schemaName = "flowpilot_app") {
         )
       `);
 
+      // A prior interrupted deployment can leave historical migration records while
+      // the Reports table itself is absent. Repair it before replaying any older
+      // ALTER statements, otherwise those statements prevent the repair migration
+      // from ever being reached.
+      const reportJobs = await client.query<{ relation: string | null }>(
+        "SELECT to_regclass($1) AS relation",
+        [`${schemaName}.report_jobs`],
+      );
+      if (!reportJobs.rows[0]?.relation) {
+        const repair = migrations(schemaName).find(
+          (migration) => migration.version === 15,
+        );
+        if (!repair) throw new Error("Reports schema repair migration is unavailable");
+        await client.query("BEGIN");
+        try {
+          await client.query(repair.sql);
+          await client.query(
+            `INSERT INTO ${schema}.schema_migrations (version)
+             SELECT unnest($1::integer[])
+             ON CONFLICT (version) DO NOTHING`,
+            [[4, 5, 9, 10, 11, 12, 13, 14]],
+          );
+          await client.query("COMMIT");
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        }
+      }
+
       for (const migration of migrations(schemaName)) {
         const existing = await client.query<{ version: number }>(
           `SELECT version FROM ${schema}.schema_migrations WHERE version = $1`,
