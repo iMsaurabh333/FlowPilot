@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.9
+version: 0.1.11
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -118,6 +118,82 @@ modules:
       - name: flowpilot-mcp-auth
       - name: flowpilot-destination
       - name: flowpilot-logs
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-cloud-integration-content
+    type: nodejs
+    path: servers/flowpilot-mcp-cloud-integration
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_TOOLSET: content
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+      - name: flowpilot-destination
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-abc-warehouse
+    type: nodejs
+    path: servers/flowpilot-mcp-reconciliation-mock
+    parameters:
+      memory: 128M
+      disk-quota: 256M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_MOCK_SYSTEM: abc-warehouse
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-xyz-tms
+    type: nodejs
+    path: servers/flowpilot-mcp-reconciliation-mock
+    parameters:
+      memory: 128M
+      disk-quota: 256M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_MOCK_SYSTEM: xyz-tms
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
     build-parameters:
       builder: custom
       commands:

@@ -9,6 +9,8 @@ import type {
 } from "./types.js";
 import type { JobSchedulerClient } from "./job-scheduler.js";
 
+export const REPORT_SCHEDULER_MINIMUM_DELAY_MS = 60 * 60_000;
+
 export class ReportJobNotFoundError extends Error {
   constructor() {
     super("Report job not found");
@@ -23,9 +25,17 @@ export class ReportJobBusyError extends Error {
   }
 }
 
+export class ReportJobScheduleTooSoonError extends Error {
+  constructor() {
+    super("The Job Scheduling service requires reports to be scheduled at least one hour in advance");
+    this.name = "ReportJobScheduleTooSoonError";
+  }
+}
+
 export interface ReportJobSummary {
   id: string;
   title: string;
+  reportPrompt: string;
   sourceToolNames: string[];
   scheduleActive: boolean;
   actionPlanId: string | null;
@@ -43,6 +53,7 @@ function summary(job: ReportJobRecord): ReportJobSummary {
   return {
     id: job.id,
     title: job.title,
+    reportPrompt: job.reportPrompt,
     sourceToolNames: job.sourceToolNames,
     scheduleActive: job.scheduleActive,
     actionPlanId: job.actionPlanId,
@@ -97,6 +108,13 @@ export class ReportJobService {
   }
 
   async create(user: AuthenticatedUser, input: CreateReportJobInput) {
+    if (
+      this.#scheduler &&
+      this.#schedulerActionUrl &&
+      input.scheduledFor.getTime() < Date.now() + REPORT_SCHEDULER_MINIMUM_DELAY_MS
+    ) {
+      throw new ReportJobScheduleTooSoonError();
+    }
     const job = await this.#repository.create(user, input);
     if (this.#scheduler && this.#schedulerActionUrl) {
       await this.#repository.setSchedulerJobId(user, job.id, await this.#scheduler.schedule({ reportJobId: job.id, title: job.title, actionUrl: this.#schedulerActionUrl, scheduledFor: job.scheduledFor, recurrenceRule: job.recurrenceRule }));
@@ -106,6 +124,21 @@ export class ReportJobService {
 
   async list(user: AuthenticatedUser) {
     return (await this.#repository.list(user)).map(summary);
+  }
+
+  async update(user: AuthenticatedUser, jobId: string, input: CreateReportJobInput) {
+    const existing = await this.#repository.findOwned(user, jobId);
+    if (!existing) throw new ReportJobNotFoundError();
+    const scheduleChanged = existing.scheduledFor.getTime() !== input.scheduledFor.getTime() || existing.recurrenceRule !== (input.recurrenceRule ?? null);
+    if (scheduleChanged && this.#scheduler && this.#schedulerActionUrl && input.scheduledFor.getTime() < Date.now() + REPORT_SCHEDULER_MINIMUM_DELAY_MS) throw new ReportJobScheduleTooSoonError();
+    if (scheduleChanged && existing.schedulerJobId && this.#scheduler) await this.#scheduler.remove(existing.schedulerJobId);
+    const updated = await this.#repository.update(user, jobId, input);
+    if (!updated) throw new ReportJobBusyError();
+    if (scheduleChanged && this.#scheduler && this.#schedulerActionUrl) {
+      const schedulerJobId = await this.#scheduler.schedule({ reportJobId: updated.id, title: updated.title, actionUrl: this.#schedulerActionUrl, scheduledFor: updated.scheduledFor, recurrenceRule: updated.recurrenceRule });
+      await this.#repository.setSchedulerJobId(user, updated.id, schedulerJobId);
+    }
+    return this.get(user, jobId);
   }
 
   async get(user: AuthenticatedUser, jobId: string) {

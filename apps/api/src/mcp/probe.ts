@@ -210,6 +210,7 @@ export class HttpMcpServerProbe implements McpServerProbe {
       return {
         status: response.status,
         payload: body === undefined ? undefined : parseJsonRpcBody(body),
+        sessionId: response.headers.get("mcp-session-id") ?? undefined,
       };
     } finally {
       clearTimeout(timer);
@@ -325,7 +326,14 @@ export class HttpMcpServerProbe implements McpServerProbe {
           "protocol_incompatible",
         );
       }
-      const legacyPing = await this.#request(server, "ping", 4, {}, headers);
+      const sessionHeaders = {
+        ...headers,
+        "MCP-Protocol-Version": legacyVersion,
+        ...(initialize.sessionId
+          ? { "Mcp-Session-Id": initialize.sessionId }
+          : {}),
+      };
+      const legacyPing = await this.#request(server, "ping", 4, {}, sessionHeaders);
       if (legacyPing.status !== 200 || legacyPing.payload?.error) {
         return result(
           "unhealthy",
@@ -338,7 +346,7 @@ export class HttpMcpServerProbe implements McpServerProbe {
             : statusCategory(legacyPing.status),
         );
       }
-      const tools = await this.#request(server, "tools/list", 5, {}, headers);
+      const tools = await this.#request(server, "tools/list", 5, {}, sessionHeaders);
       const allowlist = allowlistedToolCount(tools.payload, server);
       return result(
         tools.status === 200 && !allowlist.category ? "healthy" : "unhealthy",

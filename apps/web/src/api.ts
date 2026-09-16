@@ -49,6 +49,7 @@ export type ReportJobStatus = "scheduled" | "running" | "succeeded" | "attention
 export interface ReportJobSummary {
   id: string;
   title: string;
+  reportPrompt?: string;
   sourceToolNames: string[];
   scheduleActive: boolean;
   actionPlanId: string | null;
@@ -87,7 +88,10 @@ export interface ApprovedPlanExecutionResult {
 
 export type ReportExportFormat = "html" | "markdown" | "xlsx";
 export interface ReportSource { name: string; description: string; }
+export interface ReconciliationPreview { headers: string[]; rows: string[][]; totalRows: number; }
+export interface ReconciliationResult { generatedAt: string; rows: Array<{ applicationMessageId: string; result: "matched" | "exception" | "unavailable"; systems: Record<string, { status: string; fields: Record<string, string> }> }>; }
 export interface ReportJobRun { id: string; reportJobId: string; status: "succeeded" | "attention" | "failed"; attemptCount: number; finalReportHtml: string | null; errorLog: string | null; startedAt: string | null; completedAt: string; }
+export interface OperationLogEntry { id: string; surface: "chat" | "report" | "system"; eventType: "llm_input" | "mcp_call" | "error"; title: string; reportJobId?: string | null; detail: Record<string, unknown>; createdAt: string; }
 
 export interface ConversationSummary {
   id: string;
@@ -100,6 +104,7 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  delivery?: "failed";
   sources?: Array<{ label: string }>;
   tables?: Array<{
     title: string;
@@ -135,6 +140,7 @@ export interface FlowPilotApi {
   updateConversationPolicy?(input: ConversationPolicy): Promise<ConversationPolicy>;
   listReportJobs?(): Promise<ReportJobSummary[]>;
   createReportJob?(input: CreateReportJobInput): Promise<ReportJobSummary>;
+  updateReportJob?(jobId: string, input: CreateReportJobInput): Promise<ReportJobSummary>;
   runReportJob?(jobId: string): Promise<ReportJobSummary>;
   previewReportActionPlan?(fileName: string, contentBase64: string): Promise<ReportActionPlanPreview>;
   updateReportActionPlan?(planId: string, plan: string): Promise<ReportActionPlanPreview>;
@@ -143,9 +149,13 @@ export interface FlowPilotApi {
   regenerateReportActionPlan?(planId: string): Promise<ReportActionPlanPreview>;
   downloadReportJob?(jobId: string, format: ReportExportFormat): Promise<void>;
   listReportSources?(): Promise<ReportSource[]>;
+  listReconciliationSources?(): Promise<ReportSource[]>;
   listReportJobRuns?(jobId: string): Promise<ReportJobRun[]>;
   deleteReportJob?(jobId: string): Promise<void>;
   setReportScheduleActive?(jobId: string, active: boolean): Promise<ReportJobSummary>;
+  listOperationLogs?(): Promise<OperationLogEntry[]>;
+  previewReconciliationUpload?(fileName: string, contentBase64: string): Promise<ReconciliationPreview>;
+  runReconciliation?(input: { ids: string[]; sourceToolNames: string[]; fields: string[] }): Promise<ReconciliationResult>;
 }
 
 export class ApiError extends Error {
@@ -346,10 +356,17 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       const payload = await request<{ jobs: ReportJobSummary[] }>("/api/reports/jobs");
       return payload.jobs;
     },
+    async listOperationLogs() { return (await request<{ logs: OperationLogEntry[] }>("/api/operation-logs")).logs; },
     async listReportSources() {
       const payload = await request<{ sources: ReportSource[] }>("/api/reports/sources");
       return payload.sources;
     },
+    async listReconciliationSources() {
+      const payload = await request<{ sources: ReportSource[] }>("/api/reconciliations/sources");
+      return payload.sources;
+    },
+    previewReconciliationUpload(fileName, contentBase64) { return request<ReconciliationPreview>("/api/reconciliations/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName, contentBase64 }) }); },
+    runReconciliation(input) { return request<ReconciliationResult>("/api/reconciliations/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }); },
     async listReportJobRuns(jobId) { return (await request<{ runs: ReportJobRun[] }>(`/api/reports/jobs/${encodeURIComponent(jobId)}/runs`)).runs; },
     async deleteReportJob(jobId) { await request<void>(`/api/reports/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }); },
     setReportScheduleActive(jobId, active) { return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}/schedule-active`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }) }); },
@@ -358,6 +375,11 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
+      });
+    },
+    updateReportJob(jobId, input) {
+      return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
       });
     },
     runReportJob(jobId) {

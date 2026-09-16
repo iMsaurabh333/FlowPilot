@@ -24,11 +24,12 @@ import { PostgresReportJobRepository } from "./reports/postgres-repository.js";
 import { ReportJobService } from "./reports/service.js";
 import { resolveJobSchedulerBinding, SapJobSchedulerClient } from "./reports/job-scheduler.js";
 import { createSchedulerAuthentication } from "./auth.js";
-import { McpReportExecutor, reportOnlyTools } from "./reports/mcp-report-executor.js";
+import { McpReportExecutor, reconciliationLookupTools, reportOnlyTools } from "./reports/mcp-report-executor.js";
 import { ReportActionPlanService } from "./reports/action-plan.js";
 import { PostgresActionPlanStore } from "./reports/action-plan-store.js";
 import { ApprovedPlanExecutor } from "./reports/approved-plan-executor.js";
 import { ReportWorkflowExecutor } from "./reports/report-workflow-executor.js";
+import { OperationLogService } from "./operation-log.js";
 
 export async function createRuntime(
   environment: NodeJS.ProcessEnv = process.env,
@@ -63,16 +64,19 @@ export async function createRuntime(
     const repository = new PostgresConversationRepository(pool);
     const conversationPolicy = new PostgresConversationPolicyService(pool);
     const mcpRepository = new PostgresMcpRegistryRepository(pool);
+    const operationLogs = new OperationLogService(pool);
     const mcpAuth = createConfiguredMcpAuthProfileResolver(environment);
     const mcpTools = new McpToolResolver({
       repository: mcpRepository,
       authResolver: mcpAuth,
+      operationLogs,
     });
     const conversations = new ConversationService(
       repository,
       agent,
       mcpTools,
       conversationPolicy,
+      operationLogs,
     );
     const registry = new McpRegistryService(
       mcpRepository,
@@ -86,14 +90,15 @@ export async function createRuntime(
       new PostgresReportJobRepository(pool),
       new ReportWorkflowExecutor(new McpReportExecutor({
         agent,
-        resolveTools: (user) => mcpTools.resolve(user),
+        resolveTools: (user, jobId) => mcpTools.resolve(user, { surface: "report", reportJobId: jobId }),
+        operationLogs,
       }), actionPlans, approvedPlanExecutor),
       schedulerBinding && schedulerActionUrl ? new SapJobSchedulerClient(schedulerBinding) : undefined,
       schedulerActionUrl,
     );
 
     return {
-      app: createApp({ conversations, registry, conversationPolicy, reports, reportSources: async (user) => reportOnlyTools(await mcpTools.resolve(user)).map((tool) => ({ name: tool.name, description: tool.description })), reportPlanning: new ReportActionPlanService(agent, () => mcpTools.resolve({ tenantId: "", subject: "", scopes: ["ChatUser", "ToolOperator"] })), actionPlans, approvedPlanExecutor, ...(schedulerBinding ? { schedulerAuthentication: createSchedulerAuthentication() } : {}) }),
+      app: createApp({ conversations, registry, conversationPolicy, reports, operationLogs, reportSources: async (user) => reportOnlyTools(await mcpTools.resolve(user)).map((tool) => ({ name: tool.name, description: tool.description })), reconciliationTools: async (user) => reconciliationLookupTools(await mcpTools.resolve(user, { surface: "report" })), reportPlanning: new ReportActionPlanService(agent, () => mcpTools.resolve({ tenantId: "", subject: "", scopes: ["ChatUser", "ToolOperator"] })), actionPlans, approvedPlanExecutor, ...(schedulerBinding ? { schedulerAuthentication: createSchedulerAuthentication() } : {}) }),
       async close() {
         await pool.end();
       },

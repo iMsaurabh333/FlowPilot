@@ -318,6 +318,24 @@ function migrations(schemaName: string) {
           WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
       `,
     },
+    {
+      version: 16,
+      sql: `
+        CREATE TABLE ${schema}.operation_logs (
+          id uuid PRIMARY KEY, tenant_id text NOT NULL, subject_id text NOT NULL,
+          surface text NOT NULL CHECK (surface IN ('chat','report','system')),
+          event_type text NOT NULL CHECK (event_type IN ('llm_input','mcp_call','error')),
+          title text NOT NULL, report_job_id uuid, detail text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX operation_logs_owner_created_idx ON ${schema}.operation_logs (tenant_id, subject_id, created_at DESC);
+        ALTER TABLE ${schema}.operation_logs ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.operation_logs FORCE ROW LEVEL SECURITY;
+        CREATE POLICY operation_logs_owner_policy ON ${schema}.operation_logs
+          USING (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))
+          WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
+      `,
+    },
   ] as const;
 }
 

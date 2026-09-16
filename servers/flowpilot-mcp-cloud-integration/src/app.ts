@@ -8,6 +8,7 @@ import {
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import {
   createMcpHandler,
+  type McpServer,
   type OAuthProtectedResourceMetadata,
 } from "@modelcontextprotocol/server";
 
@@ -26,9 +27,11 @@ export interface McpAppOptions {
   allowedOrigins?: string[];
   authorizationServerUrl: URL;
   connector?: MessageProcessingLogsConnectorLike;
+  createServer?: () => McpServer;
   host?: string;
   reportError?: (error: Error) => void;
   resourceServerUrl: URL;
+  serverName?: string;
   verifier: OAuthTokenVerifier;
 }
 
@@ -102,7 +105,10 @@ export function createMcpApp(options: McpAppOptions): McpAppRuntime {
     authorization_servers: [options.authorizationServerUrl.href],
     scopes_supported: [MCP_INVOKE_SCOPE],
     bearer_methods_supported: ["header"],
-    resource_name: "FlowPilot Cloud Integration MCP server",
+    resource_name:
+      options.serverName === "flowpilot-cloud-integration-content"
+        ? "FlowPilot Cloud Integration Content MCP server"
+        : "FlowPilot Cloud Integration MCP server",
   };
 
   app.get(resourceMetadataPath, (_request, response) => {
@@ -123,7 +129,7 @@ export function createMcpApp(options: McpAppOptions): McpAppRuntime {
   app.get("/health", (_request, response) => {
     response.set("Cache-Control", "no-store").status(200).json({
       status: "ok",
-      server: MCP_SERVER_NAME,
+      server: options.serverName ?? MCP_SERVER_NAME,
       version: MCP_SERVER_VERSION,
       protocolVersions: MCP_PROTOCOL_VERSIONS,
       toolsEnabled: true,
@@ -135,7 +141,10 @@ export function createMcpApp(options: McpAppOptions): McpAppRuntime {
       if (!authInfo?.scopes.includes(MCP_INVOKE_SCOPE)) {
         throw new Error("Authenticated MCP context is missing");
       }
-      return createCloudIntegrationMcpServer({ connector: options.connector });
+      return (
+        options.createServer?.() ??
+        createCloudIntegrationMcpServer({ connector: options.connector })
+      );
     },
     {
       legacy: "stateless",

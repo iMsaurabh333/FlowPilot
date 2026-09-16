@@ -106,6 +106,18 @@ export class PostgresReportJobRepository implements ReportJobRepository {
     });
   }
 
+  async update(user: AuthenticatedUser, jobId: string, input: import("./types.js").UpdateReportJobInput) {
+    return this.#withIdentity(user, async (client) => {
+      const result = await client.query<ReportJobRow>(
+        `UPDATE ${this.#table} SET title=$2, report_prompt=$3, source_tool_names=$4, action_plan_id=$5,
+          scheduled_for=$6, recurrence_rule=$7, updated_at=now()
+         WHERE id=$1 AND active_run_id IS NULL RETURNING *`,
+        [jobId, input.title, input.reportPrompt, input.sourceToolNames ?? [], input.actionPlanId ?? null, input.scheduledFor, input.recurrenceRule ?? null],
+      );
+      return result.rows[0] ? record(result.rows[0]) : undefined;
+    });
+  }
+
   async findOwned(user: AuthenticatedUser, jobId: string) {
     return this.#withIdentity(user, async (client) => {
       const result = await client.query<ReportJobRow>(`SELECT * FROM ${this.#table} WHERE id = $1`, [jobId]);
@@ -142,7 +154,7 @@ export class PostgresReportJobRepository implements ReportJobRepository {
       if (result.rows[0]) {
         await client.query("COMMIT");
         const row = result.rows[0];
-        return { status: "acquired" as const, job: record(row), user: { tenantId: row.tenant_id, subject: row.subject_id, scopes: ["ChatUser"] } };
+        return { status: "acquired" as const, job: record(row), user: { tenantId: row.tenant_id, subject: row.subject_id, scopes: ["ChatUser", "ToolOperator"] } };
       }
       const existing = await client.query(`SELECT id FROM ${this.#table} WHERE id = $1`, [jobId]);
       await client.query("COMMIT");

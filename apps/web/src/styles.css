@@ -215,15 +215,26 @@ textarea {
 .view-stage {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
 .reports-page {
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   padding: clamp(1.5rem, 5vw, 4rem);
   background: var(--sapBackgroundColor);
 }
+.logs-page { height: 100%; min-height: 0; overflow: auto; padding: clamp(1.5rem, 5vw, 4rem); }
+.logs-page > header { max-width: 56rem; }
+.operation-log-list { display: grid; gap: 0.75rem; max-width: 72rem; padding: 0; margin: 1.5rem 0; list-style: none; }
+.operation-log-list > li { padding: 1rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.75rem; background: var(--sapGroup_ContentBackground); }
+.operation-log-list header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.operation-log-list p { margin: 0.5rem 0; color: var(--sapContent_LabelColor); }
+.operation-log-list pre { max-height: 28rem; overflow: auto; white-space: pre-wrap; font: var(--sapFontSmallSize) var(--sapFontFamily); }
+.operation-log-kind { padding: 0.2rem 0.45rem; border-radius: 1rem; background: var(--sapNeutralBackground); font-size: var(--sapFontSmallSize); text-transform: capitalize; }
+.operation-log-kind.error { background: var(--sapNegativeBackground); }
 
 .reports-header {
   max-width: 48rem;
@@ -289,17 +300,50 @@ textarea {
   gap: 1rem;
 }
 .report-header-actions { display: flex; gap: 0.25rem; }
+.reconciliation { display: grid; gap: 1rem; max-width: none; min-width: 0; margin-block: 1.25rem; padding: 1.25rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.75rem; background: var(--sapGroup_ContentBackground); box-shadow: var(--sapContent_Shadow0); }
+.reconciliation > header, .reconciliation-result > header { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+.reconciliation h2, .reconciliation h3, .reconciliation p { margin: 0; }.reconciliation h2 { margin-block: .2rem .4rem; }
+.reconciliation > header p:last-child { color: var(--sapContent_LabelColor); }
+.reconciliation-ribbon { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 1rem; padding:.7rem .9rem; border-radius:.5rem; background:var(--sapInformationBackground); color:var(--sapTextColor); font-size:var(--sapFontSmallSize); }
+.reconciliation-ribbon span { padding-inline-start:.75rem; border-inline-start:1px solid var(--sapGroup_ContentBorderColor); }
+.reconciliation-config { display:grid; grid-template-columns:minmax(16rem, 26rem) auto; gap:1rem; align-items:end; }.reconciliation-config > label { display:grid; gap:.4rem; min-width:0; font-weight:600; }.reconciliation-config small { color:var(--sapContent_LabelColor); font-weight:400; }.reconciliation-config input, .reconciliation-config select { width:100%; box-sizing:border-box; min-height:2.5rem; padding-inline:.75rem; border:1px solid var(--sapField_BorderColor); border-radius:.25rem; font:inherit; background:var(--sapField_Background); color:var(--sapField_TextColor); }.reconciliation-run { justify-self:start; }.reconciliation-source-picker { grid-column:1 / -1; grid-template-columns:repeat(auto-fit, minmax(16rem, 1fr)); align-items:start; }.reconciliation-source-picker legend { grid-column:1 / -1; }.reconciliation-source-picker > label { min-width:0; }
+.reconciliation-result { display:grid; gap:1rem; }.reconciliation-table { overflow:auto; border:1px solid var(--sapGroup_ContentBorderColor); border-radius:.5rem; }.reconciliation-table table { width:100%; border-collapse:collapse; }.reconciliation-table th, .reconciliation-table td { padding:.65rem .75rem; text-align:left; border-bottom:1px solid var(--sapList_BorderColor); white-space:nowrap; }.reconciliation-table th { background:var(--sapList_HeaderBackground); }.reconciliation-status { text-transform:capitalize; }.reconciliation-status.matched { color:var(--sapPositiveTextColor); }.reconciliation-status.exception, .reconciliation-status.unavailable { color:var(--sapNegativeTextColor); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.report-job-form {
+.reports-workspace {
   display: grid;
-  gap: 1rem;
-  max-width: 52rem;
-  padding: 1.25rem;
+  grid-template-columns: minmax(17rem, 24rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+  min-height: 0;
+  max-width: 96rem;
+  margin-block-start: 1.25rem;
+}
+
+.report-job-navigation,
+.reports-workspace-panel {
+  min-width: 0;
+  padding: 1rem;
   border: 1px solid var(--sapGroup_ContentBorderColor);
   border-radius: 0.75rem;
   background: var(--sapGroup_ContentBackground);
 }
+
+.report-job-navigation {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+}
+
+.reports-workspace-panel { display: grid; gap: 1rem; min-height: 0; overflow: auto; }
+
+.report-job-form {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.report-form-header h2 { margin: 0.2rem 0 0; }
 
 .report-job-form label {
   display: grid;
@@ -324,11 +368,11 @@ textarea {
   font: inherit;
 }
 
-.report-job-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.report-job-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 0.5rem; padding: 0.75rem 0; background: var(--sapGroup_ContentBackground); border-top: 1px solid var(--sapGroup_ContentBorderColor); }
 .report-error { color: var(--sapNegativeTextColor); }
 .reports-empty { padding: 2rem; border: 1px dashed var(--sapGroup_ContentBorderColor); border-radius: 0.75rem; }
 .reports-next { color: var(--sapContent_LabelColor); }
-.report-job-list { display: grid; gap: 0.5rem; max-width: 60rem; padding: 0; list-style: none; }
+.report-job-list { display: grid; gap: 0.5rem; padding: 0; list-style: none; }
 .report-job-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.875rem 1rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.5rem; background: var(--sapGroup_ContentBackground); }
 .report-job-row > div { display: grid; gap: 0.2rem; }
 .report-job-select { display: grid; gap: 0.2rem; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; font: inherit; cursor: pointer; }
@@ -345,7 +389,7 @@ textarea {
 .report-marker.orange { background: var(--sapCriticalElementColor); }
 .report-marker.yellow { background: #d9b300; }
 .report-status-label { color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
-.report-detail { display: grid; gap: 1rem; max-width: 60rem; margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--sapGroup_ContentBorderColor); border-radius: 0.75rem; background: var(--sapGroup_ContentBackground); }
+.report-detail { display: grid; gap: 1rem; min-width: 0; }
 .report-detail header, .report-detail-actions { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
 .report-export-picker { display: grid; gap: 0.15rem; color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
 .report-export-picker select { min-height: 2rem; border: 1px solid var(--sapField_BorderColor); border-radius: 0.25rem; background: var(--sapField_Background); color: var(--sapField_TextColor); }
@@ -665,6 +709,11 @@ textarea {
   background: var(--sapList_SelectionBackgroundColor);
 }
 
+.message.user.failed {
+  border-color: var(--sapNegativeBorderColor);
+  background: var(--sapNegativeBackground);
+}
+
 .message.assistant {
   align-self: flex-start;
   background: var(--sapGroup_ContentBackground);
@@ -688,6 +737,13 @@ textarea {
   color: var(--sapContent_LabelColor);
   font-size: var(--sapFontSmallSize);
   font-style: italic;
+}
+
+.message-delivery-error {
+  margin: 0.75rem 0 0;
+  color: var(--sapNegativeTextColor);
+  font-size: var(--sapFontSmallSize);
+  font-weight: var(--sapFontBoldWeight);
 }
 
 .tool-table {
@@ -1368,6 +1424,15 @@ textarea {
   .preset-badge {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .reports-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .report-job-navigation {
+    position: static;
+    max-height: none;
   }
 }
 

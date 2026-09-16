@@ -46,6 +46,11 @@ describe("MCP technical authentication", () => {
     await expect(resolver.resolve("technical:flowpilot-mcp")).resolves.toEqual({
       Authorization: "Bearer short-lived-token",
     });
+    await expect(
+      resolver.resolve("technical:flowpilot-mcp-content"),
+    ).resolves.toEqual({
+      Authorization: "Bearer short-lived-token",
+    });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
       url: "https://mcp-auth.example.test/oauth/token",

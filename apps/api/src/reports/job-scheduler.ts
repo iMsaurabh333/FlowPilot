@@ -70,7 +70,7 @@ export class SapJobSchedulerClient implements JobSchedulerClient {
     const response = await this.#request("/scheduler/jobs", {
       method: "POST",
       body: JSON.stringify({
-        name: `flowpilot-report-${input.reportJobId}`,
+        name: `flowpilotreport${input.reportJobId.replace(/-/gu, "")}`,
         description: input.title.slice(0, 120),
         action: input.actionUrl,
         httpMethod: "POST",
@@ -83,9 +83,13 @@ export class SapJobSchedulerClient implements JobSchedulerClient {
         }],
       }),
     });
-    const body = await response.json().catch(() => undefined) as { id?: unknown } | undefined;
-    if (!body || (typeof body.id !== "number" && typeof body.id !== "string")) throw new Error("Job Scheduler did not return a job ID");
-    return String(body.id);
+    const body = await response.json().catch(() => undefined) as { id?: unknown; _id?: unknown } | undefined;
+    const locationId = response.headers
+      .get("location")
+      ?.match(/\/scheduler\/jobs\/([^/?#]+)\/?$/u)?.[1];
+    const jobId = body?.id ?? body?._id ?? locationId;
+    if (typeof jobId !== "number" && typeof jobId !== "string") throw new Error("Job Scheduler did not return a job ID");
+    return String(jobId);
   }
   async setActive(jobId: string, active: boolean) { await this.#request(`/scheduler/jobs/${encodeURIComponent(jobId)}/schedules/activationStatus`, { method: "POST", body: JSON.stringify({ activationStatus: active }) }); }
   async remove(jobId: string) { await this.#request(`/scheduler/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }); }

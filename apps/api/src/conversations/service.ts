@@ -5,6 +5,7 @@ import type { ChatAgent, ChatMessage, ChatTool } from "@flowpilot/agent-core";
 import type { AuthenticatedUser } from "../types.js";
 import type { ConversationPolicyService } from "../conversation-policy.js";
 import type { ConversationRecord, ConversationRepository } from "./types.js";
+import type { OperationLogService } from "../operation-log.js";
 
 export class ConversationNotFoundError extends Error {
   constructor() {
@@ -66,17 +67,20 @@ export class ConversationService {
   readonly #tools:
     { resolve(user: AuthenticatedUser): Promise<ChatTool[]> } | undefined;
   readonly #policy: ConversationPolicyService | undefined;
+  readonly #operationLogs: OperationLogService | undefined;
 
   constructor(
     repository: ConversationRepository,
     agent: ChatAgent,
     tools?: { resolve(user: AuthenticatedUser): Promise<ChatTool[]> },
     policy?: ConversationPolicyService,
+    operationLogs?: OperationLogService,
   ) {
     this.#repository = repository;
     this.#agent = agent;
     this.#tools = tools;
     this.#policy = policy;
+    this.#operationLogs = operationLogs;
   }
 
   async create(user: AuthenticatedUser) {
@@ -142,6 +146,7 @@ export class ConversationService {
     let messages: ChatMessage[];
     let rolledOver = false;
     try {
+      void this.#operationLogs?.record(user, { surface: "chat", eventType: "llm_input", title: `Conversation · ${acquisition.conversation.title}`, detail: { instruction: content } });
       messages = await this.#agent.sendMessage(
         acquisition.conversation.threadId,
         content,
@@ -164,6 +169,7 @@ export class ConversationService {
         messages = await this.#agent.getMessages(acquisition.conversation.threadId);
       }
     } catch (error) {
+      void this.#operationLogs?.record(user, { surface: "chat", eventType: "error", title: "Chat model or tool execution failed", detail: { errorType: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : "Unknown failure" } });
       try {
         await this.#repository.releaseRun(user, conversationId, runId);
       } catch (releaseError) {

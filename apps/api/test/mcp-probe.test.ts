@@ -119,6 +119,35 @@ describe("MCP server protocol probe", () => {
     });
   });
 
+  it("retains the MCP session negotiated during initialization", async () => {
+    const requests: Array<{ method: string; session: string | undefined; version: string | undefined }> = [];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const method = JSON.parse(String(init?.body)) as { method: string };
+      requests.push({
+        method: method.method,
+        session: new Headers(init?.headers).get("Mcp-Session-Id") ?? undefined,
+        version: new Headers(init?.headers).get("MCP-Protocol-Version") ?? undefined,
+      });
+      const payload = method.method === "initialize"
+        ? { protocolVersion: "2025-11-25" }
+        : method.method === "tools/list"
+          ? { tools: [{ name: "search_message_processing_logs" }] }
+          : {};
+      if (method.method === "initialize") {
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: payload }), { status: 200, headers: { "Mcp-Session-Id": "session-123" } });
+      }
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: payload }), { status: 200 });
+    };
+
+    const probe = new HttpMcpServerProbe({ authResolver, fetchImpl });
+    const result = await probe.ping(serverRecord);
+    expect(result).toMatchObject({ healthState: "healthy" });
+    expect(requests.filter((request) => request.method === "ping" || request.method === "tools/list")).toEqual([
+      { method: "ping", session: "session-123", version: "2025-11-25" },
+      { method: "tools/list", session: "session-123", version: "2025-11-25" },
+    ]);
+  });
+
   it("fails closed when the authentication profile cannot resolve", async () => {
     const probe = new HttpMcpServerProbe({
       authResolver: {

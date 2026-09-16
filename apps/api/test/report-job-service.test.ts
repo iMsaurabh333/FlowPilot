@@ -27,6 +27,7 @@ function job(overrides: Partial<ReportJobRecord> = {}): ReportJobRecord {
 function repository(record = job()): ReportJobRepository {
   return {
     create: vi.fn().mockResolvedValue(record),
+    update: vi.fn().mockResolvedValue(record),
     list: vi.fn().mockResolvedValue([record]),
     findOwned: vi.fn().mockResolvedValue(record),
     acquireRun: vi.fn().mockResolvedValue({ status: "acquired", job: record }),

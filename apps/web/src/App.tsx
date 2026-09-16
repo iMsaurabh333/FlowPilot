@@ -24,6 +24,7 @@ import {
 } from "./api";
 import { McpRegistryView } from "./McpRegistryView";
 import { ReportsView } from "./ReportsView";
+import { LogsView } from "./LogsView";
 import "./styles.css";
 
 type LoadState =
@@ -33,7 +34,7 @@ type LoadState =
 
 type PendingAction = "creating" | "sending" | "improving" | "deleting" | undefined;
 
-type AppView = "chat" | "registry" | "reports";
+type AppView = "chat" | "registry" | "reports" | "logs";
 
 const starterPrompts = [
   {
@@ -146,17 +147,26 @@ export function App({ client = flowPilotApi }: AppProps) {
         const available = newestFirst(await client.listConversations());
         if (cancelled) return;
 
+        // Conversation summaries come from the application database and must
+        // stay available even if a checkpoint read or an MCP-backed chat turn
+        // cannot be loaded.
         setUser(currentUser);
         setConversations(available);
-        if (available[0]) {
-          setDetailLoading(true);
+        setState({ status: "ready" });
+        if (!available[0]) {
+          setActiveConversation(undefined);
+          return;
+        }
+        setDetailLoading(true);
+        try {
           const detail = await client.loadConversation(available[0].id);
           if (cancelled || requestId !== detailRequest.current) return;
           setActiveConversation(detail);
-        } else {
+        } catch (error) {
+          if (cancelled || requestId !== detailRequest.current) return;
           setActiveConversation(undefined);
+          setRequestError(`Conversation history could not be loaded. ${visibleError(error)}`);
         }
-        setState({ status: "ready" });
       } catch (error) {
         if (cancelled) return;
         setState({
@@ -272,6 +282,16 @@ export function App({ client = flowPilotApi }: AppProps) {
       setDraft("");
     } catch (error) {
       setRequestError(visibleError(error));
+      // The server may have durably stored the user message before a model or
+      // tool failure. Reload it so the red incomplete-turn indicator is shown
+      // immediately instead of leaving a silent orphan on the next refresh.
+      try {
+        const recovered = await client.loadConversation(conversationId);
+        setActiveConversation(recovered);
+      } catch {
+        // Keep the current view and the original request error if recovery is
+        // itself unavailable; the conversation list remains usable.
+      }
     } finally {
       setPendingAction(undefined);
     }
@@ -420,6 +440,9 @@ export function App({ client = flowPilotApi }: AppProps) {
                 <strong>Chat</strong>
                 <small>Private troubleshooting</small>
               </span>
+            </button>
+            <button type="button" className={`primary-nav-item${activeView === "logs" ? " active" : ""}`} aria-current={activeView === "logs" ? "page" : undefined} onClick={() => setActiveView("logs")}>
+              <span className="nav-glyph" aria-hidden="true">L</span><span><strong>Logs</strong><small>Model and MCP diagnostics</small></span>
             </button>
             <button
               type="button"
@@ -651,7 +674,7 @@ export function App({ client = flowPilotApi }: AppProps) {
                       {activeConversation.messages.map((message) => (
                         <li
                           key={message.id}
-                          className={`message ${message.role}`}
+                          className={`message ${message.role}${message.delivery === "failed" ? " failed" : ""}`}
                         >
                           <div className="message-author">
                             {message.role === "user"
@@ -661,6 +684,11 @@ export function App({ client = flowPilotApi }: AppProps) {
                           <div className="message-content">
                             {message.content}
                           </div>
+                          {message.delivery === "failed" && (
+                            <p className="message-delivery-error" role="status">
+                              No assistant response was recorded for this request.
+                            </p>
+                          )}
                           {message.role === "assistant" && message.sources && (
                             <p className="message-sources">
                               Source: {message.sources.map(({ label }) => label).join(" · ")}
@@ -749,6 +777,8 @@ export function App({ client = flowPilotApi }: AppProps) {
             </div>
           ) : activeView === "registry" ? (
             <McpRegistryView client={client} />
+          ) : activeView === "logs" ? (
+            <LogsView client={client} />
           ) : (
             <ReportsView client={client} />
           )}

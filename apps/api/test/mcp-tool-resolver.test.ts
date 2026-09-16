@@ -161,4 +161,44 @@ describe("MCP tool resolution", () => {
       params: { name: "search_logs", arguments: {} },
     });
   });
+
+  it("uses the session negotiated by a stateful legacy MCP server", async () => {
+    const repository = new MemoryMcpRegistryRepository();
+    await repository.save(server({ protocolVersion: "2025-11-25" }));
+    const fetchImpl = vi.fn(
+      async (_request: Request | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { method: string };
+        const headers = new Headers(init?.headers);
+        if (body.method === "initialize") {
+          return new Response(
+            JSON.stringify({ jsonrpc: "2.0", result: { protocolVersion: "2025-11-25" } }),
+            { status: 200, headers: { "Mcp-Session-Id": "session-123" } },
+          );
+        }
+        if (body.method === "tools/list" && !headers.has("Mcp-Session-Id")) {
+          return response({ jsonrpc: "2.0", error: { code: -32_000 } });
+        }
+        expect(headers.get("Mcp-Session-Id")).toBe("session-123");
+        expect(headers.get("MCP-Protocol-Version")).toBe("2025-11-25");
+        if (body.method === "tools/list") {
+          return response({
+            jsonrpc: "2.0",
+            result: {
+              tools: [{ name: "search_logs", inputSchema: { type: "object", properties: {} } }],
+            },
+          });
+        }
+        return response({ jsonrpc: "2.0", result: { content: [{ type: "text", text: "stateful result" }] } });
+      },
+    );
+    const resolver = new McpToolResolver({
+      repository,
+      authResolver: { resolve: async () => ({}) },
+      fetchImpl: fetchImpl as typeof fetch,
+      now: () => new Date(fresh),
+    });
+
+    const [tool] = await resolver.resolve({ subject: "operator", tenantId: "tenant", scopes: ["ChatUser", "ToolOperator"] });
+    await expect(tool.invoke({})).resolves.toBe("stateful result");
+  });
 });

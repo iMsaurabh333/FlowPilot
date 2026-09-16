@@ -39,6 +39,7 @@ export interface CreateReportJobInput {
   scheduledFor: Date;
   recurrenceRule?: string | null;
 }
+export type UpdateReportJobInput = CreateReportJobInput;
 
 export interface ReportExecutionResult {
   html: string;
@@ -62,6 +63,7 @@ export type ScheduledReportRunAcquisition =
 
 export interface ReportJobRepository {
   create(user: AuthenticatedUser, input: CreateReportJobInput): Promise<ReportJobRecord>;
+  update(user: AuthenticatedUser, jobId: string, input: UpdateReportJobInput): Promise<ReportJobRecord | undefined>;
   list(user: AuthenticatedUser): Promise<ReportJobRecord[]>;
   findOwned(user: AuthenticatedUser, jobId: string): Promise<ReportJobRecord | undefined>;
   acquireRun(user: AuthenticatedUser, jobId: string, runId: string): Promise<ReportRunAcquisition>;

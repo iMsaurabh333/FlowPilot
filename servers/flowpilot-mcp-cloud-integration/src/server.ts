@@ -1,11 +1,13 @@
 import { createConfiguredAuthentication } from "./auth.js";
 import { createMcpApp } from "./app.js";
+import { createCloudIntegrationContentMcpServer } from "./content.js";
 import { loadMcpServerConfig } from "./config.js";
 import { MCP_SERVER_NAME } from "./constants.js";
 
 async function main(): Promise<void> {
   const config = loadMcpServerConfig();
   const authentication = createConfiguredAuthentication(config.authMode);
+  const contentToolset = process.env.MCP_TOOLSET === "content";
   const runtime = createMcpApp({
     allowedHosts: config.allowedHosts,
     allowedOrigins: config.allowedOrigins,
@@ -13,13 +15,19 @@ async function main(): Promise<void> {
     host: config.host,
     resourceServerUrl: config.publicUrl,
     verifier: authentication.verifier,
+    ...(contentToolset
+      ? { serverName: "flowpilot-cloud-integration-content" }
+      : {}),
+    ...(contentToolset
+      ? { createServer: createCloudIntegrationContentMcpServer }
+      : {}),
   });
 
   const server = runtime.app.listen(config.port, config.host, () => {
     console.log(
       JSON.stringify({
         level: "info",
-        message: `${MCP_SERVER_NAME} started`,
+        message: `${contentToolset ? "flowpilot-cloud-integration-content" : MCP_SERVER_NAME} started`,
         host: config.host,
         port: config.port,
       }),

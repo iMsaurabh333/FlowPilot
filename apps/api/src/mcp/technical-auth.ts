@@ -1,6 +1,9 @@
 import type { McpAuthProfileResolver } from "./probe.js";
 
-const MCP_TECHNICAL_AUTH_PROFILE = "technical:flowpilot-mcp";
+const MCP_TECHNICAL_AUTH_PROFILES = new Set([
+  "technical:flowpilot-mcp",
+  "technical:flowpilot-mcp-content",
+]);
 const TOKEN_TIMEOUT_MS = 5_000;
 const TOKEN_CACHE_TTL_MS = 4 * 60_000;
 
@@ -116,7 +119,7 @@ export class TechnicalMcpAuthProfileResolver implements McpAuthProfileResolver {
 
   async resolve(authProfileRef: string) {
     if (
-      authProfileRef !== MCP_TECHNICAL_AUTH_PROFILE ||
+      !MCP_TECHNICAL_AUTH_PROFILES.has(authProfileRef) ||
       !this.#binding ||
       !this.#scopeBinding
     ) {

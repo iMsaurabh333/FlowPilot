@@ -1,0 +1,44 @@
+# Reconciliation mock systems
+
+The MTA deploys two independently runnable, read-only MCP systems for manual
+reconciliation demos:
+
+- **ABC Warehouse** (`flowpilot-mcp-abc-warehouse`)
+- **XYZ TMS** (`flowpilot-mcp-xyz-tms`)
+
+Each advertises the compatible `get_application_message` tool. Its only
+input is `{ "applicationMessageId": "..." }`. The records are deterministic
+and intentionally small; no customer data is present.
+
+| Application Message ID | ABC Warehouse | XYZ TMS |
+| --- | --- | --- |
+| `MSG-000001` | Dispatched | In transit |
+| `MSG-000002` | On hold | Awaiting handoff |
+| `MSG-000003` | Delivered to carrier | Not found |
+| `MSG-000004` | Not found | Delivered |
+| `575990` | Packed | Awaiting pickup |
+| `763968` | Dispatched | In transit |
+| `861822` | On hold | Exception |
+| `399085` | Delivered to carrier | Delivered |
+
+The last four IDs mirror the supplied Cloud Integration Application Message IDs.
+When Integration Monitoring is selected and has matching CPI logs, the report
+shows its live CPI status alongside these deterministic mock-system statuses.
+
+After deployment, use the MCP Registry as a `ChatAdmin` to add and Ping both
+systems. Use the app routes reported by `cf apps` (without `/mcp`) and these
+values:
+
+| Registry field | ABC Warehouse | XYZ TMS |
+| --- | --- | --- |
+| Server ID | `abc-warehouse` | `xyz-tms` |
+| Display name | `ABC Warehouse` | `XYZ TMS` |
+| Authentication profile | `technical:flowpilot-mcp` | `technical:flowpilot-mcp` |
+| Allowed tool names | `get_application_message` | `get_application_message` |
+| Enabled | Yes, after a successful Ping | Yes, after a successful Ping |
+
+For local development, start each server on a distinct port with
+`MCP_AUTH_MODE=mock`, an identical 32-or-more-character `MCP_MOCK_TOKEN`, and
+`MCP_MOCK_SYSTEM` set to the corresponding system. Configure the API with the
+matching `MCP_REGISTRY_AUTH_TECHNICAL_FLOWPILOT_MCP` bearer token, then register
+the loopback endpoints and Ping them.

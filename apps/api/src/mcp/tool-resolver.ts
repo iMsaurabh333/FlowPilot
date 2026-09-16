@@ -1,6 +1,7 @@
 import type { ChatTool } from "@flowpilot/agent-core";
 
 import type { AuthenticatedUser } from "../types.js";
+import type { OperationLogService } from "../operation-log.js";
 import type { McpAuthProfileResolver } from "./probe.js";
 import {
   MCP_HEALTH_MAX_AGE_MS,
@@ -15,6 +16,11 @@ const MCP_TOOL_MAX_RESPONSE_BYTES = 128 * 1_024;
 interface JsonRpcResponse {
   result?: Record<string, unknown>;
   error?: unknown;
+}
+
+interface McpResponse {
+  payload: JsonRpcResponse | undefined;
+  sessionId?: string;
 }
 
 interface AdvertisedTool {
@@ -101,17 +107,20 @@ export class McpToolResolver {
   readonly #authResolver: McpAuthProfileResolver;
   readonly #fetch: typeof fetch;
   readonly #now: () => Date;
+  readonly #operationLogs: OperationLogService | undefined;
 
   constructor(options: {
     repository: McpRegistryRepository;
     authResolver: McpAuthProfileResolver;
     fetchImpl?: typeof fetch;
     now?: () => Date;
+    operationLogs?: OperationLogService;
   }) {
     this.#repository = options.repository;
     this.#authResolver = options.authResolver;
     this.#fetch = options.fetchImpl ?? fetch;
     this.#now = options.now ?? (() => new Date());
+    this.#operationLogs = options.operationLogs;
   }
 
   async #request(
@@ -119,9 +128,10 @@ export class McpToolResolver {
     method: string,
     id: number,
     params: Record<string, unknown>,
-  ): Promise<JsonRpcResponse | undefined> {
-    const headers = await this.#authResolver.resolve(server.authProfileRef);
-    if (!headers) return undefined;
+    requestHeaders: Record<string, string> = {},
+  ): Promise<McpResponse> {
+    const authHeaders = await this.#authResolver.resolve(server.authProfileRef);
+    if (!authHeaders) return { payload: undefined };
     try {
       const response = await this.#fetch(endpointFor(server), {
         method: "POST",
@@ -130,29 +140,59 @@ export class McpToolResolver {
         headers: {
           Accept: "application/json, text/event-stream",
           "Content-Type": "application/json",
-          ...headers,
+          ...authHeaders,
+          ...requestHeaders,
         },
         body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
       });
-      if (!response.ok) return undefined;
+      if (!response.ok) return { payload: undefined };
       const contentLength = Number(response.headers.get("content-length"));
       if (
         Number.isFinite(contentLength) &&
         contentLength > MCP_TOOL_MAX_RESPONSE_BYTES
       ) {
-        return undefined;
+        return { payload: undefined };
       }
       const text = await response.text();
       if (Buffer.byteLength(text, "utf8") > MCP_TOOL_MAX_RESPONSE_BYTES) {
-        return undefined;
+        return { payload: undefined };
       }
-      return parseJsonRpcBody(text);
+      return {
+        payload: parseJsonRpcBody(text),
+        sessionId: response.headers.get("mcp-session-id") ?? undefined,
+      };
     } catch {
-      return undefined;
+      return { payload: undefined };
     }
   }
 
-  async resolve(user: AuthenticatedUser): Promise<ChatTool[]> {
+  async #listTools(server: McpServerRecord) {
+    const direct = await this.#request(server, "tools/list", 1, {});
+    if (Array.isArray(direct.payload?.result?.tools) || server.protocolVersion !== "2025-11-25") {
+      return { response: direct.payload, requestHeaders: {} };
+    }
+    const initialize = await this.#request(server, "initialize", 3, {
+      protocolVersion: "2025-11-25",
+      capabilities: {},
+      clientInfo: { name: "flowpilot-tool-resolver", version: "0.1.0" },
+    });
+    if (
+      initialize.payload?.error ||
+      initialize.payload?.result?.protocolVersion !== "2025-11-25"
+    ) {
+      return { response: direct.payload, requestHeaders: {} };
+    }
+    const requestHeaders: Record<string, string> = initialize.sessionId
+      ? {
+          "MCP-Protocol-Version": "2025-11-25",
+          "Mcp-Session-Id": initialize.sessionId,
+        }
+      : {};
+    const listed = await this.#request(server, "tools/list", 4, {}, requestHeaders);
+    return { response: listed.payload, requestHeaders };
+  }
+
+  async resolve(user: AuthenticatedUser, context: { surface?: "chat" | "report"; reportJobId?: string } = {}): Promise<ChatTool[]> {
     if (!user.scopes.includes(MCP_TOOL_OPERATOR_SCOPE)) return [];
     let servers: McpServerRecord[];
     try {
@@ -165,7 +205,7 @@ export class McpToolResolver {
     );
     const groups = await Promise.all(
       eligible.map(async (server) => {
-        const response = await this.#request(server, "tools/list", 1, {});
+        const { response, requestHeaders } = await this.#listTools(server);
         const advertised = Array.isArray(response?.result?.tools)
           ? response.result.tools
               .map(toolFrom)
@@ -182,13 +222,23 @@ export class McpToolResolver {
               name: `${server.serverId}__${name}`,
               description: advertisedTool.description,
               inputSchema: advertisedTool.inputSchema,
-              invoke: async (arguments_: Record<string, unknown>) =>
-                safeToolResult(
-                  await this.#request(server, "tools/call", 2, {
-                    name,
-                    arguments: arguments_,
-                  }),
-                ),
+              invoke: async (arguments_: Record<string, unknown>) => {
+                const startedAt = Date.now();
+                const response = await this.#request(
+                  server,
+                  "tools/call",
+                  2,
+                  { name, arguments: arguments_ },
+                  requestHeaders,
+                );
+                const result = safeToolResult(response.payload);
+                void this.#operationLogs?.record(user, {
+                  surface: context.surface ?? "chat", eventType: "mcp_call", title: `${server.displayName} · ${name}`,
+                  reportJobId: context.reportJobId ?? null,
+                  detail: { endpoint: endpointFor(server).toString(), jsonRpcMethod: "tools/call", tool: name, arguments: arguments_, durationMs: Date.now() - startedAt, response: result },
+                });
+                return result;
+              },
             } satisfies ChatTool,
           ];
         });

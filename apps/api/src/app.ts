@@ -16,7 +16,7 @@ import {
 } from "./mcp/registry.js";
 import type { ConversationPolicyService } from "./conversation-policy.js";
 import type { ReportJobService } from "./reports/service.js";
-import { ReportJobBusyError, ReportJobNotFoundError } from "./reports/service.js";
+import { ReportJobBusyError, ReportJobNotFoundError, ReportJobScheduleTooSoonError } from "./reports/service.js";
 import { extractActionDocument } from "./reports/action-document.js";
 import type { ReportActionPlanService } from "./reports/action-plan.js";
 import { ActionPlanImmutableError, ActionPlanNotFoundError, type PostgresActionPlanStore } from "./reports/action-plan-store.js";
@@ -24,6 +24,9 @@ import type { ApprovedPlanExecutor } from "./reports/approved-plan-executor.js";
 import { ActionPlanValidationError } from "./reports/approved-plan-executor.js";
 import { exportReport, ReportNotReadyError, type ReportExportFormat } from "./reports/report-export.js";
 import type { ReportSource } from "./reports/mcp-report-executor.js";
+import { previewReconciliationUpload, reconciliationTemplate, runReconciliation } from "./reports/reconciliation.js";
+import type { ChatTool } from "@flowpilot/agent-core";
+import type { OperationLogService } from "./operation-log.js";
 import "./types.js";
 
 export interface AppOptions {
@@ -37,6 +40,8 @@ export interface AppOptions {
   actionPlans?: PostgresActionPlanStore;
   approvedPlanExecutor?: ApprovedPlanExecutor;
   reportSources?: (user: ReturnType<typeof authenticatedUser>) => Promise<ReportSource[]>;
+  operationLogs?: OperationLogService;
+  reconciliationTools?: (user: ReturnType<typeof authenticatedUser>) => Promise<ChatTool[]>;
 }
 
 const conversationIdSchema = z.string().uuid();
@@ -75,6 +80,8 @@ const reportJobInputSchema = z
     actionPlanId: z.string().uuid().nullable().optional(),
   })
   .strict();
+const reconciliationUploadSchema = z.object({ fileName: z.string().trim().min(1).max(255), contentBase64: z.string().min(1).max(1_400_000) }).strict();
+const reconciliationRunSchema = z.object({ ids: z.array(z.string().trim().min(1).max(256)).min(1).max(60), sourceToolNames: z.array(z.string().trim().min(1).max(200)).min(1).max(3), fields: z.array(z.string().trim().min(1).max(80)).max(12).default([]) }).strict();
 
 function authenticatedUser(request: express.Request) {
   if (!request.flowpilotUser) {
@@ -271,10 +278,33 @@ export function createApp(options: AppOptions) {
       next(error);
     }
   });
+  app.get("/api/operation-logs", async (request, response, next) => {
+    if (!options.operationLogs) { response.status(503).json({ error: "logs_unavailable" }); return; }
+    try { response.status(200).json({ logs: await options.operationLogs.list(authenticatedUser(request)) }); } catch (error) { next(error); }
+  });
 
   app.get("/api/reports/sources", reportOperator, async (request, response, next) => {
     if (!options.reportSources) { response.status(503).json({ error: "reports_unavailable" }); return; }
     try { response.status(200).json({ sources: await options.reportSources(authenticatedUser(request)) }); } catch (error) { next(error); }
+  });
+  app.get("/api/reconciliations/sources", reportOperator, async (request, response, next) => {
+    if (!options.reconciliationTools) { response.status(503).json({ error: "reports_unavailable" }); return; }
+    try {
+      const tools = await options.reconciliationTools(authenticatedUser(request));
+      response.status(200).json({ sources: tools.map((tool) => ({ name: tool.name, description: tool.description })) });
+    } catch (error) { next(error); }
+  });
+  app.post("/api/reconciliations/preview", reportOperator, async (request, response, next) => {
+    try { const body = reconciliationUploadSchema.parse(request.body); response.status(200).json(previewReconciliationUpload(body.fileName, body.contentBase64)); } catch (error) { next(error); }
+  });
+  app.get("/api/reconciliations/template", reportOperator, (_request, response) => {
+    response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    response.setHeader("Content-Disposition", "attachment; filename=flowpilot-reconciliation-template.xlsx");
+    response.status(200).send(reconciliationTemplate());
+  });
+  app.post("/api/reconciliations/run", reportOperator, async (request, response, next) => {
+    if (!options.reconciliationTools) { response.status(503).json({ error: "reports_unavailable" }); return; }
+    try { const body = reconciliationRunSchema.parse(request.body); response.status(200).json(await runReconciliation({ ...body, user: authenticatedUser(request), resolveTools: options.reconciliationTools })); } catch (error) { next(error); }
   });
 
   app.post("/api/reports/jobs", reportOperator, async (request, response, next) => {
@@ -304,6 +334,20 @@ export function createApp(options: AppOptions) {
     } catch (error) {
       next(error);
     }
+  });
+
+  app.put("/api/reports/jobs/:jobId", reportOperator, async (request, response, next) => {
+    if (!options.reports) { response.status(503).json({ error: "reports_unavailable" }); return; }
+    try {
+      const input = reportJobInputSchema.parse(request.body);
+      if (input.sourceToolNames?.length) {
+        if (!options.reportSources) { response.status(503).json({ error: "reports_unavailable" }); return; }
+        const available = new Set((await options.reportSources(authenticatedUser(request))).map((source) => source.name));
+        if (input.sourceToolNames.some((name) => !available.has(name))) { response.status(400).json({ error: "invalid_request" }); return; }
+      }
+      if (input.actionPlanId && (!options.actionPlans || !await options.actionPlans.findApproved(authenticatedUser(request), input.actionPlanId))) { response.status(409).json({ error: "action_plan_not_approved" }); return; }
+      response.status(200).json(await options.reports.update(authenticatedUser(request), conversationIdSchema.parse(request.params.jobId), { ...input, scheduledFor: new Date(input.scheduledFor) }));
+    } catch (error) { next(error); }
   });
 
   app.get("/api/reports/jobs/:jobId/export", async (request, response, next) => {
@@ -472,10 +516,14 @@ export function createApp(options: AppOptions) {
         response.status(404).json({ error: "not_found" });
         return;
       }
-      if (error instanceof ReportJobBusyError) {
-        response.status(409).json({ error: "report_job_busy" });
-        return;
-      }
+    if (error instanceof ReportJobBusyError) {
+      response.status(409).json({ error: "report_job_busy" });
+      return;
+    }
+    if (error instanceof ReportJobScheduleTooSoonError) {
+      response.status(400).json({ error: "schedule_time_too_soon" });
+      return;
+    }
       if (error instanceof ReportNotReadyError) { response.status(409).json({ error: "report_not_ready" }); return; }
       if (error instanceof ActionPlanNotFoundError) { response.status(404).json({ error: "not_found" }); return; }
       if (error instanceof ActionPlanImmutableError) { response.status(409).json({ error: "action_plan_immutable" }); return; }

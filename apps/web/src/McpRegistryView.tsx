@@ -493,12 +493,12 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                     })
                   }
                   placeholder="technical:flowpilot-mcp"
-                  pattern="(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp)"
+                  pattern="(?:destination:[A-Za-z0-9_.-]{1,100}|technical:flowpilot-mcp(?:-content)?)"
                   required
                 />
                 <span>
-                  Use the approved technical profile for FlowPilot MCP; no
-                  secret is stored in the registry.
+                  Use an approved FlowPilot MCP technical profile; no secret
+                  is stored in the registry.
                 </span>
                 {selectedDraft.server && (
                   <div className="available-tools">

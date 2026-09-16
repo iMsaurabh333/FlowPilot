@@ -4,8 +4,9 @@ import "@ui5/webcomponents-icons/dist/AllIcons.js";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { ApiError, type ApprovedPlanExecutionResult, type FlowPilotApi, type ReportActionPlanPreview, type ReportExportFormat, type ReportJobRun, type ReportJobStatus, type ReportJobSummary, type ReportSource } from "./api";
+import { ReconciliationView } from "./ReconciliationView";
 
-const defaultPrompt = `Objective:\nState the operational question, period, and final outcome this report must answer.\n\nApproved sources:\n- Use only the selected read-only MCP tools. Explain any unavailable evidence as an unresolved limitation.\n- Never expose credentials, internal retries, or transient errors that later resolved.\n\nRequired fields:\n- Scope and filters used\n- Final status and relevant identifiers\n- Counts, timestamps, and final outcomes where available\n- Unresolved exceptions and a recommended next action\n\nPresentation:\nProduce concise HTML with an executive summary, a status table, and a details section. Do not describe tool-call attempts.`;
+const defaultPrompt = `Objective:\nState the operational question, period, and final outcome this report must answer.\n\nApproved sources:\n- Use only the selected read-only MCP tools. Explain any unavailable evidence as an unresolved limitation.\n- Never expose credentials, internal retries, or transient errors that later resolved.\n\nRequired fields:\n- Scope and filters used\n- Final status and relevant identifiers\n- Counts, timestamps, and final outcomes where available\n- Unresolved exceptions and a recommended next action\n\nPresentation:\nProduce concise, valid HTML with an executive summary, a status table, and a details section. Return only the HTML; do not use Markdown fences or prepend explanations. Do not describe tool-call attempts.`;
 
 function statusLabel(status: ReportJobStatus) {
   return status === "succeeded" ? "Completed" : status === "attention" ? "Attention needed" : status[0].toUpperCase() + status.slice(1);
@@ -47,9 +48,10 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const [showCreate, setShowCreate] = useState(false);
+  const [editingJob, setEditingJob] = useState<ReportJobSummary>();
   const [actionPlanForJob, setActionPlanForJob] = useState<ReportActionPlanPreview>();
   const [title, setTitle] = useState("");
-  const [scheduledFor, setScheduledFor] = useState(() => localDateTime(new Date(Date.now() + 60 * 60_000)));
+  const [scheduledFor, setScheduledFor] = useState(() => localDateTime(new Date(Date.now() + 65 * 60_000)));
   const [recurrence, setRecurrence] = useState<Recurrence>("once");
   const [reportPrompt, setReportPrompt] = useState(defaultPrompt);
   const [reportSources, setReportSources] = useState<ReportSource[]>([]);
@@ -92,24 +94,31 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
   };
 
   useEffect(() => { void load(); }, []);
-  useEffect(() => { if (!showCreate || !client.listReportSources) return; void client.listReportSources().then(setReportSources).catch(() => setError("Available report sources could not be loaded.")); }, [showCreate, client]);
+  useEffect(() => { if ((!showCreate && !editingJob) || !client.listReportSources) return; void client.listReportSources().then(setReportSources).catch(() => setError("Available report sources could not be loaded.")); }, [showCreate, editingJob, client]);
 
   const nextJob = useMemo(() => jobs.find((job) => job.status === "scheduled" || job.status === "running"), [jobs]);
 
   const create = async (event: FormEvent) => {
     event.preventDefault();
-    if (!client.createReportJob) return;
+    if (!client.createReportJob || (editingJob && !client.updateReportJob)) return;
+    if (!editingJob && new Date(scheduledFor).getTime() < Date.now() + 60 * 60_000) {
+      setError("Choose a time at least one hour from now. Use Run now after saving if the report is needed immediately.");
+      return;
+    }
     setSaving(true);
     try {
-      const created = await client.createReportJob({ title: title.trim(), reportPrompt: reportPrompt.trim(), sourceToolNames, scheduledFor: new Date(scheduledFor).toISOString(), recurrenceRule: recurrenceRule(recurrence, scheduledFor), actionPlanId: actionPlanForJob?.id ?? null });
-      setJobs((existing) => [...existing, created].sort((left, right) => Date.parse(left.scheduledFor) - Date.parse(right.scheduledFor)));
+      const input = { title: title.trim(), reportPrompt: reportPrompt.trim(), sourceToolNames, scheduledFor: new Date(scheduledFor).toISOString(), recurrenceRule: recurrenceRule(recurrence, scheduledFor), actionPlanId: actionPlanForJob?.id ?? editingJob?.actionPlanId ?? null };
+      const created = editingJob ? await client.updateReportJob!(editingJob.id, input) : await client.createReportJob(input);
+      setJobs((existing) => (editingJob ? existing.map((job) => job.id === created.id ? created : job) : [...existing, created]).sort((left, right) => Date.parse(left.scheduledFor) - Date.parse(right.scheduledFor)));
+      setSelectedJob(created);
       setShowCreate(false);
+      setEditingJob(undefined);
       setTitle("");
       setRecurrence("once");
       setSourceToolNames([]);
       setActionPlanForJob(undefined);
-    } catch {
-      setError("The report job could not be scheduled. Check the required fields and try again.");
+    } catch (cause) {
+      setError(cause instanceof ApiError && cause.code === "schedule_time_too_soon" ? "Choose a time at least one hour from now. Use Run now after saving if the report is needed immediately." : "The report job could not be scheduled. Check the required fields and try again.");
     } finally {
       setSaving(false);
     }
@@ -188,6 +197,7 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
   const selectJob = async (job: ReportJobSummary) => { setSelectedJob(job); if (client.listReportJobRuns) try { setJobRuns(await client.listReportJobRuns(job.id)); } catch { setJobRuns([]); } };
   const setScheduleActive = async (active: boolean) => { if (!selectedJob || !client.setReportScheduleActive) return; setScheduleUpdating(true); try { const updated = await client.setReportScheduleActive(selectedJob.id, active); setSelectedJob(updated); setJobs((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch { setError("The schedule state could not be updated."); } finally { setScheduleUpdating(false); } };
   const deleteJob = async () => { if (!deleteConfirmation || !client.deleteReportJob) return; setDeletingJob(true); try { await client.deleteReportJob(deleteConfirmation.id); setJobs((items) => items.filter((item) => item.id !== deleteConfirmation.id)); if (selectedJob?.id === deleteConfirmation.id) setSelectedJob(undefined); setDeleteConfirmation(undefined); } catch { setError("The report job could not be deleted."); } finally { setDeletingJob(false); } };
+  const editJob = (job: ReportJobSummary) => { if (job.reportPrompt === undefined) { setError("This job configuration could not be loaded. Refresh and try again."); return; } setEditingJob(job); setShowCreate(false); setSelectedJob(undefined); setTitle(job.title); setReportPrompt(job.reportPrompt); setScheduledFor(localDateTime(new Date(job.scheduledFor))); setSourceToolNames(job.sourceToolNames); setRecurrence(job.recurrenceRule?.includes(" * * * ?") ? "hourly" : job.recurrenceRule?.includes(" ? * ") ? "weekly" : job.recurrenceRule ? "daily" : "once"); };
 
   return (
     <main className="reports-page" aria-labelledby="reports-title">
@@ -197,26 +207,14 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
           <h1 id="reports-title">Reports</h1>
           <p>Schedule operational summaries and review their final outcome in one place.</p>
         </div>
-        <div className="report-header-actions"><input ref={uploadRef} className="visually-hidden" type="file" accept=".xlsx,.csv,.txt" onChange={(event) => void previewActionDocument(event)} /><Button design="Transparent" icon="upload" accessibleName="Upload action document" title="Upload action document" loading={planning} onClick={() => uploadRef.current?.click()} /><Button design="Transparent" icon="add" accessibleName="Schedule report job" title="Schedule report job" onClick={() => { setActionPlanForJob(undefined); setShowCreate((open) => !open); }} /></div>
+        <div className="report-header-actions"><input ref={uploadRef} className="visually-hidden" type="file" accept=".xlsx,.csv,.txt" onChange={(event) => void previewActionDocument(event)} /><Button design="Transparent" icon="upload" accessibleName="Upload action document" title="Upload action document" loading={planning} onClick={() => uploadRef.current?.click()} /><Button design="Transparent" icon="add" accessibleName="Schedule report job" title="Schedule report job" onClick={() => { setActionPlanForJob(undefined); setEditingJob(undefined); setSelectedJob(undefined); setShowCreate((open) => !open); }} /></div>
       </header>
 
-      {showCreate && (
-        <form className="report-job-form" aria-label="Schedule report job" onSubmit={create}>
-          <label>Job name<input required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Daily integration summary" /></label>
-          <label>Run at<input required type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} /></label>
-          <label>Repeat<select aria-label="Report recurrence" value={recurrence} onChange={(event) => setRecurrence(event.target.value as Recurrence)}><option value="once">Once</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label>
-          {recurrence !== "once" && <p className="report-plan-link">Recurring schedules run at the selected minute in UTC and meet the trial scheduler’s one-hour minimum.</p>}
-          {actionPlanForJob && <p className="report-plan-link">This job will execute approved action-plan revision {actionPlanForJob.revision}.</p>}
-          <fieldset className="report-source-picker"><legend>Approved report sources</legend><p>Select the read-only MCP tools this report may use. Leave empty to allow all available read-only sources.</p>{reportSources.map((source) => <label key={source.name}><input type="checkbox" checked={sourceToolNames.includes(source.name)} onChange={(event) => setSourceToolNames((selected) => event.target.checked ? [...selected, source.name] : selected.filter((name) => name !== source.name))} /><span><strong>{source.name.replace(/^.+__/, "")}</strong><small>{source.description}</small></span></label>)}{reportSources.length === 0 && <small>No read-only MCP sources are currently available.</small>}</fieldset>
-          <label>Report instructions<TextArea accessibleName="Report instructions" value={reportPrompt} rows={10} onInput={(event) => setReportPrompt(event.target.value)} /></label>
-          <div className="report-job-actions">
-            <Button design="Transparent" icon="decline" accessibleName="Cancel scheduling" title="Cancel" type="Button" onClick={() => { setShowCreate(false); setActionPlanForJob(undefined); setSourceToolNames([]); }} />
-            <Button design="Emphasized" icon="accept" accessibleName="Save report job" title="Save report job" type="Submit" disabled={!title.trim() || !reportPrompt.trim()} loading={saving} />
-          </div>
-        </form>
-      )}
+      <ReconciliationView client={client} />
 
       {error && <p className="report-error" role="alert">{error}</p>}
+      <section className="reports-workspace">
+      <aside className="report-job-navigation" aria-label="Report jobs">
       {loading ? <p role="status">Loading report jobs…</p> : jobs.length === 0 ? (
         <section className="reports-empty"><h2>No report jobs yet</h2><p>Use the add button to schedule your first operational report.</p></section>
       ) : (
@@ -237,13 +235,33 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
           </ol>
         </section>
       )}
+      </aside>
+
+      <section className="reports-workspace-panel" aria-label="Report configuration and history">
+      {(showCreate || editingJob) && (
+        <form className="report-job-form" aria-label={editingJob ? "Edit report job" : "Schedule report job"} onSubmit={create}>
+          <header className="report-form-header"><div><p className="section-label">{editingJob ? "Edit job" : "New job"}</p><h2>{editingJob ? editingJob.title : "Schedule report job"}</h2></div></header>
+          <label>Job name<input required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Daily integration summary" /></label>
+          <label>Run at<input required type="datetime-local" min={localDateTime(new Date(Date.now() + 60 * 60_000))} value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} /></label>
+          <label>Repeat<select aria-label="Report recurrence" value={recurrence} onChange={(event) => setRecurrence(event.target.value as Recurrence)}><option value="once">Once</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label>
+          <p className="report-plan-link">Schedules must be at least one hour ahead. Recurring schedules run at the selected minute in UTC.</p>
+          {actionPlanForJob && <p className="report-plan-link">This job will execute approved action-plan revision {actionPlanForJob.revision}.</p>}
+          <fieldset className="report-source-picker"><legend>Approved report sources</legend><p>Select the read-only MCP tools this report may use. Leave empty to allow all available read-only sources.</p>{reportSources.map((source) => <label key={source.name}><input type="checkbox" checked={sourceToolNames.includes(source.name)} onChange={(event) => setSourceToolNames((selected) => event.target.checked ? [...selected, source.name] : selected.filter((name) => name !== source.name))} /><span><strong>{source.name.replace(/^.+__/, "")}</strong><small>{source.description}</small></span></label>)}{reportSources.length === 0 && <small>No read-only MCP sources are currently available.</small>}</fieldset>
+          <label>Report instructions<TextArea accessibleName="Report instructions" value={reportPrompt} rows={10} onInput={(event) => setReportPrompt(event.target.value)} /></label>
+          <div className="report-job-actions">
+            <Button design="Transparent" icon="decline" accessibleName="Cancel scheduling" title="Cancel" type="Button" onClick={() => { setShowCreate(false); setEditingJob(undefined); setActionPlanForJob(undefined); setSourceToolNames([]); }} />
+            <Button design="Emphasized" icon="accept" accessibleName={editingJob ? "Save report job changes" : "Save report job"} title={editingJob ? "Save changes" : "Save report job"} type="Submit" disabled={!title.trim() || !reportPrompt.trim()} loading={saving} />
+          </div>
+        </form>
+      )}
 
       {selectedJob && (
         <section className="report-detail" aria-labelledby="report-detail-title">
           <header>
             <div><p className="section-label">Job detail</p><h2 id="report-detail-title">{selectedJob.title}</h2></div>
             <div className="report-detail-actions">
-              {selectedJob.status === "scheduled" && <Button design="Transparent" icon="media-play" accessibleName="Run report now" title="Run report now" onClick={() => setRunConfirmation(selectedJob)} />}
+              {selectedJob.status !== "running" && <Button design="Transparent" icon="media-play" accessibleName={selectedJob.status === "scheduled" ? "Run report now" : "Run report again"} title={selectedJob.status === "scheduled" ? "Run report now" : "Run report again"} onClick={() => setRunConfirmation(selectedJob)} />}
+              <Button design="Transparent" icon="edit" accessibleName="Edit report job" title="Edit report job" onClick={() => editJob(selectedJob)} />
               {selectedJob.status === "scheduled" && <Button design="Transparent" icon={selectedJob.scheduleActive ? "media-pause" : "media-play"} accessibleName={selectedJob.scheduleActive ? "Pause schedule" : "Resume schedule"} title={selectedJob.scheduleActive ? "Pause schedule" : "Resume schedule"} loading={scheduleUpdating} onClick={() => void setScheduleActive(!selectedJob.scheduleActive)} />}
               <label className="report-export-picker">Export<select aria-label="Report download format" value={exportFormat} disabled={!selectedJob.finalReportHtml || downloading} onChange={(event) => setExportFormat(event.target.value as ReportExportFormat)}><option value="html">HTML</option><option value="markdown">Markdown</option><option value="xlsx">Excel</option></select></label>
               <Button design="Transparent" icon="download" accessibleName="Download report" title="Download report" disabled={!selectedJob.finalReportHtml} loading={downloading} onClick={() => void downloadReport()} />
@@ -257,13 +275,16 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
           {jobRuns.length > 0 && <details><summary>Run history ({jobRuns.length})</summary><ol className="report-run-history">{jobRuns.map((run) => <li key={run.id}><span className={`report-status ${run.status}`} /><span>{statusLabel(run.status)} · {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(run.completedAt))}</span>{run.errorLog && <a href={`/api/reports/jobs/${encodeURIComponent(selectedJob.id)}/runs/${encodeURIComponent(run.id)}/roadblock`}>Roadblock log</a>}</li>)}</ol></details>}
         </section>
       )}
+      {!showCreate && !editingJob && !selectedJob && <section className="reports-empty"><h2>Select a report job</h2><p>Choose a job on the left to review its configuration, report, and run history.</p></section>}
+      </section>
+      </section>
 
-      {planPreview && <section className="report-plan-preview" aria-labelledby="action-plan-title"><header><div><p className="section-label">{planPreview.status === "approved" ? `Approved revision ${planPreview.revision}` : `Review only · Draft revision ${planPreview.revision}`}</p><h2 id="action-plan-title">Proposed action plan</h2></div><div className="report-detail-actions">{planPreview.status === "draft" && <><Button design="Transparent" icon="save" accessibleName="Save action-plan draft" title="Save draft" disabled={!editablePlan.trim() || editablePlan === planPreview.plan} loading={savingPlan} onClick={() => void savePlan()} /><Button design="Transparent" icon="refresh" accessibleName="Regenerate action-plan steps" title="Regenerate steps" disabled={editablePlan !== planPreview.plan} loading={regeneratingPlan} onClick={() => void regeneratePlan()} /><Button design="Emphasized" icon="accept" accessibleName="Approve action-plan revision" title="Approve revision" disabled={editablePlan !== planPreview.plan || planPreview.steps.length === 0} onClick={() => setApprovalConfirmation(planPreview)} /></>}{planPreview.status === "approved" && <><Button design="Transparent" icon="calendar" accessibleName="Schedule approved action plan" title="Schedule approved plan" onClick={() => { setActionPlanForJob(planPreview); setShowCreate(true); }} /><Button design="Emphasized" icon="media-play" accessibleName="Execute approved action plan" title="Execute approved plan" onClick={() => setExecutionConfirmation(planPreview)} /></>}<Button design="Transparent" icon="decline" accessibleName="Close action plan" title="Close" onClick={() => setPlanPreview(undefined)} /></div></header><p>{planPreview.status === "approved" ? "This exact plan revision is locked. You can schedule it as a report job or execute it only when you intend to run every listed operation." : planPreview.steps.length === 0 ? "This edited draft has no executable steps. Regenerate its steps before approval." : "Review the exact tool calls below before approving this revision."}</p><div className="report-plan-grid"><label className="report-plan-editor">Editable proposed plan<TextArea accessibleName="Editable proposed action plan" value={editablePlan} rows={14} growing growingMaxRows={22} disabled={planPreview.status === "approved"} onInput={(event) => setEditablePlan(event.target.value)} /></label><details open><summary>Exact MCP steps ({planPreview.steps.length})</summary><pre>{JSON.stringify(planPreview.steps, null, 2)}</pre></details><details><summary>Normalized source document</summary><pre>{planPreview.source}</pre></details>{planExecution && <iframe className="report-preview" title="Approved action-plan execution report" sandbox="" srcDoc={planExecution.html} />}</div></section>}
+      {planPreview && <section className="report-plan-preview" aria-labelledby="action-plan-title"><header><div><p className="section-label">{planPreview.status === "approved" ? `Approved revision ${planPreview.revision}` : `Review only · Draft revision ${planPreview.revision}`}</p><h2 id="action-plan-title">Proposed action plan</h2></div><div className="report-detail-actions">{planPreview.status === "draft" && <><Button design="Transparent" icon="save" accessibleName="Save action-plan draft" title="Save draft" disabled={!editablePlan.trim() || editablePlan === planPreview.plan} loading={savingPlan} onClick={() => void savePlan()} /><Button design="Transparent" icon="refresh" accessibleName="Regenerate action-plan steps" title="Regenerate steps" disabled={editablePlan !== planPreview.plan} loading={regeneratingPlan} onClick={() => void regeneratePlan()} /><Button design="Emphasized" icon="accept" accessibleName="Approve action-plan revision" title="Approve revision" disabled={editablePlan !== planPreview.plan || planPreview.steps.length === 0} onClick={() => setApprovalConfirmation(planPreview)} /></>}{planPreview.status === "approved" && <><Button design="Transparent" icon="calendar" accessibleName="Schedule approved action plan" title="Schedule approved plan" onClick={() => { setActionPlanForJob(planPreview); setSelectedJob(undefined); setShowCreate(true); }} /><Button design="Emphasized" icon="media-play" accessibleName="Execute approved action plan" title="Execute approved plan" onClick={() => setExecutionConfirmation(planPreview)} /></>}<Button design="Transparent" icon="decline" accessibleName="Close action plan" title="Close" onClick={() => setPlanPreview(undefined)} /></div></header><p>{planPreview.status === "approved" ? "This exact plan revision is locked. You can schedule it as a report job or execute it only when you intend to run every listed operation." : planPreview.steps.length === 0 ? "This edited draft has no executable steps. Regenerate its steps before approval." : "Review the exact tool calls below before approving this revision."}</p><div className="report-plan-grid"><label className="report-plan-editor">Editable proposed plan<TextArea accessibleName="Editable proposed action plan" value={editablePlan} rows={14} growing growingMaxRows={22} disabled={planPreview.status === "approved"} onInput={(event) => setEditablePlan(event.target.value)} /></label><details open><summary>Exact MCP steps ({planPreview.steps.length})</summary><pre>{JSON.stringify(planPreview.steps, null, 2)}</pre></details><details><summary>Normalized source document</summary><pre>{planPreview.source}</pre></details>{planExecution && <iframe className="report-preview" title="Approved action-plan execution report" sandbox="" srcDoc={planExecution.html} />}</div></section>}
 
       {approvalConfirmation && <div className="delete-confirmation-backdrop"><section className="delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="approve-plan-title" aria-describedby="approve-plan-description"><div><strong id="approve-plan-title">Approve this plan revision?</strong><p id="approve-plan-description">Revision {approvalConfirmation.revision} will be locked. Any later change requires a new draft and a new approval.</p></div><div className="delete-confirmation-actions"><Button design="Transparent" icon="decline" accessibleName="Cancel action-plan approval" title="Cancel" disabled={approvingPlan} onClick={() => setApprovalConfirmation(undefined)} /><Button design="Emphasized" icon="accept" accessibleName="Confirm action-plan approval" title="Approve revision" loading={approvingPlan} onClick={() => void approvePlan()} /></div></section></div>}
       {executionConfirmation && <div className="delete-confirmation-backdrop"><section className="delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="execute-plan-title" aria-describedby="execute-plan-description"><div><strong id="execute-plan-title">Execute approved plan?</strong><p id="execute-plan-description">FlowPilot will invoke each approved Integration Content operation in order. Each item may deploy, undeploy, or update an integration flow.</p></div><div className="delete-confirmation-actions"><Button design="Transparent" icon="decline" accessibleName="Cancel action-plan execution" title="Cancel" disabled={executingPlan} onClick={() => setExecutionConfirmation(undefined)} /><Button design="Emphasized" icon="media-play" accessibleName="Confirm action-plan execution" title="Execute plan" loading={executingPlan} onClick={() => void executePlan()} /></div></section></div>}
 
-      {runConfirmation && <div className="delete-confirmation-backdrop"><section className="delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="run-report-title" aria-describedby="run-report-description"><div><strong id="run-report-title">Run this report now?</strong><p id="run-report-description">FlowPilot will execute the configured report workflow immediately. Any connected operations must be approved before they are added to this workflow.</p></div><div className="delete-confirmation-actions"><Button design="Transparent" icon="decline" accessibleName="Cancel report run" title="Cancel" disabled={running} onClick={() => setRunConfirmation(undefined)} /><Button design="Emphasized" icon="media-play" accessibleName="Confirm report run" title="Run now" loading={running} onClick={() => void runNow()} /></div></section></div>}
+      {runConfirmation && <div className="delete-confirmation-backdrop"><section className="delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="run-report-title" aria-describedby="run-report-description"><div><strong id="run-report-title">{runConfirmation.status === "scheduled" ? "Run this report now?" : "Run this report again?"}</strong><p id="run-report-description">FlowPilot will execute the configured report workflow immediately. Any connected operations must be approved before they are added to this workflow.</p></div><div className="delete-confirmation-actions"><Button design="Transparent" icon="decline" accessibleName="Cancel report run" title="Cancel" disabled={running} onClick={() => setRunConfirmation(undefined)} /><Button design="Emphasized" icon="media-play" accessibleName="Confirm report run" title={runConfirmation.status === "scheduled" ? "Run now" : "Run again"} loading={running} onClick={() => void runNow()} /></div></section></div>}
       {deleteConfirmation && <div className="delete-confirmation-backdrop"><section className="delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="delete-report-title" aria-describedby="delete-report-description"><div><strong id="delete-report-title">Delete this report job?</strong><p id="delete-report-description">This removes its scheduler entry and its saved run history.</p></div><div className="delete-confirmation-actions"><Button design="Transparent" icon="decline" accessibleName="Cancel report deletion" title="Cancel" disabled={deletingJob} onClick={() => setDeleteConfirmation(undefined)} /><Button design="Negative" icon="delete" accessibleName="Confirm report deletion" title="Delete report job" loading={deletingJob} onClick={() => void deleteJob()} /></div></section></div>}
     </main>
   );

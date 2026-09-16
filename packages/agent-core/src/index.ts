@@ -34,6 +34,8 @@ export interface ChatMessage {
   id: string;
   role: ChatMessageRole;
   content: string;
+  /** The request ended before an assistant response was persisted. */
+  delivery?: "failed";
   sources?: ChatSource[];
   tables?: ChatTable[];
 }
@@ -277,6 +279,11 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
       }
       chatMessages.push(chatMessage);
     });
+    // A failed model or MCP call can occur after the human message is saved in
+    // the checkpoint. Make that durable incomplete turn explicit to the UI
+    // rather than rendering it as an unexplained, unanswered chat bubble.
+    const latest = chatMessages.at(-1);
+    if (latest?.role === "user") latest.delivery = "failed";
     return chatMessages;
   };
 
