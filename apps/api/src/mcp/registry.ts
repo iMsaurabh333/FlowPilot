@@ -5,7 +5,7 @@ import { quoteIdentifier } from "../db/migrations.js";
 export const MCP_ADMIN_SCOPE = "ChatAdmin";
 export const MCP_DEFAULT_PATH = "/mcp";
 export const MCP_MAX_SERVERS = 50;
-export const MCP_HEALTH_MAX_AGE_MS = 5 * 60 * 1_000;
+export const MCP_HEALTH_MAX_AGE_MS = 30 * 60 * 1_000;
 
 export const MCP_PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25"] as const;
 export type McpProtocolVersion = (typeof MCP_PROTOCOL_VERSIONS)[number];

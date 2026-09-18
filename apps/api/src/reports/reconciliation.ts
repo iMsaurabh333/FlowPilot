@@ -9,6 +9,7 @@ export const RECONCILIATION_DIRECT_MAX_IDS = 10;
 export const RECONCILIATION_MAX_SOURCES = 3;
 
 export interface ReconciliationPreview {
+  fileName: string;
   headers: string[];
   rows: string[][];
   totalRows: number;
@@ -36,7 +37,7 @@ export function previewReconciliationUpload(fileName: string, contentBase64: str
   if (!headers.length) throw new Error("The first row must contain column headers.");
   const rows = matrix.slice(1).map((row) => headers.map((_, index) => text(row[index]))).filter((row) => row.some(Boolean));
   if (rows.length > RECONCILIATION_MAX_IDS) throw new Error(`Upload contains ${rows.length} records. The MVP limit is ${RECONCILIATION_MAX_IDS}.`);
-  return { headers, rows, totalRows: rows.length };
+  return { fileName, headers, rows, totalRows: rows.length };
 }
 
 export function reconciliationTemplate() {

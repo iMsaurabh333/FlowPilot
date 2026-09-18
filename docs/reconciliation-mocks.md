@@ -48,7 +48,8 @@ the loopback endpoints and Ping them.
 
 Mock Jira is a read-only MCP server for use in Conversation. Register it with
 server ID `mock-jira`, the `technical:flowpilot-mcp` profile, and the allowed
-tool `get_transaction_defects`. It provides deterministic defect records for:
+tool `get_jira_defect`. Look up a Jira defect using its defect ID; the response
+includes the linked transaction ID. It provides deterministic defect records for:
 
 - CPI transaction `611889`: purchasing organization missing for the purchase order.
 - CPI transaction `173470`: duplicate business partner record detected.
@@ -56,6 +57,6 @@ tool `get_transaction_defects`. It provides deterministic defect records for:
   mock transport and warehouse statuses.
 
 After enabling Mock Jira and the relevant ABC Warehouse, XYZ TMS, or CPI MCP
-server in the registry, a user can ask a Conversation for defect details and
-then ask for the transaction status. The agent can call the corresponding
-read-only MCP tools in the same conversation.
+server in the registry, a user can ask a Conversation for a defect such as
+`CPI-611889`. The agent returns its transaction ID, and the user can then ask
+for that transaction's status or failure reason in the relevant system.

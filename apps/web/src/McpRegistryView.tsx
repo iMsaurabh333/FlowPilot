@@ -99,7 +99,8 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<string>();
   const [error, setError] = useState<string>();
-  const [conversationPolicy, setConversationPolicy] = useState<ConversationPolicy>();
+  const [conversationPolicy, setConversationPolicy] =
+    useState<ConversationPolicy>();
   const [availableTools, setAvailableTools] = useState<string[]>([]);
 
   useEffect(() => {
@@ -241,15 +242,23 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
   const discoverTools = async (draft: AdminDraft) => {
     if (!client.listMcpServerTools || !draft.server) return;
     setPending(`${draft.key}:tools`);
-    try { setAvailableTools(await client.listMcpServerTools(draft.server.serverId)); }
-    catch (caught) { setError(visibleAdminError(caught)); }
-    finally { setPending(undefined); }
+    try {
+      setAvailableTools(await client.listMcpServerTools(draft.server.serverId));
+    } catch (caught) {
+      setError(visibleAdminError(caught));
+    } finally {
+      setPending(undefined);
+    }
   };
 
-  const addAllowedTool = (tool: string) => {
+  const toggleAllowedTool = (tool: string) => {
     if (!selectedDraft) return;
     const names = commaSeparated(selectedDraft.allowedToolNames);
-    if (!names.includes(tool)) updateDraft(selectedDraft.key, { allowedToolNames: [...names, tool].join(", ") });
+    updateDraft(selectedDraft.key, {
+      allowedToolNames: names.includes(tool)
+        ? names.filter((name) => name !== tool).join(", ")
+        : [...names, tool].join(", "),
+    });
   };
 
   const submitServer = (event: FormEvent) => {
@@ -262,10 +271,13 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
     if (!conversationPolicy || !client.updateConversationPolicy) return;
     setPending("conversation-policy");
     setError(undefined);
-    void client.updateConversationPolicy(conversationPolicy).then(
-      (saved) => setConversationPolicy(saved),
-      (caught) => setError(visibleAdminError(caught)),
-    ).finally(() => setPending(undefined));
+    void client
+      .updateConversationPolicy(conversationPolicy)
+      .then(
+        (saved) => setConversationPolicy(saved),
+        (caught) => setError(visibleAdminError(caught)),
+      )
+      .finally(() => setPending(undefined));
   };
 
   return (
@@ -312,7 +324,9 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
           <div>
             <p className="section-label">Conversation policy</p>
             <h2>Retention limits</h2>
-            <span>Limits apply to each user and keep chat history bounded.</span>
+            <span>
+              Limits apply to each user and keep chat history bounded.
+            </span>
           </div>
           <label>
             Maximum conversations per user
@@ -322,7 +336,12 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
               max="1000"
               value={conversationPolicy.maxConversationsPerUser}
               disabled={Boolean(pending)}
-              onChange={(event) => setConversationPolicy({ ...conversationPolicy, maxConversationsPerUser: Number(event.target.value) })}
+              onChange={(event) =>
+                setConversationPolicy({
+                  ...conversationPolicy,
+                  maxConversationsPerUser: Number(event.target.value),
+                })
+              }
             />
           </label>
           <label>
@@ -333,10 +352,22 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
               max="500"
               value={conversationPolicy.maxRetainedTurns}
               disabled={Boolean(pending)}
-              onChange={(event) => setConversationPolicy({ ...conversationPolicy, maxRetainedTurns: Number(event.target.value) })}
+              onChange={(event) =>
+                setConversationPolicy({
+                  ...conversationPolicy,
+                  maxRetainedTurns: Number(event.target.value),
+                })
+              }
             />
           </label>
-          <Button type="Submit" design="Emphasized" disabled={Boolean(pending)} loading={pending === "conversation-policy"}>Save limits</Button>
+          <Button
+            type="Submit"
+            design="Emphasized"
+            disabled={Boolean(pending)}
+            loading={pending === "conversation-policy"}
+          >
+            Save limits
+          </Button>
         </form>
       )}
 
@@ -411,13 +442,43 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                 </p>
                 <h2>{selectedDraft.displayName || "New MCP server"}</h2>
               </div>
-              {selectedDraft.server && (
-                <span
-                  className={`health-pill ${selectedDraft.server.healthState}`}
+              <div className="registry-editor-header-actions">
+                {selectedDraft.server && (
+                  <span
+                    className={`health-pill ${selectedDraft.server.healthState}`}
+                  >
+                    {healthLabel(selectedDraft.server.healthState)}
+                  </span>
+                )}
+                {selectedDraft.key === "__new__" && (
+                  <Button
+                    type="Button"
+                    disabled={Boolean(pending)}
+                    onClick={discardNewServer}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                {selectedDraft.server && (
+                  <Button
+                    type="Button"
+                    disabled={Boolean(pending)}
+                    loading={pending === `${selectedDraft.key}:ping`}
+                    onClick={() => void pingServer(selectedDraft)}
+                  >
+                    Ping server
+                  </Button>
+                )}
+                <Button
+                  type="Button"
+                  design="Emphasized"
+                  disabled={Boolean(pending) || !selectedDraft.serverId.trim()}
+                  loading={pending === `${selectedDraft.key}:save`}
+                  onClick={() => void saveServer(selectedDraft)}
                 >
-                  {healthLabel(selectedDraft.server.healthState)}
-                </span>
-              )}
+                  Save registration
+                </Button>
+              </div>
             </header>
 
             <section className="policy-preset" aria-labelledby="policy-title">
@@ -497,14 +558,45 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                   required
                 />
                 <span>
-                  Use an approved FlowPilot MCP technical profile; no secret
-                  is stored in the registry.
+                  Use an approved FlowPilot MCP technical profile; no secret is
+                  stored in the registry.
                 </span>
                 {selectedDraft.server && (
-                  <div className="available-tools">
-                    <Button type="Button" design="Transparent" disabled={Boolean(pending)} loading={pending === `${selectedDraft.key}:tools`} onClick={() => void discoverTools(selectedDraft)}>Discover available tools</Button>
-                    {availableTools.length > 0 && <div role="list" aria-label="Available MCP tools">{availableTools.map((tool) => <Button key={tool} type="Button" design="Transparent" onClick={() => addAllowedTool(tool)}>{tool}</Button>)}</div>}
-                  </div>
+                  <section
+                    className="available-tools"
+                    aria-label="Available MCP tools"
+                  >
+                    <header>
+                      <strong>Tool discovery</strong>
+                      <Button
+                        type="Button"
+                        design="Transparent"
+                        disabled={Boolean(pending)}
+                        loading={pending === `${selectedDraft.key}:tools`}
+                        onClick={() => void discoverTools(selectedDraft)}
+                      >
+                        Discover available tools
+                      </Button>
+                    </header>
+                    {availableTools.length > 0 && (
+                      <fieldset>
+                        <legend>Select tools to allow</legend>
+                        {availableTools.map((tool) => (
+                          <label key={tool}>
+                            <input
+                              type="checkbox"
+                              checked={commaSeparated(
+                                selectedDraft.allowedToolNames,
+                              ).includes(tool)}
+                              disabled={Boolean(pending)}
+                              onChange={() => toggleAllowedTool(tool)}
+                            />
+                            <span>{tool}</span>
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                  </section>
                 )}
               </label>
               <label className="wide-field">
@@ -599,35 +691,6 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                 </div>
               </dl>
             )}
-
-            <footer className="registry-editor-actions">
-              {selectedDraft.key === "__new__" && (
-                <Button
-                  type="Button"
-                  disabled={Boolean(pending)}
-                  onClick={discardNewServer}
-                >
-                  Cancel
-                </Button>
-              )}
-              <Button
-                type="Button"
-                disabled={Boolean(pending) || !selectedDraft.server}
-                loading={pending === `${selectedDraft.key}:ping`}
-                onClick={() => void pingServer(selectedDraft)}
-              >
-                Ping server
-              </Button>
-              <Button
-                type="Button"
-                design="Emphasized"
-                disabled={Boolean(pending) || !selectedDraft.serverId.trim()}
-                loading={pending === `${selectedDraft.key}:save`}
-                onClick={() => void saveServer(selectedDraft)}
-              >
-                Save registration
-              </Button>
-            </footer>
           </form>
         ) : (
           <section className="registry-editor-empty" aria-live="polite">

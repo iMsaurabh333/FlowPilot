@@ -45,4 +45,4 @@ export function findRecord(system: MockSystem, applicationMessageId: string) {
   return (system === "abc-warehouse" ? abcWarehouse : xyzTms).find((record) => record.applicationMessageId === applicationMessageId);
 }
 
-export function findDefects(transactionId: string) { return defects.filter((defect) => defect.transactionId === transactionId || defect.defectId === transactionId); }
+export function findDefect(defectId: string) { return defects.find((defect) => defect.defectId === defectId); }

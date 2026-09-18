@@ -88,7 +88,7 @@ export interface ApprovedPlanExecutionResult {
 
 export type ReportExportFormat = "html" | "markdown" | "xlsx";
 export interface ReportSource { name: string; description: string; }
-export interface ReconciliationPreview { headers: string[]; rows: string[][]; totalRows: number; }
+export interface ReconciliationPreview { fileName: string; headers: string[]; rows: string[][]; totalRows: number; }
 export interface ReconciliationResult { generatedAt: string; rows: Array<{ applicationMessageId: string; result: "matched" | "exception" | "unavailable"; systems: Record<string, { status: string; fields: Record<string, string> }> }>; }
 export interface ReportJobRun { id: string; reportJobId: string; status: "succeeded" | "attention" | "failed"; attemptCount: number; finalReportHtml: string | null; errorLog: string | null; startedAt: string | null; completedAt: string; }
 export interface OperationLogEntry { id: string; surface: "chat" | "report" | "system"; eventType: "llm_input" | "mcp_call" | "error"; title: string; reportJobId?: string | null; detail: Record<string, unknown>; createdAt: string; }

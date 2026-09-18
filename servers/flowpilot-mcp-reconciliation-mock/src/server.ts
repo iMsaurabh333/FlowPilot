@@ -6,7 +6,7 @@ import type { Request, Response } from "express";
 import { createConfiguredAuthentication } from "./auth.js";
 import { loadMockServerConfig } from "./config.js";
 import { MCP_INVOKE_SCOPE, MCP_PATH, MCP_PROTOCOL_VERSIONS, MCP_SERVER_VERSION } from "./constants.js";
-import { findDefects, findRecord } from "./data.js";
+import { findDefect, findRecord } from "./data.js";
 
 async function main(): Promise<void> {
   const config = loadMockServerConfig();
@@ -19,8 +19,9 @@ async function main(): Promise<void> {
   const handler = createMcpHandler(() => {
     const server = new McpServer({ name: config.system, version: MCP_SERVER_VERSION }, { capabilities: {}, instructions: `Read-only deterministic mock data for ${config.system}.`, supportedProtocolVersions: [...MCP_PROTOCOL_VERSIONS] });
     if (config.system === "mock-jira") {
-      server.registerTool("get_transaction_defects", { title: "Get transaction defects", description: "Look up mock Jira defects by transaction ID or defect ID.", inputSchema: fromJsonSchema({ type: "object", additionalProperties: false, required: ["transactionId"], properties: { transactionId: { type: "string", minLength: 1, maxLength: 256 } } }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => {
-        const items = findDefects((args as { transactionId: string }).transactionId);
+      server.registerTool("get_jira_defect", { title: "Get Jira defect", description: "Look up one mock Jira defect by its defect ID. The result includes the linked transaction ID for subsequent CPI, TMS, or Warehouse status checks.", inputSchema: fromJsonSchema({ type: "object", additionalProperties: false, required: ["defectId"], properties: { defectId: { type: "string", minLength: 1, maxLength: 256 } } }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => {
+        const defect = findDefect((args as { defectId: string }).defectId);
+        const items = defect ? [defect] : [];
         return { content: [{ type: "text", text: JSON.stringify({ items, count: items.length }) }], structuredContent: { items, count: items.length } };
       });
       return server;
