@@ -6,7 +6,7 @@ import type { Request, Response } from "express";
 import { createConfiguredAuthentication } from "./auth.js";
 import { loadMockServerConfig } from "./config.js";
 import { MCP_INVOKE_SCOPE, MCP_PATH, MCP_PROTOCOL_VERSIONS, MCP_SERVER_VERSION } from "./constants.js";
-import { findRecord } from "./data.js";
+import { findDefects, findRecord } from "./data.js";
 
 async function main(): Promise<void> {
   const config = loadMockServerConfig();
@@ -18,6 +18,13 @@ async function main(): Promise<void> {
   app.get("/health", (_request: Request, response: Response) => response.status(200).json({ status: "ok", system: config.system, version: MCP_SERVER_VERSION, toolsEnabled: true }));
   const handler = createMcpHandler(() => {
     const server = new McpServer({ name: config.system, version: MCP_SERVER_VERSION }, { capabilities: {}, instructions: `Read-only deterministic mock data for ${config.system}.`, supportedProtocolVersions: [...MCP_PROTOCOL_VERSIONS] });
+    if (config.system === "mock-jira") {
+      server.registerTool("get_transaction_defects", { title: "Get transaction defects", description: "Look up mock Jira defects by transaction ID or defect ID.", inputSchema: fromJsonSchema({ type: "object", additionalProperties: false, required: ["transactionId"], properties: { transactionId: { type: "string", minLength: 1, maxLength: 256 } } }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => {
+        const items = findDefects((args as { transactionId: string }).transactionId);
+        return { content: [{ type: "text", text: JSON.stringify({ items, count: items.length }) }], structuredContent: { items, count: items.length } };
+      });
+      return server;
+    }
     server.registerTool("get_application_message", { title: "Get application message", description: `Look up one ${config.system} record by application message ID.`, inputSchema: fromJsonSchema({ type: "object", additionalProperties: false, required: ["applicationMessageId"], properties: { applicationMessageId: { type: "string", minLength: 1, maxLength: 256 } } }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => {
       const record = findRecord(config.system, (args as { applicationMessageId: string }).applicationMessageId);
       return { content: [{ type: "text", text: JSON.stringify({ items: record ? [record] : [], count: record ? 1 : 0 }) }], structuredContent: { items: record ? [record] : [], count: record ? 1 : 0 } };

@@ -5,6 +5,7 @@ reconciliation demos:
 
 - **ABC Warehouse** (`flowpilot-mcp-abc-warehouse`)
 - **XYZ TMS** (`flowpilot-mcp-xyz-tms`)
+- **Mock Jira** (`flowpilot-mcp-jira-mock`)
 
 Each advertises the compatible `get_application_message` tool. Its only
 input is `{ "applicationMessageId": "..." }`. The records are deterministic
@@ -42,3 +43,19 @@ For local development, start each server on a distinct port with
 `MCP_MOCK_SYSTEM` set to the corresponding system. Configure the API with the
 matching `MCP_REGISTRY_AUTH_TECHNICAL_FLOWPILOT_MCP` bearer token, then register
 the loopback endpoints and Ping them.
+
+## Mock Jira defects
+
+Mock Jira is a read-only MCP server for use in Conversation. Register it with
+server ID `mock-jira`, the `technical:flowpilot-mcp` profile, and the allowed
+tool `get_transaction_defects`. It provides deterministic defect records for:
+
+- CPI transaction `611889`: purchasing organization missing for the purchase order.
+- CPI transaction `173470`: duplicate business partner record detected.
+- TMS/Warehouse transactions `575990` and `861822`, derived from the existing
+  mock transport and warehouse statuses.
+
+After enabling Mock Jira and the relevant ABC Warehouse, XYZ TMS, or CPI MCP
+server in the registry, a user can ask a Conversation for defect details and
+then ask for the transaction status. The agent can call the corresponding
+read-only MCP tools in the same conversation.

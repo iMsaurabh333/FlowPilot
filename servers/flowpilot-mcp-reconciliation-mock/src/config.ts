@@ -1,5 +1,5 @@
 export type McpAuthMode = "xsuaa" | "mock";
-export type MockSystem = "abc-warehouse" | "xyz-tms";
+export type MockSystem = "abc-warehouse" | "xyz-tms" | "mock-jira";
 
 export interface MockServerConfig {
   allowedHosts?: string[];
@@ -29,7 +29,7 @@ export function loadMockServerConfig(environment: NodeJS.ProcessEnv = process.en
   const authMode = environment.MCP_AUTH_MODE ?? "xsuaa";
   if (authMode !== "xsuaa" && authMode !== "mock") throw new Error(`Unsupported MCP_AUTH_MODE: ${authMode}`);
   const system = environment.MCP_MOCK_SYSTEM ?? "";
-  if (system !== "abc-warehouse" && system !== "xyz-tms") throw new Error("MCP_MOCK_SYSTEM must be abc-warehouse or xyz-tms");
+  if (system !== "abc-warehouse" && system !== "xyz-tms" && system !== "mock-jira") throw new Error("MCP_MOCK_SYSTEM must be abc-warehouse, xyz-tms, or mock-jira");
   const allowedHosts = parseHostnames("MCP_ALLOWED_HOSTS", environment.MCP_ALLOWED_HOSTS);
   const allowedOrigins = parseHostnames("MCP_ALLOWED_ORIGINS", environment.MCP_ALLOWED_ORIGINS);
   if (!LOCAL_HOSTS.has(host) && (!allowedHosts || !allowedOrigins || !environment.MCP_PUBLIC_URL)) throw new Error("Public MCP_HOST values require MCP_ALLOWED_HOSTS, MCP_ALLOWED_ORIGINS, and MCP_PUBLIC_URL");

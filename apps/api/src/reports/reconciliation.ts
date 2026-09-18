@@ -5,6 +5,7 @@ import type { AuthenticatedUser } from "../types.js";
 
 export const RECONCILIATION_MAX_BYTES = 1_000_000;
 export const RECONCILIATION_MAX_IDS = 60;
+export const RECONCILIATION_DIRECT_MAX_IDS = 10;
 export const RECONCILIATION_MAX_SOURCES = 3;
 
 export interface ReconciliationPreview {
@@ -43,6 +44,19 @@ export function reconciliationTemplate() {
   const sheet = XLSX.utils.aoa_to_sheet([["Application Message ID"], ["MSG-000001"], ["MSG-000002"]]);
   sheet["!cols"] = [{ wch: 32 }];
   XLSX.utils.book_append_sheet(workbook, sheet, "Application IDs");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+export function reconciliationExport(result: { generatedAt: string; rows: ReconciliationRow[] }) {
+  const systems = [...new Set(result.rows.flatMap((row) => Object.keys(row.systems)))];
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["FlowPilot reconciliation report"], ["Generated", result.generatedAt], [],
+    ["Application Message ID", ...systems, "Result"],
+    ...result.rows.map((row) => [row.applicationMessageId, ...systems.map((system) => row.systems[system]?.status ?? "Not configured"), row.result]),
+  ]);
+  sheet["!cols"] = [{ wch: 28 }, ...systems.map(() => ({ wch: 26 })), { wch: 16 }];
+  XLSX.utils.book_append_sheet(workbook, sheet, "Reconciliation");
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 

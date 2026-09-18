@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.11
+version: 0.1.12
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -188,6 +188,31 @@ modules:
       NODE_ENV: production
       MCP_AUTH_MODE: xsuaa
       MCP_MOCK_SYSTEM: xyz-tms
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-jira-mock
+    type: nodejs
+    path: servers/flowpilot-mcp-reconciliation-mock
+    parameters:
+      memory: 128M
+      disk-quota: 256M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_MOCK_SYSTEM: mock-jira
       MCP_HOST: 0.0.0.0
       MCP_PUBLIC_URL: ${default-url}/mcp
       MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}

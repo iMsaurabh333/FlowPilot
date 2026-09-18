@@ -24,10 +24,11 @@ import type { ApprovedPlanExecutor } from "./reports/approved-plan-executor.js";
 import { ActionPlanValidationError } from "./reports/approved-plan-executor.js";
 import { exportReport, ReportNotReadyError, type ReportExportFormat } from "./reports/report-export.js";
 import type { ReportSource } from "./reports/mcp-report-executor.js";
-import { previewReconciliationUpload, reconciliationTemplate, runReconciliation } from "./reports/reconciliation.js";
+import { previewReconciliationUpload, reconciliationExport, reconciliationTemplate, runReconciliation, type ReconciliationRow } from "./reports/reconciliation.js";
 import type { ChatTool } from "@flowpilot/agent-core";
 import type { OperationLogService } from "./operation-log.js";
 import type { BulkJobStore } from "./bulk-jobs.js";
+import type { JobSchedulerClient } from "./reports/job-scheduler.js";
 import "./types.js";
 
 export interface AppOptions {
@@ -45,6 +46,8 @@ export interface AppOptions {
   reconciliationTools?: (user: ReturnType<typeof authenticatedUser>) => Promise<ChatTool[]>;
   contentTools?: (user: ReturnType<typeof authenticatedUser>) => Promise<ChatTool[]>;
   bulkJobs?: BulkJobStore;
+  bulkScheduler?: JobSchedulerClient;
+  bulkSchedulerActionUrl?: string;
 }
 
 const conversationIdSchema = z.string().uuid();
@@ -85,9 +88,10 @@ const reportJobInputSchema = z
   .strict();
 const reconciliationUploadSchema = z.object({ fileName: z.string().trim().min(1).max(255), contentBase64: z.string().min(1).max(1_400_000) }).strict();
 const reconciliationRunSchema = z.object({ ids: z.array(z.string().trim().min(1).max(256)).min(1).max(60), sourceToolNames: z.array(z.string().trim().min(1).max(200)).min(1).max(3), fields: z.array(z.string().trim().min(1).max(80)).max(12).default([]) }).strict();
+const reconciliationExportSchema = z.object({ generatedAt: z.string().datetime({ offset: true }), rows: z.array(z.object({ applicationMessageId: z.string().trim().min(1).max(256), result: z.enum(["matched", "exception", "unavailable"]), systems: z.record(z.string(), z.object({ status: z.string(), fields: z.record(z.string(), z.string()) })) })).min(1).max(60) }).strict();
 const contentFlowSchema = z.object({ integrationFlowId: z.string().trim().min(1).max(256), version: z.string().trim().min(1).max(256) }).strict();
 const contentConfigurationSchema = contentFlowSchema.extend({ configuration: z.record(z.string().trim().min(1).max(256), z.object({ value: z.string().max(10_000), dataType: z.string().trim().min(1).max(100) }).strict()).refine((value) => Object.keys(value).length <= 100) }).strict();
-const bulkJobSchema = z.object({ title: z.string().trim().min(1).max(120), artifacts: z.array(z.object({ id: z.string().min(1).max(256), version: z.string().min(1).max(256), name: z.string().min(1).max(256), packageName: z.string().min(1).max(256), action: z.enum(["deploy", "undeploy", "none"]), configure: z.boolean(), parameters: z.array(z.object({ key: z.string().min(1).max(256), value: z.string().max(10_000), dataType: z.string().min(1).max(100) }).strict()).max(100) }).passthrough()).min(1).max(100) }).strict();
+const bulkJobSchema = z.object({ title: z.string().trim().min(1).max(120), scheduledFor: z.string().datetime({ offset: true }).nullable().optional(), artifacts: z.array(z.object({ id: z.string().min(1).max(256), version: z.string().min(1).max(256), name: z.string().min(1).max(256), packageName: z.string().min(1).max(256), action: z.enum(["deploy", "undeploy", "none"]), configure: z.boolean(), parameters: z.array(z.object({ key: z.string().min(1).max(256), value: z.string().max(10_000), dataType: z.string().min(1).max(100) }).strict()).max(100) }).passthrough()).min(1).max(100) }).strict();
 
 function authenticatedUser(request: express.Request) {
   if (!request.flowpilotUser) {
@@ -161,6 +165,7 @@ export function createApp(options: AppOptions) {
       } catch (error) { next(error); }
     });
   }
+  if (options.bulkJobs && options.schedulerAuthentication) app.post("/internal/bulk-actions/dispatch", options.schedulerAuthentication, async (request, response, next) => { try { const job = await options.bulkJobs!.findScheduled(z.object({ reportJobId: z.string().uuid() }).parse(request.body).reportJobId); if (!job) return response.status(404).end(); await executeBulk(job.user, job.artifacts); response.status(204).end(); } catch (error) { next(error); } });
 
   app.use("/api", options.authentication ?? createAuthentication());
 
@@ -189,6 +194,7 @@ export function createApp(options: AppOptions) {
       return parsed;
     } catch (error) { if (error instanceof Error && error.message === "content_tool_failed") throw error; throw new Error("content_tool_invalid_response"); }
   };
+  async function executeBulk(user: ReturnType<typeof authenticatedUser>, artifacts: unknown[]) { for (const artifact of artifacts as Array<{ id: string; version: string; action: "deploy" | "undeploy" | "none"; configure: boolean; parameters: Array<{ key: string; value: string; dataType: string }> }>) { if (artifact.action === "none") continue; if (artifact.configure && artifact.parameters.length) await invokeContent(user, "update_integration_flow_configuration", { integrationFlowId: artifact.id, version: artifact.version, configuration: Object.fromEntries(artifact.parameters.map((p) => [p.key, { value: p.value, dataType: p.dataType }])) }); await invokeContent(user, artifact.action === "deploy" ? "deploy_integration_flow" : "undeploy_integration_flow", artifact.action === "deploy" ? { integrationFlowId: artifact.id, version: artifact.version } : { integrationFlowId: artifact.id }); } }
   app.get("/api/admin/conversation-policy", adminRegistry, async (_request, response, next) => {
     if (!options.conversationPolicy) {
       response.status(503).json({ error: "policy_unavailable" });
@@ -315,7 +321,8 @@ export function createApp(options: AppOptions) {
   });
   app.get("/api/bulk-actions/packages", reportOperator, async (request, response, next) => { try { response.json(await invokeContent(authenticatedUser(request), "list_integration_packages", { limit: 100 })); } catch (error) { next(error); } });
   app.get("/api/bulk-actions/jobs", reportOperator, async (request, response, next) => { if (!options.bulkJobs) return response.status(503).json({ error: "bulk_jobs_unavailable" }); try { response.json({ jobs: await options.bulkJobs.list(authenticatedUser(request)) }); } catch (error) { next(error); } });
-  app.post("/api/bulk-actions/jobs", reportOperator, async (request, response, next) => { if (!options.bulkJobs) return response.status(503).json({ error: "bulk_jobs_unavailable" }); try { const input = bulkJobSchema.parse(request.body); response.status(201).json(await options.bulkJobs.create(authenticatedUser(request), input.title, input.artifacts)); } catch (error) { next(error); } });
+  app.post("/api/bulk-actions/jobs", reportOperator, async (request, response, next) => { if (!options.bulkJobs) return response.status(503).json({ error: "bulk_jobs_unavailable" }); try { const input = bulkJobSchema.parse(request.body); const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor) : null; if (scheduledFor && scheduledFor.getTime() < Date.now() + 10 * 60_000) return response.status(400).json({ error: "schedule_time_too_soon" }); const job = await options.bulkJobs.create(authenticatedUser(request), input.title, input.artifacts, scheduledFor); if (scheduledFor && options.bulkScheduler && options.bulkSchedulerActionUrl) await options.bulkJobs.setSchedulerJobId(authenticatedUser(request), job.id, await options.bulkScheduler.schedule({ reportJobId: job.id, title: job.title, actionUrl: options.bulkSchedulerActionUrl, scheduledFor, recurrenceRule: null })); response.status(201).json(await options.bulkJobs.findOwned(authenticatedUser(request), job.id)); } catch (error) { next(error); } });
+  app.post("/api/bulk-actions/jobs/:jobId/run", reportOperator, async (request, response, next) => { if (!options.bulkJobs) return response.status(503).json({ error: "bulk_jobs_unavailable" }); try { const job = await options.bulkJobs.findOwned(authenticatedUser(request), conversationIdSchema.parse(request.params.jobId)); if (!job) return response.status(404).json({ error: "not_found" }); await executeBulk(authenticatedUser(request), job.artifacts); response.status(204).end(); } catch (error) { next(error); } });
   app.get("/api/bulk-actions/packages/:packageId/flows", reportOperator, async (request, response, next) => { try { response.json(await invokeContent(authenticatedUser(request), "list_package_integration_flows", { packageId: z.string().min(1).max(256).parse(request.params.packageId) })); } catch (error) { next(error); } });
   app.get("/api/bulk-actions/flows/:flowId/configurations", reportOperator, async (request, response, next) => { try { const version = z.string().min(1).max(256).parse(request.query.version); response.json(await invokeContent(authenticatedUser(request), "list_integration_flow_configurations", { integrationFlowId: z.string().min(1).max(256).parse(request.params.flowId), version })); } catch (error) { next(error); } });
   app.post("/api/bulk-actions/flows/:flowId/deploy", reportOperator, async (request, response, next) => { try { const input = contentFlowSchema.parse({ ...request.body, integrationFlowId: request.params.flowId }); response.json(await invokeContent(authenticatedUser(request), "deploy_integration_flow", input)); } catch (error) { next(error); } });
@@ -332,6 +339,9 @@ export function createApp(options: AppOptions) {
   app.post("/api/reconciliations/run", reportOperator, async (request, response, next) => {
     if (!options.reconciliationTools) { response.status(503).json({ error: "reports_unavailable" }); return; }
     try { const body = reconciliationRunSchema.parse(request.body); response.status(200).json(await runReconciliation({ ...body, user: authenticatedUser(request), resolveTools: options.reconciliationTools })); } catch (error) { next(error); }
+  });
+  app.post("/api/reconciliations/export", reportOperator, async (request, response, next) => {
+    try { const result = reconciliationExportSchema.parse(request.body) as { generatedAt: string; rows: ReconciliationRow[] }; response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); response.setHeader("Content-Disposition", "attachment; filename=flowpilot-reconciliation-report.xlsx"); response.status(200).send(reconciliationExport(result)); } catch (error) { next(error); }
   });
 
   app.post("/api/reports/jobs", reportOperator, async (request, response, next) => {

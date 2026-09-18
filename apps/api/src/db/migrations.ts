@@ -353,6 +353,8 @@ function migrations(schemaName: string) {
           WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
       `,
     },
+    { version: 18, sql: `ALTER TABLE ${schema}.bulk_action_jobs ADD COLUMN scheduled_for timestamptz, ADD COLUMN schedule_active boolean NOT NULL DEFAULT true, ADD COLUMN scheduler_job_id text;` },
+    { version: 19, sql: `ALTER POLICY bulk_action_jobs_owner_policy ON ${schema}.bulk_action_jobs USING (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))) WITH CHECK (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true)));` },
   ] as const;
 }
 
