@@ -156,6 +156,14 @@ export interface FlowPilotApi {
   listOperationLogs?(): Promise<OperationLogEntry[]>;
   previewReconciliationUpload?(fileName: string, contentBase64: string): Promise<ReconciliationPreview>;
   runReconciliation?(input: { ids: string[]; sourceToolNames: string[]; fields: string[] }): Promise<ReconciliationResult>;
+  listBulkPackages?(): Promise<unknown>;
+  listBulkPackageFlows?(packageId: string): Promise<unknown>;
+  deployBulkFlow?(flowId: string, version: string): Promise<unknown>;
+  undeployBulkFlow?(flowId: string): Promise<unknown>;
+  getBulkFlowConfigurations?(flowId: string, version: string): Promise<unknown>;
+  updateBulkFlowConfigurations?(flowId: string, version: string, configuration: Record<string, { value: string; dataType: string }>): Promise<unknown>;
+  listBulkJobs?(): Promise<Array<{ id: string; title: string; artifacts: unknown[]; createdAt: string }>>;
+  createBulkJob?(input: { title: string; artifacts: unknown[] }): Promise<{ id: string; title: string; artifacts: unknown[]; createdAt: string }>;
 }
 
 export class ApiError extends Error {
@@ -367,6 +375,14 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
     },
     previewReconciliationUpload(fileName, contentBase64) { return request<ReconciliationPreview>("/api/reconciliations/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName, contentBase64 }) }); },
     runReconciliation(input) { return request<ReconciliationResult>("/api/reconciliations/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }); },
+    listBulkPackages() { return request<unknown>("/api/bulk-actions/packages"); },
+    listBulkPackageFlows(packageId) { return request<unknown>(`/api/bulk-actions/packages/${encodeURIComponent(packageId)}/flows`); },
+    deployBulkFlow(flowId, version) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}/deploy`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version }) }); },
+    undeployBulkFlow(flowId) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}`, { method: "DELETE" }); },
+    getBulkFlowConfigurations(flowId, version) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}/configurations?version=${encodeURIComponent(version)}`); },
+    updateBulkFlowConfigurations(flowId, version, configuration) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}/configurations`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version, configuration }) }); },
+    async listBulkJobs() { return (await request<{ jobs: Array<{ id: string; title: string; artifacts: unknown[]; createdAt: string }> }>("/api/bulk-actions/jobs")).jobs; },
+    createBulkJob(input) { return request<{ id: string; title: string; artifacts: unknown[]; createdAt: string }>("/api/bulk-actions/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }); },
     async listReportJobRuns(jobId) { return (await request<{ runs: ReportJobRun[] }>(`/api/reports/jobs/${encodeURIComponent(jobId)}/runs`)).runs; },
     async deleteReportJob(jobId) { await request<void>(`/api/reports/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }); },
     setReportScheduleActive(jobId, active) { return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}/schedule-active`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }) }); },

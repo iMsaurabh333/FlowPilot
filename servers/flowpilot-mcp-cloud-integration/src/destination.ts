@@ -24,6 +24,9 @@ export interface DestinationServiceResolverOptions {
   requestTimeoutMs?: number;
 }
 
+/** The only Content API destination that this service is allowed to resolve. */
+export const CONTENT_DESTINATION_NAME = "FLOWPILOT_CLOUD_INTEGRATION_CONTENT";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -282,7 +285,7 @@ export class DestinationServiceResolver implements DestinationResolver {
   }
 
   async resolve(name: string): Promise<ResolvedDestination> {
-    if (name !== MPL_DESTINATION_NAME) {
+    if (name !== MPL_DESTINATION_NAME && name !== CONTENT_DESTINATION_NAME) {
       throw new MessageProcessingLogsError(
         "destination_unavailable",
         "The requested destination is not approved",

@@ -11,6 +11,7 @@ import {
 
 export const MCP_TOOL_OPERATOR_SCOPE = "ToolOperator";
 const MCP_TOOL_TIMEOUT_MS = 5_000;
+const CONTENT_TOOL_TIMEOUT_MS = 45_000;
 const MCP_TOOL_MAX_RESPONSE_BYTES = 128 * 1_024;
 
 interface JsonRpcResponse {
@@ -136,7 +137,11 @@ export class McpToolResolver {
       const response = await this.#fetch(endpointFor(server), {
         method: "POST",
         redirect: "manual",
-        signal: AbortSignal.timeout(MCP_TOOL_TIMEOUT_MS),
+        signal: AbortSignal.timeout(
+          server.serverId.includes("content")
+            ? CONTENT_TOOL_TIMEOUT_MS
+            : MCP_TOOL_TIMEOUT_MS,
+        ),
         headers: {
           Accept: "application/json, text/event-stream",
           "Content-Type": "application/json",

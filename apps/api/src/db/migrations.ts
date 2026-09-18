@@ -336,6 +336,23 @@ function migrations(schemaName: string) {
           WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
       `,
     },
+    {
+      version: 17,
+      sql: `
+        CREATE TABLE ${schema}.bulk_action_jobs (
+          id uuid PRIMARY KEY, tenant_id text NOT NULL, subject_id text NOT NULL,
+          title text NOT NULL, artifacts jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT bulk_action_jobs_title_length CHECK (char_length(title) BETWEEN 1 AND 120),
+          CONSTRAINT bulk_action_jobs_artifacts_array CHECK (jsonb_typeof(artifacts) = 'array')
+        );
+        CREATE INDEX bulk_action_jobs_owner_updated_idx ON ${schema}.bulk_action_jobs (tenant_id, subject_id, updated_at DESC);
+        ALTER TABLE ${schema}.bulk_action_jobs ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${schema}.bulk_action_jobs FORCE ROW LEVEL SECURITY;
+        CREATE POLICY bulk_action_jobs_owner_policy ON ${schema}.bulk_action_jobs
+          USING (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))
+          WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
+      `,
+    },
   ] as const;
 }
 

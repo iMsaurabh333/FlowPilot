@@ -30,6 +30,7 @@ import { PostgresActionPlanStore } from "./reports/action-plan-store.js";
 import { ApprovedPlanExecutor } from "./reports/approved-plan-executor.js";
 import { ReportWorkflowExecutor } from "./reports/report-workflow-executor.js";
 import { OperationLogService } from "./operation-log.js";
+import { BulkJobStore } from "./bulk-jobs.js";
 
 export async function createRuntime(
   environment: NodeJS.ProcessEnv = process.env,
@@ -98,7 +99,7 @@ export async function createRuntime(
     );
 
     return {
-      app: createApp({ conversations, registry, conversationPolicy, reports, operationLogs, reportSources: async (user) => reportOnlyTools(await mcpTools.resolve(user)).map((tool) => ({ name: tool.name, description: tool.description })), reconciliationTools: async (user) => reconciliationLookupTools(await mcpTools.resolve(user, { surface: "report" })), reportPlanning: new ReportActionPlanService(agent, () => mcpTools.resolve({ tenantId: "", subject: "", scopes: ["ChatUser", "ToolOperator"] })), actionPlans, approvedPlanExecutor, ...(schedulerBinding ? { schedulerAuthentication: createSchedulerAuthentication() } : {}) }),
+      app: createApp({ conversations, registry, conversationPolicy, reports, operationLogs, bulkJobs: new BulkJobStore(pool), reportSources: async (user) => reportOnlyTools(await mcpTools.resolve(user)).map((tool) => ({ name: tool.name, description: tool.description })), reconciliationTools: async (user) => reconciliationLookupTools(await mcpTools.resolve(user, { surface: "report" })), contentTools: async (user) => mcpTools.resolve(user, { surface: "report" }), reportPlanning: new ReportActionPlanService(agent, () => mcpTools.resolve({ tenantId: "", subject: "", scopes: ["ChatUser", "ToolOperator"] })), actionPlans, approvedPlanExecutor, ...(schedulerBinding ? { schedulerAuthentication: createSchedulerAuthentication() } : {}) }),
       async close() {
         await pool.end();
       },

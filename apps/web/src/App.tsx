@@ -25,6 +25,7 @@ import {
 import { McpRegistryView } from "./McpRegistryView";
 import { ReportsView } from "./ReportsView";
 import { LogsView } from "./LogsView";
+import { BulkActionsView } from "./BulkActionsView";
 import "./styles.css";
 
 type LoadState =
@@ -34,7 +35,7 @@ type LoadState =
 
 type PendingAction = "creating" | "sending" | "improving" | "deleting" | undefined;
 
-type AppView = "chat" | "registry" | "reports" | "logs";
+type AppView = "chat" | "registry" | "reports" | "logs" | "bulk-actions";
 
 const starterPrompts = [
   {
@@ -441,6 +442,9 @@ export function App({ client = flowPilotApi }: AppProps) {
                 <small>Private troubleshooting</small>
               </span>
             </button>
+            <button type="button" className={`primary-nav-item${activeView === "bulk-actions" ? " active" : ""}`} aria-current={activeView === "bulk-actions" ? "page" : undefined} onClick={() => setActiveView("bulk-actions")}>
+              <span className="nav-glyph" aria-hidden="true">B</span><span><strong>Bulk actions</strong><small>Deploy and configure flows</small></span>
+            </button>
             <button type="button" className={`primary-nav-item${activeView === "logs" ? " active" : ""}`} aria-current={activeView === "logs" ? "page" : undefined} onClick={() => setActiveView("logs")}>
               <span className="nav-glyph" aria-hidden="true">L</span><span><strong>Logs</strong><small>Model and MCP diagnostics</small></span>
             </button>
@@ -779,6 +783,8 @@ export function App({ client = flowPilotApi }: AppProps) {
             <McpRegistryView client={client} />
           ) : activeView === "logs" ? (
             <LogsView client={client} />
+          ) : activeView === "bulk-actions" ? (
+            <BulkActionsView client={client} />
           ) : (
             <ReportsView client={client} />
           )}

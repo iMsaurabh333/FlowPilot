@@ -27,6 +27,7 @@ import type { ReportSource } from "./reports/mcp-report-executor.js";
 import { previewReconciliationUpload, reconciliationTemplate, runReconciliation } from "./reports/reconciliation.js";
 import type { ChatTool } from "@flowpilot/agent-core";
 import type { OperationLogService } from "./operation-log.js";
+import type { BulkJobStore } from "./bulk-jobs.js";
 import "./types.js";
 
 export interface AppOptions {
@@ -42,6 +43,8 @@ export interface AppOptions {
   reportSources?: (user: ReturnType<typeof authenticatedUser>) => Promise<ReportSource[]>;
   operationLogs?: OperationLogService;
   reconciliationTools?: (user: ReturnType<typeof authenticatedUser>) => Promise<ChatTool[]>;
+  contentTools?: (user: ReturnType<typeof authenticatedUser>) => Promise<ChatTool[]>;
+  bulkJobs?: BulkJobStore;
 }
 
 const conversationIdSchema = z.string().uuid();
@@ -82,6 +85,9 @@ const reportJobInputSchema = z
   .strict();
 const reconciliationUploadSchema = z.object({ fileName: z.string().trim().min(1).max(255), contentBase64: z.string().min(1).max(1_400_000) }).strict();
 const reconciliationRunSchema = z.object({ ids: z.array(z.string().trim().min(1).max(256)).min(1).max(60), sourceToolNames: z.array(z.string().trim().min(1).max(200)).min(1).max(3), fields: z.array(z.string().trim().min(1).max(80)).max(12).default([]) }).strict();
+const contentFlowSchema = z.object({ integrationFlowId: z.string().trim().min(1).max(256), version: z.string().trim().min(1).max(256) }).strict();
+const contentConfigurationSchema = contentFlowSchema.extend({ configuration: z.record(z.string().trim().min(1).max(256), z.object({ value: z.string().max(10_000), dataType: z.string().trim().min(1).max(100) }).strict()).refine((value) => Object.keys(value).length <= 100) }).strict();
+const bulkJobSchema = z.object({ title: z.string().trim().min(1).max(120), artifacts: z.array(z.object({ id: z.string().min(1).max(256), version: z.string().min(1).max(256), name: z.string().min(1).max(256), packageName: z.string().min(1).max(256), action: z.enum(["deploy", "undeploy", "none"]), configure: z.boolean(), parameters: z.array(z.object({ key: z.string().min(1).max(256), value: z.string().max(10_000), dataType: z.string().min(1).max(100) }).strict()).max(100) }).passthrough()).min(1).max(100) }).strict();
 
 function authenticatedUser(request: express.Request) {
   if (!request.flowpilotUser) {
@@ -170,6 +176,19 @@ export function createApp(options: AppOptions) {
 
   const adminRegistry = requireScope(MCP_ADMIN_SCOPE);
   const reportOperator = requireScope("ToolOperator");
+  const invokeContent = async (user: ReturnType<typeof authenticatedUser>, name: string, arguments_: Record<string, unknown>) => {
+    if (!options.contentTools) throw new Error("content_tools_unavailable");
+    // The registry server ID is administrator-configurable. Match the approved
+    // tool suffix instead of coupling this API route to one particular ID.
+    const tool = (await options.contentTools(user)).find((candidate) => candidate.name.endsWith(`__${name}`));
+    if (!tool) throw new Error("content_tool_unavailable");
+    const result = await tool.invoke(arguments_);
+    try {
+      const parsed = JSON.parse(result) as unknown;
+      if (typeof parsed === "object" && parsed !== null && "error" in parsed) throw new Error("content_tool_failed");
+      return parsed;
+    } catch (error) { if (error instanceof Error && error.message === "content_tool_failed") throw error; throw new Error("content_tool_invalid_response"); }
+  };
   app.get("/api/admin/conversation-policy", adminRegistry, async (_request, response, next) => {
     if (!options.conversationPolicy) {
       response.status(503).json({ error: "policy_unavailable" });
@@ -294,6 +313,14 @@ export function createApp(options: AppOptions) {
       response.status(200).json({ sources: tools.map((tool) => ({ name: tool.name, description: tool.description })) });
     } catch (error) { next(error); }
   });
+  app.get("/api/bulk-actions/packages", reportOperator, async (request, response, next) => { try { response.json(await invokeContent(authenticatedUser(request), "list_integration_packages", { limit: 100 })); } catch (error) { next(error); } });
+  app.get("/api/bulk-actions/jobs", reportOperator, async (request, response, next) => { if (!options.bulkJobs) return response.status(503).json({ error: "bulk_jobs_unavailable" }); try { response.json({ jobs: await options.bulkJobs.list(authenticatedUser(request)) }); } catch (error) { next(error); } });
+  app.post("/api/bulk-actions/jobs", reportOperator, async (request, response, next) => { if (!options.bulkJobs) return response.status(503).json({ error: "bulk_jobs_unavailable" }); try { const input = bulkJobSchema.parse(request.body); response.status(201).json(await options.bulkJobs.create(authenticatedUser(request), input.title, input.artifacts)); } catch (error) { next(error); } });
+  app.get("/api/bulk-actions/packages/:packageId/flows", reportOperator, async (request, response, next) => { try { response.json(await invokeContent(authenticatedUser(request), "list_package_integration_flows", { packageId: z.string().min(1).max(256).parse(request.params.packageId) })); } catch (error) { next(error); } });
+  app.get("/api/bulk-actions/flows/:flowId/configurations", reportOperator, async (request, response, next) => { try { const version = z.string().min(1).max(256).parse(request.query.version); response.json(await invokeContent(authenticatedUser(request), "list_integration_flow_configurations", { integrationFlowId: z.string().min(1).max(256).parse(request.params.flowId), version })); } catch (error) { next(error); } });
+  app.post("/api/bulk-actions/flows/:flowId/deploy", reportOperator, async (request, response, next) => { try { const input = contentFlowSchema.parse({ ...request.body, integrationFlowId: request.params.flowId }); response.json(await invokeContent(authenticatedUser(request), "deploy_integration_flow", input)); } catch (error) { next(error); } });
+  app.delete("/api/bulk-actions/flows/:flowId", reportOperator, async (request, response, next) => { try { response.json(await invokeContent(authenticatedUser(request), "undeploy_integration_flow", { integrationFlowId: z.string().min(1).max(256).parse(request.params.flowId) })); } catch (error) { next(error); } });
+  app.put("/api/bulk-actions/flows/:flowId/configurations", reportOperator, async (request, response, next) => { try { const input = contentConfigurationSchema.parse({ ...request.body, integrationFlowId: request.params.flowId }); response.json(await invokeContent(authenticatedUser(request), "update_integration_flow_configuration", input)); } catch (error) { next(error); } });
   app.post("/api/reconciliations/preview", reportOperator, async (request, response, next) => {
     try { const body = reconciliationUploadSchema.parse(request.body); response.status(200).json(previewReconciliationUpload(body.fileName, body.contentBase64)); } catch (error) { next(error); }
   });

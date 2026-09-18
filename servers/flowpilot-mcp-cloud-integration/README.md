@@ -37,6 +37,21 @@ semantic fields defined by the pinned EDMX-derived contract.
 - No resources, prompts, sampling, elicitation, roots, or subscriptions are
   exposed.
 
+## Live Integration Content operations
+
+The separate `flowpilot-mcp-cloud-integration-content` module resolves only the
+`FLOWPILOT_CLOUD_INTEGRATION_CONTENT` BTP Destination. Configure its URL as the
+CPI tenant base URL (for example, `https://<tenant-host>`); the connector adds
+the reviewed `/api/v1` OData root. Use
+`OAuth2ClientCredentials`. Its technical user needs CPI permissions to view
+design content, update externalized parameters, deploy, and undeploy.
+
+Register that module with `technical:flowpilot-mcp-content`, then permit only
+`list_integration_packages`, `list_package_integration_flows`,
+`list_integration_flow_configurations`, `update_integration_flow_configuration`,
+`deploy_integration_flow`, and `undeploy_integration_flow`. Write operations
+obtain the required CPI CSRF token through the Destination-backed session.
+
 ## Local verification
 
 Install and run the deterministic suite:
