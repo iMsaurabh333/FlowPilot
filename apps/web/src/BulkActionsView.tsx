@@ -557,9 +557,9 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
             <table>
               <thead>
                 <tr>
-            <th>Integration flow</th>
-            <th>Package</th>
-            <th>Action</th>
+                  <th>Integration flow</th>
+                  <th>Package</th>
+                  <th>Action</th>
                   <th>Configure external parameters</th>
                   <th>Status</th>
                 </tr>
@@ -775,12 +775,11 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
                       .filter((item) => item.action !== "none")
                       .map((item) => (
                         <tr key={item.id}>
-                <td>
-                  <strong>{item.name}</strong>
-                  <small>ID: {item.id}</small>
-                </td>
-                <td>{item.packageName}</td>
-                <td>{item.action}</td>
+                          <td>
+                            <strong>{item.name}</strong>
+                          </td>
+                          <td>{item.packageName}</td>
+                          <td>{item.action}</td>
                           <td>{item.configure ? "Configured" : "—"}</td>
                           <td>
                             <span className={`bulk-status ${item.state}`}>

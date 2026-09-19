@@ -357,6 +357,6 @@ describe("FlowPilot chat interface", () => {
       await screen.findByRole("heading", { name: "Reports" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("No report jobs yet")).toBeInTheDocument();
-    expect(document.querySelector('ui5-button[accessible-name="Schedule report job"]')).toBeInTheDocument();
+    expect(document.querySelector('ui5-button[accessible-name="Schedule report job"]')).not.toBeInTheDocument();
   });
 });

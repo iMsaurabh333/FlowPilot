@@ -33,7 +33,8 @@ type LoadState =
   | { status: "ready" }
   | { status: "error"; message: string };
 
-type PendingAction = "creating" | "sending" | "improving" | "deleting" | undefined;
+type PendingAction =
+  "creating" | "sending" | "improving" | "deleting" | undefined;
 
 type AppView = "chat" | "registry" | "reports" | "logs" | "bulk-actions";
 
@@ -166,7 +167,9 @@ export function App({ client = flowPilotApi }: AppProps) {
         } catch (error) {
           if (cancelled || requestId !== detailRequest.current) return;
           setActiveConversation(undefined);
-          setRequestError(`Conversation history could not be loaded. ${visibleError(error)}`);
+          setRequestError(
+            `Conversation history could not be loaded. ${visibleError(error)}`,
+          );
         }
       } catch (error) {
         if (cancelled) return;
@@ -203,13 +206,19 @@ export function App({ client = flowPilotApi }: AppProps) {
     if (!activeConversation || detailLoading) return;
     const region = messageRegionRef.current;
     if (!region) return;
-    const scroll = () => { region.scrollTop = region.scrollHeight; };
+    const scroll = () => {
+      region.scrollTop = region.scrollHeight;
+    };
     const frame = requestAnimationFrame(() => {
       scroll();
       requestAnimationFrame(scroll);
     });
     return () => cancelAnimationFrame(frame);
-  }, [activeConversation?.id, activeConversation?.messages.length, detailLoading]);
+  }, [
+    activeConversation?.id,
+    activeConversation?.messages.length,
+    detailLoading,
+  ]);
 
   const chooseConversation = async (
     conversationId: string,
@@ -275,7 +284,9 @@ export function App({ client = flowPilotApi }: AppProps) {
       const detail = await client.sendMessage(conversationId, content);
       setActiveConversation(detail);
       if (detail.rolledOver) {
-        setRequestError("Conversation history limit reached. The oldest turn was removed.");
+        setRequestError(
+          "Conversation history limit reached. The oldest turn was removed.",
+        );
       }
       setConversations((current) =>
         newestFirst([detail, ...current.filter(({ id }) => id !== detail.id)]),
@@ -418,8 +429,10 @@ export function App({ client = flowPilotApi }: AppProps) {
           <div className="navigation-heading">
             <span className="navigation-mark" aria-hidden="true">
               <svg focusable="false" viewBox="0 0 32 32">
-                <path d="M8 9h10a6 6 0 0 1 0 12h-4v4" />
-                <path d="m12 17-4 4 4 4" />
+                <rect x="7" y="7" width="7" height="7" rx="1" />
+                <rect x="18" y="7" width="7" height="7" rx="1" />
+                <rect x="7" y="18" width="7" height="7" rx="1" />
+                <path d="M18 21.5h7M21.5 18v7" />
               </svg>
             </span>
             <div>
@@ -442,11 +455,33 @@ export function App({ client = flowPilotApi }: AppProps) {
                 <small>Private troubleshooting</small>
               </span>
             </button>
-            <button type="button" className={`primary-nav-item${activeView === "bulk-actions" ? " active" : ""}`} aria-current={activeView === "bulk-actions" ? "page" : undefined} onClick={() => setActiveView("bulk-actions")}>
-              <span className="nav-glyph" aria-hidden="true">B</span><span><strong>Bulk actions</strong><small>Deploy and configure flows</small></span>
+            <button
+              type="button"
+              className={`primary-nav-item${activeView === "bulk-actions" ? " active" : ""}`}
+              aria-current={activeView === "bulk-actions" ? "page" : undefined}
+              onClick={() => setActiveView("bulk-actions")}
+            >
+              <span className="nav-glyph" aria-hidden="true">
+                B
+              </span>
+              <span>
+                <strong>Bulk actions</strong>
+                <small>Deploy and configure flows</small>
+              </span>
             </button>
-            <button type="button" className={`primary-nav-item${activeView === "logs" ? " active" : ""}`} aria-current={activeView === "logs" ? "page" : undefined} onClick={() => setActiveView("logs")}>
-              <span className="nav-glyph" aria-hidden="true">L</span><span><strong>Logs</strong><small>Model and MCP diagnostics</small></span>
+            <button
+              type="button"
+              className={`primary-nav-item${activeView === "logs" ? " active" : ""}`}
+              aria-current={activeView === "logs" ? "page" : undefined}
+              onClick={() => setActiveView("logs")}
+            >
+              <span className="nav-glyph" aria-hidden="true">
+                L
+              </span>
+              <span>
+                <strong>Logs</strong>
+                <small>Model and MCP diagnostics</small>
+              </span>
             </button>
             <button
               type="button"
@@ -528,17 +563,32 @@ export function App({ client = flowPilotApi }: AppProps) {
                           <button
                             type="button"
                             className="conversation-select"
-                            aria-current={conversation.id === activeConversation?.id ? "page" : undefined}
-                            onClick={() => void chooseConversation(conversation.id)}
+                            aria-current={
+                              conversation.id === activeConversation?.id
+                                ? "page"
+                                : undefined
+                            }
+                            onClick={() =>
+                              void chooseConversation(conversation.id)
+                            }
                           >
-                            <span className="conversation-title">{conversation.title}</span>
-                            <span className="conversation-updated">{formatDate(conversation.updatedAt)}</span>
+                            <span className="conversation-title">
+                              {conversation.title}
+                            </span>
+                            <span className="conversation-updated">
+                              {formatDate(conversation.updatedAt)}
+                            </span>
                           </button>
                           <button
                             type="button"
                             className="conversation-delete"
-                            disabled={Boolean(pendingAction) || Boolean(conversationToDelete)}
-                            onClick={() => setConversationToDelete(conversation)}
+                            disabled={
+                              Boolean(pendingAction) ||
+                              Boolean(conversationToDelete)
+                            }
+                            onClick={() =>
+                              setConversationToDelete(conversation)
+                            }
                             aria-label={`Delete ${conversation.title}`}
                             title="Delete conversation"
                           >
@@ -579,29 +629,32 @@ export function App({ client = flowPilotApi }: AppProps) {
                       aria-labelledby="delete-confirmation-title"
                       aria-describedby="delete-confirmation-description"
                     >
-                    <div>
-                      <strong id="delete-confirmation-title">Delete this conversation?</strong>
-                      <p id="delete-confirmation-description">
-                        Delete “{conversationToDelete.title}” from your private conversation history? This cannot be undone.
-                      </p>
-                    </div>
-                    <div className="delete-confirmation-actions">
-                      <Button
-                        design="Transparent"
-                        disabled={Boolean(pendingAction)}
-                        onClick={() => setConversationToDelete(undefined)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        design="Negative"
-                        disabled={Boolean(pendingAction)}
-                        loading={pendingAction === "deleting"}
-                        onClick={() => void deleteConversation()}
-                      >
-                        Delete conversation
-                      </Button>
-                    </div>
+                      <div>
+                        <strong id="delete-confirmation-title">
+                          Delete this conversation?
+                        </strong>
+                        <p id="delete-confirmation-description">
+                          Delete “{conversationToDelete.title}” from your
+                          private conversation history? This cannot be undone.
+                        </p>
+                      </div>
+                      <div className="delete-confirmation-actions">
+                        <Button
+                          design="Transparent"
+                          disabled={Boolean(pendingAction)}
+                          onClick={() => setConversationToDelete(undefined)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          design="Negative"
+                          disabled={Boolean(pendingAction)}
+                          loading={pendingAction === "deleting"}
+                          onClick={() => void deleteConversation()}
+                        >
+                          Delete conversation
+                        </Button>
+                      </div>
                     </section>
                   </div>
                 )}
@@ -616,7 +669,11 @@ export function App({ client = flowPilotApi }: AppProps) {
                   </MessageStrip>
                 )}
 
-                <section ref={messageRegionRef} className="message-region" aria-label="Chat content">
+                <section
+                  ref={messageRegionRef}
+                  className="message-region"
+                  aria-label="Chat content"
+                >
                   {detailLoading ? (
                     <div className="loading-detail" role="status">
                       <BusyIndicator active size="M" delay={0} />
@@ -690,33 +747,51 @@ export function App({ client = flowPilotApi }: AppProps) {
                           </div>
                           {message.delivery === "failed" && (
                             <p className="message-delivery-error" role="status">
-                              No assistant response was recorded for this request.
+                              No assistant response was recorded for this
+                              request.
                             </p>
                           )}
                           {message.role === "assistant" && message.sources && (
                             <p className="message-sources">
-                              Source: {message.sources.map(({ label }) => label).join(" · ")}
+                              Source:{" "}
+                              {message.sources
+                                .map(({ label }) => label)
+                                .join(" · ")}
                             </p>
                           )}
-                          {message.role === "assistant" && message.tables?.map((table) => (
-                            <div className="tool-table" key={`${message.id}-${table.title}`}>
-                              <table>
-                                <caption>{table.title}</caption>
-                                <thead>
-                                  <tr>
-                                    {table.columns.map((column) => <th key={column} scope="col">{column}</th>)}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {table.rows.map((row, rowIndex) => (
-                                    <tr key={`${message.id}-${rowIndex}`}>
-                                      {row.map((cell, cellIndex) => <td key={`${message.id}-${rowIndex}-${table.columns[cellIndex]}`}>{cell ?? "—"}</td>)}
+                          {message.role === "assistant" &&
+                            message.tables?.map((table) => (
+                              <div
+                                className="tool-table"
+                                key={`${message.id}-${table.title}`}
+                              >
+                                <table>
+                                  <caption>{table.title}</caption>
+                                  <thead>
+                                    <tr>
+                                      {table.columns.map((column) => (
+                                        <th key={column} scope="col">
+                                          {column}
+                                        </th>
+                                      ))}
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ))}
+                                  </thead>
+                                  <tbody>
+                                    {table.rows.map((row, rowIndex) => (
+                                      <tr key={`${message.id}-${rowIndex}`}>
+                                        {row.map((cell, cellIndex) => (
+                                          <td
+                                            key={`${message.id}-${rowIndex}-${table.columns[cellIndex]}`}
+                                          >
+                                            {cell ?? "—"}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ))}
                         </li>
                       ))}
                     </ol>
@@ -758,22 +833,22 @@ export function App({ client = flowPilotApi }: AppProps) {
                       {characterCount.toLocaleString()} / 4,000 characters
                     </span>
                     <div className="composer-buttons">
-                    <Button
-                      design="Transparent"
-                      disabled={!draft.trim() || Boolean(pendingAction)}
-                      loading={pendingAction === "improving"}
-                      onClick={() => void improvePrompt()}
-                    >
-                      Improve prompt
-                    </Button>
-                    <Button
-                      type="Submit"
-                      design="Emphasized"
-                      disabled={!canSend}
-                      loading={pendingAction === "sending"}
-                    >
-                      Send
-                    </Button>
+                      <Button
+                        design="Transparent"
+                        disabled={!draft.trim() || Boolean(pendingAction)}
+                        loading={pendingAction === "improving"}
+                        onClick={() => void improvePrompt()}
+                      >
+                        Improve prompt
+                      </Button>
+                      <Button
+                        type="Submit"
+                        design="Emphasized"
+                        disabled={!canSend}
+                        loading={pendingAction === "sending"}
+                      >
+                        Send
+                      </Button>
                     </div>
                   </div>
                 </form>
