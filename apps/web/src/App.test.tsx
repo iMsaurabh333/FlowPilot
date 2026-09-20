@@ -73,7 +73,7 @@ function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
 function renderApp(client: FlowPilotApi) {
   return render(
     <ThemeProvider>
-      <App client={client} />
+      <App client={client} initialView="chat" />
     </ThemeProvider>,
   );
 }
@@ -87,6 +87,21 @@ function composer() {
 }
 
 describe("FlowPilot chat interface", () => {
+  it("opens on a home workspace and can collapse navigation", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api()} />
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /Good to see you, Test/ })).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Collapse navigation" });
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Expand navigation" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /Assistant chat/ })[0]);
+    expect(await screen.findByRole("heading", { name: "Check sales order" })).toBeInTheDocument();
+  });
+
   it("loads the authenticated user's latest private conversation", async () => {
     renderApp(api());
 
@@ -105,7 +120,7 @@ describe("FlowPilot chat interface", () => {
     expect(
       screen.getByRole("navigation", { name: "Primary navigation" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Chat/ })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Assistant chat/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -308,7 +323,8 @@ describe("FlowPilot chat interface", () => {
 
     const { container } = renderApp(client);
 
-    fireEvent.click(await screen.findByRole("button", { name: /MCP servers/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Settings/ }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: "MCP servers" }),
     ).toBeInTheDocument();
@@ -346,6 +362,9 @@ describe("FlowPilot chat interface", () => {
         ({ impact }) => impact === "serious" || impact === "critical",
       ),
     ).toEqual([]);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Logs" }));
+    expect(await screen.findByRole("heading", { name: "Logs" })).toBeInTheDocument();
   });
 
   it("opens the report-job workspace", async () => {

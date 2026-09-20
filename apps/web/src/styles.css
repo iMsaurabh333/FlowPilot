@@ -23,6 +23,69 @@ body {
   background: var(--sapBackgroundColor);
 }
 
+/* Cockpit-inspired application shell and landing workspace. */
+.app-shell { position: relative; }
+.app-shell > ui5-shellbar { padding-inline-start: 3.75rem; background: #1f242b; box-shadow: none; }
+.navigation-toggle { position: absolute; z-index: 2; inset: 0 auto auto 0; width: 3.75rem; height: 3.75rem; display: grid; align-content: center; justify-items: center; gap: .28rem; padding: 0; border: 0; border-inline-end: 1px solid #343b44; background: #1f242b; cursor: pointer; }
+.navigation-toggle:hover { background: #29303a; }
+.navigation-toggle:focus-visible { outline: 2px solid #76b7ff; outline-offset: -4px; }
+.navigation-toggle span { width: 1.25rem; height: .12rem; border-radius: 1rem; background: #f2f4f7; }
+.primary-navigation { padding: 1.25rem .75rem; border-inline-end-color: #343b44; background: #1f242b; color: #f1f4f8; }
+.navigation-heading { padding: .25rem .5rem 1.25rem; }
+.primary-nav-list { padding-block-start: .85rem; border-block-start-color: #343b44; }
+.primary-nav-item { border-radius: .375rem; color: #f1f4f8; }
+.primary-nav-item:hover { background: #29303a; }
+.primary-nav-item.active { position: relative; color: #fff; background: #27364d; }
+.primary-nav-item.active::before { content: ""; position: absolute; inset: 0 auto 0 -.75rem; width: .22rem; border-radius: 0 .25rem .25rem 0; background: #72afff; }
+.nav-glyph { border: 0; font-size: 1.4rem; }
+.navigation-footer { border-block-start-color: #343b44; }
+.status-indicator { box-shadow: 0 0 0 .2rem #29303a; }
+.navigation-collapsed .app-frame { grid-template-columns: 4.5rem minmax(0, 1fr); }
+.navigation-collapsed .primary-navigation { padding-inline: .5rem; }
+.navigation-collapsed .navigation-heading { justify-content: center; padding-inline: 0; }
+.navigation-collapsed .navigation-heading > div, .navigation-collapsed .navigation-footer > span:last-child, .navigation-collapsed .primary-nav-item > span:last-child { display: none; }
+.navigation-collapsed .primary-nav-item, .navigation-collapsed .navigation-footer { justify-content: center; padding-inline: 0; }
+.navigation-collapsed .primary-nav-item.active::before { inset-inline-start: -.5rem; }
+
+.home-page { height: 100%; overflow: auto; padding: clamp(2rem, 6vw, 5.5rem); background: linear-gradient(130deg, #f6f9fc 0%, #fff 45%, #f0f6ff 100%); }
+.home-hero { max-width: 50rem; }
+.home-page h1, .home-page h2, .home-page p { margin: 0; }
+.home-hero h1 { margin-top: .35rem; color: #172b4d; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -.035em; }
+.home-hero > p:last-of-type { max-width: 42rem; margin-top: 1rem; color: #52657e; font-size: 1.1rem; line-height: 1.6; }
+.home-hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.75rem; }
+.home-primary-action, .home-secondary-action, .home-inline-action { min-height: 2.75rem; padding: .65rem 1.1rem; border-radius: .375rem; font: inherit; font-weight: 700; cursor: pointer; }
+.home-primary-action { border: 1px solid #0a6ed1; background: #0a6ed1; color: #fff; box-shadow: 0 .4rem 1rem rgb(10 110 209 / 20%); }
+.home-primary-action:hover { background: #085caf; }
+.home-secondary-action { border: 1px solid #a8b7ca; background: #fff; color: #1d3d66; }
+.home-section { max-width: 72rem; margin-top: clamp(3rem, 7vw, 5.5rem); }
+.home-section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin-bottom: 1.25rem; }
+.home-section-heading h2, .home-activity h2 { margin-top: .25rem; color: #172b4d; font-size: 1.4rem; }
+.home-status { display: inline-flex; gap: .45rem; align-items: center; color: #506278; font-size: .875rem; }
+.home-status i { width: .55rem; height: .55rem; border-radius: 50%; background: #188918; }
+.home-action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.home-action-card { min-height: 13rem; display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: .9rem; padding: 1.35rem; border: 1px solid #d5dfeb; border-radius: .65rem; background: rgb(255 255 255 / 88%); color: #172b4d; text-align: left; box-shadow: 0 .3rem 1rem rgb(23 43 77 / 5%); cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease; }
+.home-action-card:hover { transform: translateY(-.18rem); border-color: #78aef0; box-shadow: 0 .65rem 1.4rem rgb(23 43 77 / 12%); }
+.home-card-icon { width: 2.4rem; height: 2.4rem; display: grid; place-items: center; border-radius: .45rem; background: #e8f2ff; color: #0a6ed1; font-size: 1.5rem; }
+.home-action-card span:nth-child(2) { display: grid; gap: .45rem; }
+.home-action-card small { color: #5b6d82; line-height: 1.45; }
+.home-action-card b { color: #0a6ed1; font-size: 1.25rem; }
+.home-activity { max-width: 72rem; display: grid; grid-template-columns: 1fr auto auto; gap: 1.5rem; align-items: center; margin-top: 1.5rem; padding: 1.25rem 1.4rem; border-radius: .65rem; background: #172b4d; color: #fff; }
+.home-activity h2 { color: #fff; }
+.home-activity > p { color: #d9e5f5; }
+.home-activity strong { color: #fff; font-size: 1.3rem; }
+.home-inline-action { border: 1px solid #7896ba; background: transparent; color: #fff; }
+
+.settings-page { height: 100%; overflow: auto; padding: clamp(1.5rem, 5vw, 4rem); }
+.settings-header h1, .settings-header p { margin: 0; }
+.settings-header h1 { margin-block: .25rem .6rem; color: var(--sapPageHeader_TextColor); font-size: var(--sapFontHeader2Size); }
+.settings-header > p:last-child { color: var(--sapContent_LabelColor); }
+.settings-tabs { display: flex; gap: .25rem; margin-top: 2rem; border-bottom: 1px solid var(--sapList_BorderColor); }
+.settings-tabs button { padding: .7rem 1rem; border: 0; border-bottom: .2rem solid transparent; background: transparent; color: var(--sapContent_LabelColor); font: inherit; font-weight: 700; cursor: pointer; }
+.settings-tabs button.active { border-bottom-color: var(--sapSelectedColor); color: var(--sapSelectedColor); }
+.settings-panel > .registry-page, .settings-panel > .logs-page { height: auto; overflow: visible; padding: 2rem 0 0; }
+.settings-panel .registry-page > header, .settings-panel .logs-page > header { display: none; }
+@media (max-width: 48rem) { .home-action-grid, .home-activity { grid-template-columns: 1fr; } .home-section-heading { align-items: start; flex-direction: column; } }
+
 button,
 textarea {
   font: inherit;
@@ -497,6 +560,37 @@ textarea {
     overflow: auto;
   }
 }
+
+/* Keep the cockpit layout in the standard SAP Horizon light palette. */
+.app-shell > ui5-shellbar {
+  background: var(--sapGroup_ContentBackground);
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+.navigation-toggle {
+  border-inline-end-color: var(--sapList_BorderColor);
+  background: var(--sapGroup_ContentBackground);
+}
+.navigation-toggle:hover { background: var(--sapList_Hover_Background); }
+.navigation-toggle span { background: var(--sapTextColor); }
+.primary-navigation {
+  background: var(--sapGroup_ContentBackground);
+  border-inline-end-color: var(--sapList_BorderColor);
+  color: var(--sapTextColor);
+}
+.navigation-heading span,
+.navigation-footer small,
+.primary-nav-item small { color: var(--sapContent_LabelColor); }
+.primary-nav-list,
+.navigation-footer { border-block-color: var(--sapList_BorderColor); }
+.primary-nav-item { color: var(--sapTextColor); }
+.primary-nav-item:hover { background: var(--sapList_Hover_Background); }
+.primary-nav-item.active { color: var(--sapTextColor); background: var(--sapList_SelectionBackground); }
+.primary-nav-item.active::before { background: var(--sapSelectedColor); }
+.status-indicator { box-shadow: 0 0 0 .2rem var(--sapGroup_ContentBackground); }
+.home-activity { border: 1px solid var(--sapInformationBorderColor); background: var(--sapInformationBackground); color: var(--sapTextColor); }
+.home-activity h2, .home-activity strong { color: var(--sapTextColor); }
+.home-activity > p { color: var(--sapContent_LabelColor); }
+.home-inline-action { border-color: var(--sapButton_BorderColor); background: var(--sapButton_Background); color: var(--sapButton_TextColor); }
 .logs-page > header {
   max-width: 56rem;
 }
@@ -662,6 +756,7 @@ textarea {
 .reconciliation-config {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: 9rem auto auto;
   gap: 1.25rem;
   align-items: start;
 }
@@ -713,11 +808,13 @@ textarea {
   resize: vertical;
 }
 .reconciliation-run {
+  grid-column: 1 / -1;
+  grid-row: 2;
   justify-self: start;
-  align-self: end;
 }
 .reconciliation-source-picker {
   grid-column: 1 / -1;
+  grid-row: 3;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: 1rem;
@@ -2235,4 +2332,48 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Sidebar alignment and high-contrast application icons. */
+.navigation-heading { padding: 0.25rem 0.5rem 1.25rem; }
+.nav-glyph {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--sapBrandColor);
+  color: var(--sapContent_ContrastTextColor);
+}
+.nav-glyph svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+.primary-nav-item:hover .nav-glyph,
+.primary-nav-item.active .nav-glyph { background: var(--sapSelectedColor); }
+.registry-workspace { margin-block-start: 1.5rem; }
+
+/* Keep the full Home workspace visible on a standard desktop viewport. */
+.home-page {
+  display: grid;
+  align-content: center;
+  gap: clamp(1rem, 3vh, 2rem);
+  padding: clamp(1.5rem, 3vw, 3rem);
+}
+.home-hero-actions { margin-top: 1.25rem; }
+.home-section { margin-top: 0; }
+.home-action-card { min-height: 10.5rem; }
+.home-activity { margin-top: 0; }
+.home-card-icon svg {
+  width: 1.4rem;
+  height: 1.4rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }

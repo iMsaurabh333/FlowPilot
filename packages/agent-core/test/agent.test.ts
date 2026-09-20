@@ -52,7 +52,7 @@ describe("FlowPilot chat graph", () => {
       .respond(
         new AIMessage("The approved monitoring tool found no failures."),
       );
-    const agent = createChatAgent({ checkpointer: new MemorySaver(), model });
+    const agent = createChatAgent({ checkpointer: new MemorySaver(), model, compactResponses: true });
 
     const messages = await agent.sendMessage("operator-thread", "Check logs", [
       {
@@ -74,7 +74,7 @@ describe("FlowPilot chat graph", () => {
     expect(messages.at(-1)).toEqual(
       expect.objectContaining({
         role: "assistant",
-        content: "The approved monitoring tool found no failures.",
+        content: "The approved monitoring tool.",
       }),
     );
   });
@@ -88,7 +88,11 @@ describe("FlowPilot chat graph", () => {
         },
       ])
       .respond(new AIMessage("One failed message was found."));
-    const agent = createChatAgent({ checkpointer: new MemorySaver(), model });
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model,
+      compactResponses: true,
+    });
 
     const messages = await agent.sendMessage("mpl-thread", "Find failures", [
       {
@@ -112,6 +116,7 @@ describe("FlowPilot chat graph", () => {
 
     expect(messages.at(-1)).toMatchObject({
       role: "assistant",
+      content: "",
       sources: [
         { label: "Cloud Integration monitoring · Message Processing Logs" },
       ],
@@ -123,6 +128,24 @@ describe("FlowPilot chat graph", () => {
         },
       ],
     });
+  });
+
+  it("caps unstructured guidance to two short sentences", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      compactResponses: true,
+      model: new FakeListChatModel({
+        responses: [
+          "This lookup did not return any records in the requested period. Check the identifier and search a wider time range. Ask an administrator for additional diagnostics.",
+        ],
+      }),
+    });
+
+    const messages = await agent.sendMessage("compact-guidance", "Check message");
+    const guidance = messages.at(-1)?.content ?? "";
+    const sentences = guidance.split(/(?<=[.!?])\s+/u);
+    expect(sentences).toHaveLength(2);
+    expect(sentences.every((sentence) => sentence.length <= 30)).toBe(true);
   });
 
   it("does not expose empty assistant placeholders as chat messages", async () => {

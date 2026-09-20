@@ -63,11 +63,38 @@ export interface ChatAgentOptions {
   checkpointer: BaseCheckpointSaver;
   systemPrompt?: string;
   maxContextMessages?: number;
+  /** Apply the minimal-output policy for interactive conversations only. */
+  compactResponses?: boolean;
 }
 
 const defaultSystemPrompt = `You are FlowPilot, a concise operational troubleshooting assistant.
 State uncertainty clearly. Do not claim to have checked a system unless a tool result is present.
 Do not invent transaction status, identifiers, logs, or remediation results.`;
+
+const compactResponsePrompt = `
+When a tool returns structured evidence, return no narrative text: FlowPilot renders the evidence itself.
+For a failed, empty, or unavailable lookup, guidance is optional and may contain at most two sentences of 30 characters each. Do not add explanations, lists, headings, tables, or next-step prose.`;
+
+const MAX_GUIDANCE_SENTENCES = 2;
+const MAX_GUIDANCE_SENTENCE_LENGTH = 30;
+
+/** Enforce the chat's compact guidance contract even when a model ignores it. */
+function compactGuidance(content: string) {
+  return content
+    .replace(/```[\s\S]*?```/gu, " ")
+    .replace(/^\s*[|*#>-]+\s*/gmu, "")
+    .replace(/\s+/gu, " ")
+    .match(/[^.!?]+[.!?]?/gu)
+    ?.map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .slice(0, MAX_GUIDANCE_SENTENCES)
+    .map((sentence) => {
+      if (sentence.length <= MAX_GUIDANCE_SENTENCE_LENGTH) return sentence;
+      return `${sentence.slice(0, MAX_GUIDANCE_SENTENCE_LENGTH - 1).trimEnd()}.`;
+    })
+    .filter(Boolean)
+    .join(" ") ?? "";
+}
 
 function contentAsText(content: MessageContent) {
   if (typeof content === "string") {
@@ -110,6 +137,7 @@ function toChatMessage(
   message: BaseMessage,
   threadId: string,
   index: number,
+  contentOverride?: string,
 ): ChatMessage | undefined {
   const type = message.getType();
   const role =
@@ -117,10 +145,10 @@ function toChatMessage(
   if (!role) {
     return undefined;
   }
-  const content = contentAsText(message.content);
+  const content = contentOverride ?? contentAsText(message.content);
   // Tool-call requests are AI messages with no user-facing text. They stay in
   // the checkpoint for the model, but are not rendered as chat bubbles.
-  if (role === "assistant" && content.trim().length === 0) {
+  if (role === "assistant" && content.trim().length === 0 && contentOverride === undefined) {
     return undefined;
   }
 
@@ -189,7 +217,9 @@ function messageProcessingLogsTable(
 
 export function createChatAgent(options: ChatAgentOptions): ChatAgent {
   const maxContextMessages = Math.max(2, options.maxContextMessages ?? 12);
-  const systemPrompt = options.systemPrompt ?? defaultSystemPrompt;
+  const systemPrompt =
+    options.systemPrompt ??
+    `${defaultSystemPrompt}${options.compactResponses ? compactResponsePrompt : ""}`;
 
   const createGraph = (chatTools: ChatTool[] = []) => {
     const langChainTools = chatTools.map((chatTool) =>
@@ -215,6 +245,22 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
         [new SystemMessage(systemPrompt), ...recentMessages],
         config,
       );
+      // Keep the checkpoint as compact as the UI. This prevents an ignored
+      // prompt instruction from becoming repeated input-token overhead on
+      // later conversation turns.
+      const requestedTool = Array.isArray(
+        (response as { tool_calls?: unknown }).tool_calls,
+      ) && (response as { tool_calls: unknown[] }).tool_calls.length > 0;
+      if (options.compactResponses && !requestedTool) {
+        const hasStructuredEvidence = recentMessages.some(
+          (message) =>
+            message.getType() === "tool" &&
+            Boolean(messageProcessingLogsTable(toolName(message) ?? "", message.content)),
+        );
+        response.content = hasStructuredEvidence
+          ? ""
+          : compactGuidance(contentAsText(response.content));
+      }
       response.id ??= randomUUID();
       return { messages: [response] };
     };
@@ -259,7 +305,24 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
         }
         return;
       }
-      const chatMessage = toChatMessage(message, threadId, index);
+      const tables = pendingToolOutputs.flatMap(({ table }) =>
+        table ? [table] : [],
+      );
+      // Structured evidence is rendered directly; discard model prose.
+      // Otherwise only compact, bounded guidance may reach the UI.
+      const compacted = compactGuidance(contentAsText(message.content));
+      const contentOverride =
+        message.getType() !== "ai" || !options.compactResponses
+          ? undefined
+          : tables.length > 0
+            ? ""
+            : compacted || undefined;
+      const chatMessage = toChatMessage(
+        message,
+        threadId,
+        index,
+        contentOverride,
+      );
       if (!chatMessage) return;
       if (chatMessage.role === "assistant" && pendingToolOutputs.length > 0) {
         const sourceLabels = new Set<string>();
@@ -270,9 +333,6 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
             sourceLabels.add(label);
             return true;
           });
-        const tables = pendingToolOutputs.flatMap(({ table }) =>
-          table ? [table] : [],
-        );
         chatMessage.sources = sources;
         if (tables.length > 0) chatMessage.tables = tables;
         pendingToolOutputs.length = 0;

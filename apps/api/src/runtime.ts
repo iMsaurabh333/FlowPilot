@@ -62,6 +62,12 @@ export async function createRuntime(
       maxContextMessages: 12,
       model,
     });
+    const chatAgent = createChatAgent({
+      checkpointer,
+      maxContextMessages: 12,
+      model,
+      compactResponses: true,
+    });
     const repository = new PostgresConversationRepository(pool);
     const conversationPolicy = new PostgresConversationPolicyService(pool);
     const mcpRepository = new PostgresMcpRegistryRepository(pool);
@@ -74,7 +80,7 @@ export async function createRuntime(
     });
     const conversations = new ConversationService(
       repository,
-      agent,
+      chatAgent,
       mcpTools,
       conversationPolicy,
       operationLogs,

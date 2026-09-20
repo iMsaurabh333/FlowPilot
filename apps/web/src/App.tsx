@@ -12,6 +12,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 
 import {
@@ -22,10 +23,10 @@ import {
   type CurrentUser,
   type FlowPilotApi,
 } from "./api";
-import { McpRegistryView } from "./McpRegistryView";
 import { ReportsView } from "./ReportsView";
-import { LogsView } from "./LogsView";
 import { BulkActionsView } from "./BulkActionsView";
+import { HomeView } from "./HomeView";
+import { SettingsView } from "./SettingsView";
 import "./styles.css";
 
 type LoadState =
@@ -36,7 +37,19 @@ type LoadState =
 type PendingAction =
   "creating" | "sending" | "improving" | "deleting" | undefined;
 
-type AppView = "chat" | "registry" | "reports" | "logs" | "bulk-actions";
+type AppView = "home" | "chat" | "reports" | "bulk-actions" | "settings";
+type NavigationIcon = "home" | "chat" | "bulk" | "reports" | "settings";
+
+function NavGlyph({ icon }: { icon: NavigationIcon }) {
+  const paths: Record<NavigationIcon, ReactNode> = {
+    home: <path d="M4 11.2 12 4l8 7.2v8.3a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5v-8.3ZM9 21v-5h6v5" />,
+    chat: <path d="M20 11.4a7.6 7.6 0 0 1-8 7.5 8.8 8.8 0 0 1-3.6-.8L4 20l1.4-4A7.2 7.2 0 0 1 4 11.4 7.6 7.6 0 0 1 12 4a7.6 7.6 0 0 1 8 7.4ZM8.5 11.5h.1m3.3 0h.1m3.3 0h.1" />,
+    bulk: <path d="M5 5.5h11a2 2 0 0 1 2 2V19H7a2 2 0 0 1-2-2V5.5Zm0 0h11v11.5H7a2 2 0 0 0-2 2V5.5ZM8 9h5m-5 3h5m-5 3h4M18 8h1a1 1 0 0 1 1 1v10H9" />,
+    reports: <path d="M7 3.5h8l3 3V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Zm7.5 0V7H18M9 11h6M9 14h6M9 17h4" />,
+    settings: <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5 .8 2.1 2.1.8 1.9-1.1 1.6 1.6-1.1 1.9.8 2.1 2.1.8v2.2l-2.1.8-.8 2.1 1.1 1.9-1.6 1.6-1.9-1.1-2.1.8L12 20.5H9.8L9 18.4l-2.1-.8-1.9 1.1-1.6-1.6 1.1-1.9-.8-2.1-2.1-.8v-2.2l2.1-.8.8-2.1-1.1-1.9 1.6-1.6 1.9 1.1 2.1-.8.8-2.1H12Z" />,
+  };
+  return <span className="nav-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false">{paths[icon]}</svg></span>;
+}
 
 const starterPrompts = [
   {
@@ -116,9 +129,10 @@ function visibleError(error: unknown) {
 
 export interface AppProps {
   client?: FlowPilotApi;
+  initialView?: AppView;
 }
 
-export function App({ client = flowPilotApi }: AppProps) {
+export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [user, setUser] = useState<CurrentUser>();
@@ -132,7 +146,8 @@ export function App({ client = flowPilotApi }: AppProps) {
   const [conversationToDelete, setConversationToDelete] =
     useState<ConversationSummary>();
   const [profileOpen, setProfileOpen] = useState(false);
-  const [activeView, setActiveView] = useState<AppView>("chat");
+  const [activeView, setActiveView] = useState<AppView>(initialView);
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const detailRequest = useRef(0);
   const profileRef = useRef<AvatarDomRef>(null);
   const messageRegionRef = useRef<HTMLElement>(null);
@@ -394,7 +409,16 @@ export function App({ client = flowPilotApi }: AppProps) {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${navigationCollapsed ? " navigation-collapsed" : ""}`}>
+      <button
+        type="button"
+        className="navigation-toggle"
+        aria-label={navigationCollapsed ? "Expand navigation" : "Collapse navigation"}
+        aria-expanded={!navigationCollapsed}
+        onClick={() => setNavigationCollapsed((collapsed) => !collapsed)}
+      >
+        <span /><span /><span />
+      </button>
       <ShellBar
         primaryTitle="FlowPilot"
         secondaryTitle="Operational assistant"
@@ -443,15 +467,25 @@ export function App({ client = flowPilotApi }: AppProps) {
           <nav aria-label="Primary navigation" className="primary-nav-list">
             <button
               type="button"
+              className={`primary-nav-item${activeView === "home" ? " active" : ""}`}
+              aria-current={activeView === "home" ? "page" : undefined}
+              onClick={() => setActiveView("home")}
+            >
+              <NavGlyph icon="home" />
+              <span>
+                <strong>Home</strong>
+                <small>Workspace overview</small>
+              </span>
+            </button>
+            <button
+              type="button"
               className={`primary-nav-item${activeView === "chat" ? " active" : ""}`}
               aria-current={activeView === "chat" ? "page" : undefined}
               onClick={() => setActiveView("chat")}
             >
-              <span className="nav-glyph" aria-hidden="true">
-                C
-              </span>
+              <NavGlyph icon="chat" />
               <span>
-                <strong>Chat</strong>
+                <strong>Assistant chat</strong>
                 <small>Private troubleshooting</small>
               </span>
             </button>
@@ -461,26 +495,10 @@ export function App({ client = flowPilotApi }: AppProps) {
               aria-current={activeView === "bulk-actions" ? "page" : undefined}
               onClick={() => setActiveView("bulk-actions")}
             >
-              <span className="nav-glyph" aria-hidden="true">
-                B
-              </span>
+              <NavGlyph icon="bulk" />
               <span>
                 <strong>Bulk actions</strong>
                 <small>Deploy and configure flows</small>
-              </span>
-            </button>
-            <button
-              type="button"
-              className={`primary-nav-item${activeView === "logs" ? " active" : ""}`}
-              aria-current={activeView === "logs" ? "page" : undefined}
-              onClick={() => setActiveView("logs")}
-            >
-              <span className="nav-glyph" aria-hidden="true">
-                L
-              </span>
-              <span>
-                <strong>Logs</strong>
-                <small>Model and MCP diagnostics</small>
               </span>
             </button>
             <button
@@ -489,9 +507,7 @@ export function App({ client = flowPilotApi }: AppProps) {
               aria-current={activeView === "reports" ? "page" : undefined}
               onClick={() => setActiveView("reports")}
             >
-              <span className="nav-glyph" aria-hidden="true">
-                R
-              </span>
+              <NavGlyph icon="reports" />
               <span>
                 <strong>Reports</strong>
                 <small>Scheduled and export-ready</small>
@@ -500,16 +516,14 @@ export function App({ client = flowPilotApi }: AppProps) {
             {user?.scopes.includes("ChatAdmin") && client.listMcpServers && (
               <button
                 type="button"
-                className={`primary-nav-item${activeView === "registry" ? " active" : ""}`}
-                aria-current={activeView === "registry" ? "page" : undefined}
-                onClick={() => setActiveView("registry")}
+                className={`primary-nav-item${activeView === "settings" ? " active" : ""}`}
+                aria-current={activeView === "settings" ? "page" : undefined}
+                onClick={() => setActiveView("settings")}
               >
-                <span className="nav-glyph" aria-hidden="true">
-                  M
-                </span>
+                <NavGlyph icon="settings" />
                 <span>
-                  <strong>MCP servers</strong>
-                  <small>Connections and policy</small>
+                  <strong>Settings</strong>
+                  <small>Servers and diagnostics</small>
                 </span>
               </button>
             )}
@@ -524,7 +538,15 @@ export function App({ client = flowPilotApi }: AppProps) {
         </aside>
 
         <section className="view-stage">
-          {activeView === "chat" ? (
+          {activeView === "home" ? (
+            <HomeView
+              user={user!}
+              conversationCount={orderedConversations.length}
+              onOpenChat={() => setActiveView("chat")}
+              onOpenReports={() => setActiveView("reports")}
+              onOpenBulkActions={() => setActiveView("bulk-actions")}
+            />
+          ) : activeView === "chat" ? (
             <div className="workspace">
               <aside
                 className="conversation-panel"
@@ -742,9 +764,11 @@ export function App({ client = flowPilotApi }: AppProps) {
                               ? signedInName
                               : "FlowPilot"}
                           </div>
-                          <div className="message-content">
-                            {message.content}
-                          </div>
+                          {message.content && (
+                            <div className="message-content">
+                              {message.content}
+                            </div>
+                          )}
                           {message.delivery === "failed" && (
                             <p className="message-delivery-error" role="status">
                               No assistant response was recorded for this
@@ -854,12 +878,10 @@ export function App({ client = flowPilotApi }: AppProps) {
                 </form>
               </main>
             </div>
-          ) : activeView === "registry" ? (
-            <McpRegistryView client={client} />
-          ) : activeView === "logs" ? (
-            <LogsView client={client} />
           ) : activeView === "bulk-actions" ? (
             <BulkActionsView client={client} />
+          ) : activeView === "settings" ? (
+            <SettingsView client={client} />
           ) : (
             <ReportsView client={client} />
           )}
