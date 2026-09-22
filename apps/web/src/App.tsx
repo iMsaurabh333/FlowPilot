@@ -27,6 +27,7 @@ import { ReportsView } from "./ReportsView";
 import { BulkActionsView } from "./BulkActionsView";
 import { HomeView } from "./HomeView";
 import { SettingsView } from "./SettingsView";
+import { HealthView } from "./HealthView";
 import "./styles.css";
 
 type LoadState =
@@ -37,18 +38,35 @@ type LoadState =
 type PendingAction =
   "creating" | "sending" | "improving" | "deleting" | undefined;
 
-type AppView = "home" | "chat" | "reports" | "bulk-actions" | "settings";
-type NavigationIcon = "home" | "chat" | "bulk" | "reports" | "settings";
+type AppView = "home" | "chat" | "health" | "reports" | "bulk-actions" | "settings";
+type NavigationIcon = "home" | "chat" | "health" | "bulk" | "reports" | "settings";
 
 function NavGlyph({ icon }: { icon: NavigationIcon }) {
   const paths: Record<NavigationIcon, ReactNode> = {
-    home: <path d="M4 11.2 12 4l8 7.2v8.3a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5v-8.3ZM9 21v-5h6v5" />,
-    chat: <path d="M20 11.4a7.6 7.6 0 0 1-8 7.5 8.8 8.8 0 0 1-3.6-.8L4 20l1.4-4A7.2 7.2 0 0 1 4 11.4 7.6 7.6 0 0 1 12 4a7.6 7.6 0 0 1 8 7.4ZM8.5 11.5h.1m3.3 0h.1m3.3 0h.1" />,
-    bulk: <path d="M5 5.5h11a2 2 0 0 1 2 2V19H7a2 2 0 0 1-2-2V5.5Zm0 0h11v11.5H7a2 2 0 0 0-2 2V5.5ZM8 9h5m-5 3h5m-5 3h4M18 8h1a1 1 0 0 1 1 1v10H9" />,
-    reports: <path d="M7 3.5h8l3 3V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Zm7.5 0V7H18M9 11h6M9 14h6M9 17h4" />,
-    settings: <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5 .8 2.1 2.1.8 1.9-1.1 1.6 1.6-1.1 1.9.8 2.1 2.1.8v2.2l-2.1.8-.8 2.1 1.1 1.9-1.6 1.6-1.9-1.1-2.1.8L12 20.5H9.8L9 18.4l-2.1-.8-1.9 1.1-1.6-1.6 1.1-1.9-.8-2.1-2.1-.8v-2.2l2.1-.8.8-2.1-1.1-1.9 1.6-1.6 1.9 1.1 2.1-.8.8-2.1H12Z" />,
+    home: (
+      <path d="M4 11.2 12 4l8 7.2v8.3a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5v-8.3ZM9 21v-5h6v5" />
+    ),
+    chat: (
+      <path d="M20 11.4a7.6 7.6 0 0 1-8 7.5 8.8 8.8 0 0 1-3.6-.8L4 20l1.4-4A7.2 7.2 0 0 1 4 11.4 7.6 7.6 0 0 1 12 4a7.6 7.6 0 0 1 8 7.4ZM8.5 11.5h.1m3.3 0h.1m3.3 0h.1" />
+    ),
+    bulk: (
+      <path d="M5 5.5h11a2 2 0 0 1 2 2V19H7a2 2 0 0 1-2-2V5.5Zm0 0h11v11.5H7a2 2 0 0 0-2 2V5.5ZM8 9h5m-5 3h5m-5 3h4M18 8h1a1 1 0 0 1 1 1v10H9" />
+    ),
+    health: <path d="M4 12h3l2-5 4 10 2-5h5" />,
+    reports: (
+      <path d="M7 3.5h8l3 3V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Zm7.5 0V7H18M9 11h6M9 14h6M9 17h4" />
+    ),
+    settings: (
+      <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5 .8 2.1 2.1.8 1.9-1.1 1.6 1.6-1.1 1.9.8 2.1 2.1.8v2.2l-2.1.8-.8 2.1 1.1 1.9-1.6 1.6-1.9-1.1-2.1.8L12 20.5H9.8L9 18.4l-2.1-.8-1.9 1.1-1.6-1.6 1.1-1.9-.8-2.1-2.1-.8v-2.2l2.1-.8.8-2.1-1.1-1.9 1.6-1.6 1.9 1.1 2.1-.8.8-2.1H12Z" />
+    ),
   };
-  return <span className="nav-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false">{paths[icon]}</svg></span>;
+  return (
+    <span className="nav-glyph" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        {paths[icon]}
+      </svg>
+    </span>
+  );
 }
 
 const starterPrompts = [
@@ -409,15 +427,21 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
   }
 
   return (
-    <div className={`app-shell${navigationCollapsed ? " navigation-collapsed" : ""}`}>
+    <div
+      className={`app-shell${navigationCollapsed ? " navigation-collapsed" : ""}`}
+    >
       <button
         type="button"
         className="navigation-toggle"
-        aria-label={navigationCollapsed ? "Expand navigation" : "Collapse navigation"}
+        aria-label={
+          navigationCollapsed ? "Expand navigation" : "Collapse navigation"
+        }
         aria-expanded={!navigationCollapsed}
         onClick={() => setNavigationCollapsed((collapsed) => !collapsed)}
       >
-        <span /><span /><span />
+        <span />
+        <span />
+        <span />
       </button>
       <ShellBar
         primaryTitle="FlowPilot"
@@ -476,6 +500,15 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
                 <strong>Home</strong>
                 <small>Workspace overview</small>
               </span>
+            </button>
+            <button
+              type="button"
+              className={`primary-nav-item${activeView === "health" ? " active" : ""}`}
+              aria-current={activeView === "health" ? "page" : undefined}
+              onClick={() => setActiveView("health")}
+            >
+              <NavGlyph icon="health" />
+              <span><strong>Health</strong><small>CPI diagnostics</small></span>
             </button>
             <button
               type="button"
@@ -541,10 +574,17 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
           {activeView === "home" ? (
             <HomeView
               user={user!}
-              conversationCount={orderedConversations.length}
-              onOpenChat={() => setActiveView("chat")}
-              onOpenReports={() => setActiveView("reports")}
-              onOpenBulkActions={() => setActiveView("bulk-actions")}
+              conversations={orderedConversations}
+              onStartTroubleshooting={(prompt) => {
+                setDraft(prompt ?? "");
+                setActiveView("chat");
+              }}
+              onOpenHealth={() => setActiveView("health")}
+              onResumeConversation={(conversationId) => {
+                void chooseConversation(conversationId);
+                setActiveView("chat");
+              }}
+              client={client}
             />
           ) : activeView === "chat" ? (
             <div className="workspace">
@@ -755,10 +795,9 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
                       aria-live="polite"
                     >
                       {activeConversation.messages.map((message) => (
-                        <li
-                          key={message.id}
-                          className={`message ${message.role}${message.delivery === "failed" ? " failed" : ""}`}
-                        >
+                        <li key={message.id} className={`message-row ${message.role}`}>
+                          <time className="message-timestamp" dateTime={message.sentAt}>{message.sentAt ? formatDate(message.sentAt) : "Timestamp unavailable"}</time>
+                          <article className={`message ${message.role}${message.delivery === "failed" ? " failed" : ""}`}>
                           <div className="message-author">
                             {message.role === "user"
                               ? signedInName
@@ -771,10 +810,10 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
                           )}
                           {message.delivery === "failed" && (
                             <p className="message-delivery-error" role="status">
-                              No assistant response was recorded for this
-                              request.
+                              Request incomplete — no assistant response was recorded.
                             </p>
                           )}
+                          {message.toolFailure && <p className="message-tool-error" role="status">Tool result unavailable — {message.toolFailure}</p>}
                           {message.role === "assistant" && message.sources && (
                             <p className="message-sources">
                               Source:{" "}
@@ -816,6 +855,7 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
                                 </table>
                               </div>
                             ))}
+                          </article>
                         </li>
                       ))}
                     </ol>
@@ -880,6 +920,8 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
             </div>
           ) : activeView === "bulk-actions" ? (
             <BulkActionsView client={client} />
+          ) : activeView === "health" ? (
+            <HealthView client={client} />
           ) : activeView === "settings" ? (
             <SettingsView client={client} />
           ) : (

@@ -40,7 +40,7 @@ function response(payload: object) {
 }
 
 describe("MCP tool resolution", () => {
-  it("exposes only approved healthy namespaced tools and isolates another server failure", async () => {
+  it("keeps previously confirmed servers available after the health timestamp ages, while excluding disabled and unhealthy servers", async () => {
     const repository = new MemoryMcpRegistryRepository();
     await repository.save(server({ serverId: "monitoring" }));
     await repository.save(
@@ -83,7 +83,6 @@ describe("MCP tool resolution", () => {
       repository,
       authResolver: { resolve: async () => ({ Authorization: "Bearer test" }) },
       fetchImpl: fetchImpl as typeof fetch,
-      now: () => new Date(fresh),
     });
 
     const tools = await resolver.resolve({
@@ -92,8 +91,8 @@ describe("MCP tool resolution", () => {
       scopes: ["ChatUser", "ToolOperator"],
     });
 
-    expect(tools.map((tool) => tool.name)).toEqual(["monitoring__search_logs"]);
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(tools.map((tool) => tool.name)).toEqual(["monitoring__search_logs", "stale__search_logs"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it("does not discover or invoke tools for a chat-only identity", async () => {
@@ -104,7 +103,6 @@ describe("MCP tool resolution", () => {
       repository,
       authResolver: { resolve: async () => ({}) },
       fetchImpl: fetchImpl as typeof fetch,
-      now: () => new Date(fresh),
     });
 
     await expect(
@@ -147,7 +145,6 @@ describe("MCP tool resolution", () => {
       repository,
       authResolver: { resolve: async () => ({}) },
       fetchImpl: fetchImpl as typeof fetch,
-      now: () => new Date(fresh),
     });
 
     const [tool] = await resolver.resolve({
@@ -195,7 +192,6 @@ describe("MCP tool resolution", () => {
       repository,
       authResolver: { resolve: async () => ({}) },
       fetchImpl: fetchImpl as typeof fetch,
-      now: () => new Date(fresh),
     });
 
     const [tool] = await resolver.resolve({ subject: "operator", tenantId: "tenant", scopes: ["ChatUser", "ToolOperator"] });

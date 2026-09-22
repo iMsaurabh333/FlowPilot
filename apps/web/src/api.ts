@@ -44,7 +44,8 @@ export interface ConversationPolicy {
   maxRetainedTurns: number;
 }
 
-export type ReportJobStatus = "scheduled" | "running" | "succeeded" | "attention" | "failed";
+export type ReportJobStatus =
+  "scheduled" | "running" | "succeeded" | "attention" | "failed";
 
 export interface ReportJobSummary {
   id: string;
@@ -56,7 +57,10 @@ export interface ReportJobSummary {
   scheduledFor: string;
   recurrenceRule: string | null;
   status: ReportJobStatus;
-  lastRunStatus: Extract<ReportJobStatus, "succeeded" | "attention" | "failed"> | null;
+  lastRunStatus: Extract<
+    ReportJobStatus,
+    "succeeded" | "attention" | "failed"
+  > | null;
   finalReportHtml: string | null;
   errorLog: string | null;
   completedAt: string | null;
@@ -87,11 +91,80 @@ export interface ApprovedPlanExecutionResult {
 }
 
 export type ReportExportFormat = "html" | "markdown" | "xlsx";
-export interface ReportSource { name: string; description: string; }
-export interface ReconciliationPreview { fileName: string; headers: string[]; rows: string[][]; totalRows: number; }
-export interface ReconciliationResult { generatedAt: string; rows: Array<{ applicationMessageId: string; result: "matched" | "exception" | "unavailable"; systems: Record<string, { status: string; fields: Record<string, string> }> }>; }
-export interface ReportJobRun { id: string; reportJobId: string; status: "succeeded" | "attention" | "failed"; attemptCount: number; finalReportHtml: string | null; errorLog: string | null; startedAt: string | null; completedAt: string; }
-export interface OperationLogEntry { id: string; surface: "chat" | "report" | "system"; eventType: "llm_input" | "mcp_call" | "error"; title: string; reportJobId?: string | null; detail: Record<string, unknown>; createdAt: string; }
+export interface ReportSource {
+  name: string;
+  description: string;
+}
+export interface ReconciliationPreview {
+  fileName: string;
+  headers: string[];
+  rows: string[][];
+  totalRows: number;
+}
+export interface ReconciliationResult {
+  generatedAt: string;
+  rows: Array<{
+    applicationMessageId: string;
+    result: "matched" | "exception" | "unavailable";
+    systems: Record<string, { status: string; fields: Record<string, string> }>;
+  }>;
+}
+export interface ReportJobRun {
+  id: string;
+  reportJobId: string;
+  status: "succeeded" | "attention" | "failed";
+  attemptCount: number;
+  finalReportHtml: string | null;
+  errorLog: string | null;
+  startedAt: string | null;
+  completedAt: string;
+}
+export interface OperationLogEntry {
+  id: string;
+  surface: "chat" | "report" | "system";
+  eventType: "llm_input" | "mcp_call" | "error";
+  title: string;
+  reportJobId?: string | null;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}
+export interface IntegrationHealthMessage {
+  applicationMessageId: string | null;
+  applicationMessageType: string | null;
+  failed: number;
+  completed: number;
+  lastFailureAt: string | null;
+  latestError: string | null;
+  durationTotalMilliseconds?: number;
+  durationSamples?: number;
+}
+export interface IntegrationHealthFlow {
+  flowId: string;
+  flowName: string;
+  processed: number;
+  failed: number;
+  failureRate: number;
+  changePoints: number | null;
+  partial: boolean;
+  recurring: boolean;
+  intermittent: boolean;
+  businessMessages: IntegrationHealthMessage[];
+  representativeError: string | null;
+  averageProcessingMilliseconds: number | null;
+}
+export interface IntegrationHealthSummary {
+  window: "last_completed_hour" | "today" | "yesterday" | "last_24_hours";
+  from: string;
+  to: string;
+  partial: boolean;
+  processed: number;
+  failed: number;
+  failureRate: number;
+  changePoints: number | null;
+  trend: number[];
+  flows: IntegrationHealthFlow[];
+  conclusion: string;
+}
 
 export interface ConversationSummary {
   id: string;
@@ -104,7 +177,9 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  sentAt?: string;
   delivery?: "failed";
+  toolFailure?: string;
   sources?: Array<{ label: string }>;
   tables?: Array<{
     title: string;
@@ -137,34 +212,94 @@ export interface FlowPilotApi {
   pingMcpServer?(serverId: string): Promise<McpServerRecord>;
   listMcpServerTools?(serverId: string): Promise<string[]>;
   getConversationPolicy?(): Promise<ConversationPolicy>;
-  updateConversationPolicy?(input: ConversationPolicy): Promise<ConversationPolicy>;
+  updateConversationPolicy?(
+    input: ConversationPolicy,
+  ): Promise<ConversationPolicy>;
   listReportJobs?(): Promise<ReportJobSummary[]>;
   createReportJob?(input: CreateReportJobInput): Promise<ReportJobSummary>;
-  updateReportJob?(jobId: string, input: CreateReportJobInput): Promise<ReportJobSummary>;
+  updateReportJob?(
+    jobId: string,
+    input: CreateReportJobInput,
+  ): Promise<ReportJobSummary>;
   runReportJob?(jobId: string): Promise<ReportJobSummary>;
-  previewReportActionPlan?(fileName: string, contentBase64: string): Promise<ReportActionPlanPreview>;
-  updateReportActionPlan?(planId: string, plan: string): Promise<ReportActionPlanPreview>;
-  approveReportActionPlan?(planId: string, revision: number): Promise<ReportActionPlanPreview>;
-  executeApprovedActionPlan?(planId: string): Promise<ApprovedPlanExecutionResult>;
+  previewReportActionPlan?(
+    fileName: string,
+    contentBase64: string,
+  ): Promise<ReportActionPlanPreview>;
+  updateReportActionPlan?(
+    planId: string,
+    plan: string,
+  ): Promise<ReportActionPlanPreview>;
+  approveReportActionPlan?(
+    planId: string,
+    revision: number,
+  ): Promise<ReportActionPlanPreview>;
+  executeApprovedActionPlan?(
+    planId: string,
+  ): Promise<ApprovedPlanExecutionResult>;
   regenerateReportActionPlan?(planId: string): Promise<ReportActionPlanPreview>;
   downloadReportJob?(jobId: string, format: ReportExportFormat): Promise<void>;
   listReportSources?(): Promise<ReportSource[]>;
   listReconciliationSources?(): Promise<ReportSource[]>;
   listReportJobRuns?(jobId: string): Promise<ReportJobRun[]>;
   deleteReportJob?(jobId: string): Promise<void>;
-  setReportScheduleActive?(jobId: string, active: boolean): Promise<ReportJobSummary>;
+  setReportScheduleActive?(
+    jobId: string,
+    active: boolean,
+  ): Promise<ReportJobSummary>;
   listOperationLogs?(): Promise<OperationLogEntry[]>;
-  previewReconciliationUpload?(fileName: string, contentBase64: string): Promise<ReconciliationPreview>;
-  runReconciliation?(input: { ids: string[]; sourceToolNames: string[]; fields: string[] }): Promise<ReconciliationResult>;
+  getIntegrationHealth?(
+    window?: IntegrationHealthSummary["window"],
+  ): Promise<IntegrationHealthSummary>;
+  collectIntegrationHealth?(hours?: number): Promise<{
+    bucketStart: string;
+    partial: boolean;
+    flows: number;
+  }>;
+  previewReconciliationUpload?(
+    fileName: string,
+    contentBase64: string,
+  ): Promise<ReconciliationPreview>;
+  runReconciliation?(input: {
+    ids: string[];
+    sourceToolNames: string[];
+    fields: string[];
+  }): Promise<ReconciliationResult>;
   downloadReconciliationReport?(result: ReconciliationResult): Promise<void>;
   listBulkPackages?(): Promise<unknown>;
   listBulkPackageFlows?(packageId: string): Promise<unknown>;
   deployBulkFlow?(flowId: string, version: string): Promise<unknown>;
   undeployBulkFlow?(flowId: string): Promise<unknown>;
   getBulkFlowConfigurations?(flowId: string, version: string): Promise<unknown>;
-  updateBulkFlowConfigurations?(flowId: string, version: string, configuration: Record<string, { value: string; dataType: string }>): Promise<unknown>;
-  listBulkJobs?(): Promise<Array<{ id: string; title: string; artifacts: unknown[]; scheduledFor: string | null; createdAt: string }>>;
-  createBulkJob?(input: { title: string; artifacts: unknown[]; scheduledFor?: string | null }): Promise<{ id: string; title: string; artifacts: unknown[]; scheduledFor: string | null; createdAt: string }>;
+  updateBulkFlowConfigurations?(
+    flowId: string,
+    version: string,
+    configuration: Record<string, { value: string; dataType: string }>,
+  ): Promise<unknown>;
+  listBulkJobs?(): Promise<
+    Array<{
+      id: string;
+      title: string;
+      artifacts: unknown[];
+      scheduledFor: string | null;
+      createdAt: string;
+    }>
+  >;
+  createBulkJob?(input: {
+    title: string;
+    artifacts: unknown[];
+    scheduledFor?: string | null;
+  }): Promise<{
+    id: string;
+    title: string;
+    artifacts: unknown[];
+    scheduledFor: string | null;
+    createdAt: string;
+  }>;
+  getIntegrationHealthSettings?(): Promise<{ retentionDays: number }>;
+  updateIntegrationHealthSettings?(input: { retentionDays: number }): Promise<{ retentionDays: number }>;
+  updateBulkJob?(jobId: string, input: { title: string; artifacts: unknown[]; scheduledFor?: string | null }): Promise<{ id: string; title: string; artifacts: unknown[]; scheduledFor: string | null; createdAt: string }>;
+  deleteBulkJob?(jobId: string): Promise<void>;
   runBulkJob?(jobId: string): Promise<void>;
 }
 
@@ -349,7 +484,9 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       );
     },
     async listMcpServerTools(serverId) {
-      const payload = await request<{ tools: string[] }>(`/api/admin/mcp-servers/${encodeURIComponent(serverId)}/tools`);
+      const payload = await request<{ tools: string[] }>(
+        `/api/admin/mcp-servers/${encodeURIComponent(serverId)}/tools`,
+      );
       return payload.tools;
     },
     getConversationPolicy() {
@@ -363,33 +500,181 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       });
     },
     async listReportJobs() {
-      const payload = await request<{ jobs: ReportJobSummary[] }>("/api/reports/jobs");
+      const payload = await request<{ jobs: ReportJobSummary[] }>(
+        "/api/reports/jobs",
+      );
       return payload.jobs;
     },
-    async listOperationLogs() { return (await request<{ logs: OperationLogEntry[] }>("/api/operation-logs")).logs; },
+    async listOperationLogs() {
+      return (
+        await request<{ logs: OperationLogEntry[] }>("/api/operation-logs")
+      ).logs;
+    },
+    getIntegrationHealth(window = "last_completed_hour") {
+      return request<IntegrationHealthSummary>(
+        `/api/integration-health?window=${encodeURIComponent(window)}`,
+      );
+    },
+    collectIntegrationHealth(hours = 1) {
+      return request<{ bucketStart: string; partial: boolean; flows: number }>(
+        `/api/integration-health/collect?hours=${encodeURIComponent(hours)}`,
+        { method: "POST" },
+      );
+    },
+    getIntegrationHealthSettings() {
+      return request<{ retentionDays: number }>("/api/admin/integration-health-settings");
+    },
+    updateIntegrationHealthSettings(input) {
+      return request<{ retentionDays: number }>("/api/admin/integration-health-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    },
     async listReportSources() {
-      const payload = await request<{ sources: ReportSource[] }>("/api/reports/sources");
+      const payload = await request<{ sources: ReportSource[] }>(
+        "/api/reports/sources",
+      );
       return payload.sources;
     },
     async listReconciliationSources() {
-      const payload = await request<{ sources: ReportSource[] }>("/api/reconciliations/sources");
+      const payload = await request<{ sources: ReportSource[] }>(
+        "/api/reconciliations/sources",
+      );
       return payload.sources;
     },
-    previewReconciliationUpload(fileName, contentBase64) { return request<ReconciliationPreview>("/api/reconciliations/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName, contentBase64 }) }); },
-    runReconciliation(input) { return request<ReconciliationResult>("/api/reconciliations/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }); },
-    async downloadReconciliationReport(result) { const response = await fetcher("/api/reconciliations/export", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }, body: JSON.stringify(result) }); if (!response.ok) throw new ApiError(response.status, (await response.json().catch(() => ({ error: "download_failed" }))).error ?? "download_failed"); const anchor = document.createElement("a"); anchor.href = URL.createObjectURL(await response.blob()); anchor.download = "flowpilot-reconciliation-report.xlsx"; anchor.click(); URL.revokeObjectURL(anchor.href); },
-    listBulkPackages() { return request<unknown>("/api/bulk-actions/packages"); },
-    listBulkPackageFlows(packageId) { return request<unknown>(`/api/bulk-actions/packages/${encodeURIComponent(packageId)}/flows`); },
-    deployBulkFlow(flowId, version) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}/deploy`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version }) }); },
-    undeployBulkFlow(flowId) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}`, { method: "DELETE" }); },
-    getBulkFlowConfigurations(flowId, version) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}/configurations?version=${encodeURIComponent(version)}`); },
-    updateBulkFlowConfigurations(flowId, version, configuration) { return request<unknown>(`/api/bulk-actions/flows/${encodeURIComponent(flowId)}/configurations`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version, configuration }) }); },
-    async listBulkJobs() { return (await request<{ jobs: Array<{ id: string; title: string; artifacts: unknown[]; scheduledFor: string | null; createdAt: string }> }>("/api/bulk-actions/jobs")).jobs; },
-    createBulkJob(input) { return request<{ id: string; title: string; artifacts: unknown[]; scheduledFor: string | null; createdAt: string }>("/api/bulk-actions/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }); },
-    async runBulkJob(jobId) { await request<unknown>(`/api/bulk-actions/jobs/${encodeURIComponent(jobId)}/run`, { method: "POST" }); },
-    async listReportJobRuns(jobId) { return (await request<{ runs: ReportJobRun[] }>(`/api/reports/jobs/${encodeURIComponent(jobId)}/runs`)).runs; },
-    async deleteReportJob(jobId) { await request<void>(`/api/reports/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }); },
-    setReportScheduleActive(jobId, active) { return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}/schedule-active`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }) }); },
+    previewReconciliationUpload(fileName, contentBase64) {
+      return request<ReconciliationPreview>("/api/reconciliations/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName, contentBase64 }),
+      });
+    },
+    runReconciliation(input) {
+      return request<ReconciliationResult>("/api/reconciliations/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    },
+    async downloadReconciliationReport(result) {
+      const response = await fetcher("/api/reconciliations/export", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          Accept:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+        body: JSON.stringify(result),
+      });
+      if (!response.ok)
+        throw new ApiError(
+          response.status,
+          (await response.json().catch(() => ({ error: "download_failed" })))
+            .error ?? "download_failed",
+        );
+      const anchor = document.createElement("a");
+      anchor.href = URL.createObjectURL(await response.blob());
+      anchor.download = "flowpilot-reconciliation-report.xlsx";
+      anchor.click();
+      URL.revokeObjectURL(anchor.href);
+    },
+    listBulkPackages() {
+      return request<unknown>("/api/bulk-actions/packages");
+    },
+    listBulkPackageFlows(packageId) {
+      return request<unknown>(
+        `/api/bulk-actions/packages/${encodeURIComponent(packageId)}/flows`,
+      );
+    },
+    deployBulkFlow(flowId, version) {
+      return request<unknown>(
+        `/api/bulk-actions/flows/${encodeURIComponent(flowId)}/deploy`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version }),
+        },
+      );
+    },
+    undeployBulkFlow(flowId) {
+      return request<unknown>(
+        `/api/bulk-actions/flows/${encodeURIComponent(flowId)}`,
+        { method: "DELETE" },
+      );
+    },
+    getBulkFlowConfigurations(flowId, version) {
+      return request<unknown>(
+        `/api/bulk-actions/flows/${encodeURIComponent(flowId)}/configurations?version=${encodeURIComponent(version)}`,
+      );
+    },
+    updateBulkFlowConfigurations(flowId, version, configuration) {
+      return request<unknown>(
+        `/api/bulk-actions/flows/${encodeURIComponent(flowId)}/configurations`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version, configuration }),
+        },
+      );
+    },
+    async listBulkJobs() {
+      return (
+        await request<{
+          jobs: Array<{
+            id: string;
+            title: string;
+            artifacts: unknown[];
+            scheduledFor: string | null;
+            createdAt: string;
+          }>;
+        }>("/api/bulk-actions/jobs")
+      ).jobs;
+    },
+    createBulkJob(input) {
+      return request<{
+        id: string;
+        title: string;
+        artifacts: unknown[];
+        scheduledFor: string | null;
+        createdAt: string;
+      }>("/api/bulk-actions/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    },
+    updateBulkJob(jobId, input) { return request(`/api/bulk-actions/jobs/${encodeURIComponent(jobId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }); },
+    async deleteBulkJob(jobId) { await request<void>(`/api/bulk-actions/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }); },
+    async runBulkJob(jobId) {
+      await request<unknown>(
+        `/api/bulk-actions/jobs/${encodeURIComponent(jobId)}/run`,
+        { method: "POST" },
+      );
+    },
+    async listReportJobRuns(jobId) {
+      return (
+        await request<{ runs: ReportJobRun[] }>(
+          `/api/reports/jobs/${encodeURIComponent(jobId)}/runs`,
+        )
+      ).runs;
+    },
+    async deleteReportJob(jobId) {
+      await request<void>(`/api/reports/jobs/${encodeURIComponent(jobId)}`, {
+        method: "DELETE",
+      });
+    },
+    setReportScheduleActive(jobId, active) {
+      return request<ReportJobSummary>(
+        `/api/reports/jobs/${encodeURIComponent(jobId)}/schedule-active`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active }),
+        },
+      );
+    },
     createReportJob(input) {
       return request<ReportJobSummary>("/api/reports/jobs", {
         method: "POST",
@@ -398,42 +683,87 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       });
     },
     updateReportJob(jobId, input) {
-      return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
-      });
+      return request<ReportJobSummary>(
+        `/api/reports/jobs/${encodeURIComponent(jobId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
     },
     runReportJob(jobId) {
-      return request<ReportJobSummary>(`/api/reports/jobs/${encodeURIComponent(jobId)}/run`, {
-        method: "POST",
-      });
+      return request<ReportJobSummary>(
+        `/api/reports/jobs/${encodeURIComponent(jobId)}/run`,
+        {
+          method: "POST",
+        },
+      );
     },
     previewReportActionPlan(fileName, contentBase64) {
-      return request<ReportActionPlanPreview>("/api/reports/action-plan-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName, contentBase64 }),
-      });
+      return request<ReportActionPlanPreview>(
+        "/api/reports/action-plan-preview",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName, contentBase64 }),
+        },
+      );
     },
     updateReportActionPlan(planId, plan) {
-      return request<ReportActionPlanPreview>(`/api/reports/action-plans/${encodeURIComponent(planId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan }) });
+      return request<ReportActionPlanPreview>(
+        `/api/reports/action-plans/${encodeURIComponent(planId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan }),
+        },
+      );
     },
     approveReportActionPlan(planId, revision) {
-      return request<ReportActionPlanPreview>(`/api/reports/action-plans/${encodeURIComponent(planId)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision }) });
+      return request<ReportActionPlanPreview>(
+        `/api/reports/action-plans/${encodeURIComponent(planId)}/approve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision }),
+        },
+      );
     },
     executeApprovedActionPlan(planId) {
-      return request<ApprovedPlanExecutionResult>(`/api/reports/action-plans/${encodeURIComponent(planId)}/execute`, { method: "POST" });
+      return request<ApprovedPlanExecutionResult>(
+        `/api/reports/action-plans/${encodeURIComponent(planId)}/execute`,
+        { method: "POST" },
+      );
     },
     regenerateReportActionPlan(planId) {
-      return request<ReportActionPlanPreview>(`/api/reports/action-plans/${encodeURIComponent(planId)}/regenerate`, { method: "POST" });
+      return request<ReportActionPlanPreview>(
+        `/api/reports/action-plans/${encodeURIComponent(planId)}/regenerate`,
+        { method: "POST" },
+      );
     },
     async downloadReportJob(jobId, format) {
-      const response = await fetcher(`/api/reports/jobs/${encodeURIComponent(jobId)}/export?format=${encodeURIComponent(format)}`, { credentials: "same-origin", headers: { Accept: "application/octet-stream" } });
-      if (!response.ok) throw new ApiError(response.status, errorCode(await responsePayload(response)));
+      const response = await fetcher(
+        `/api/reports/jobs/${encodeURIComponent(jobId)}/export?format=${encodeURIComponent(format)}`,
+        {
+          credentials: "same-origin",
+          headers: { Accept: "application/octet-stream" },
+        },
+      );
+      if (!response.ok)
+        throw new ApiError(
+          response.status,
+          errorCode(await responsePayload(response)),
+        );
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = response.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/u)?.[1] ?? `flowpilot-report.${format === "markdown" ? "md" : format}`;
+      anchor.download =
+        response.headers
+          .get("content-disposition")
+          ?.match(/filename="?([^";]+)"?/u)?.[1] ??
+        `flowpilot-report.${format === "markdown" ? "md" : format}`;
       anchor.click();
       URL.revokeObjectURL(url);
     },

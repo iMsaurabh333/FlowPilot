@@ -353,8 +353,44 @@ function migrations(schemaName: string) {
           WITH CHECK (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true));
       `,
     },
-    { version: 18, sql: `ALTER TABLE ${schema}.bulk_action_jobs ADD COLUMN scheduled_for timestamptz, ADD COLUMN schedule_active boolean NOT NULL DEFAULT true, ADD COLUMN scheduler_job_id text;` },
-    { version: 19, sql: `ALTER POLICY bulk_action_jobs_owner_policy ON ${schema}.bulk_action_jobs USING (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))) WITH CHECK (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true)));` },
+    {
+      version: 18,
+      sql: `ALTER TABLE ${schema}.bulk_action_jobs ADD COLUMN scheduled_for timestamptz, ADD COLUMN schedule_active boolean NOT NULL DEFAULT true, ADD COLUMN scheduler_job_id text;`,
+    },
+    {
+      version: 19,
+      sql: `ALTER POLICY bulk_action_jobs_owner_policy ON ${schema}.bulk_action_jobs USING (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true))) WITH CHECK (current_setting('flowpilot.scheduler', true) = 'true' OR (tenant_id = current_setting('flowpilot.tenant_id', true) AND subject_id = current_setting('flowpilot.subject_id', true)));`,
+    },
+    {
+      version: 20,
+      sql: `
+        CREATE TABLE ${schema}.integration_health_snapshots (
+          tenant_id text NOT NULL,
+          bucket_start timestamptz NOT NULL,
+          flow_id text NOT NULL,
+          flow_name text NOT NULL,
+          status_counts jsonb NOT NULL,
+          business_messages jsonb NOT NULL,
+          representative_error text,
+          partial boolean NOT NULL DEFAULT false,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (tenant_id, bucket_start, flow_id)
+        );
+        CREATE INDEX integration_health_snapshots_tenant_bucket_idx
+          ON ${schema}.integration_health_snapshots (tenant_id, bucket_start DESC);
+      `,
+    },
+    {
+      version: 21,
+      sql: `
+        CREATE TABLE ${schema}.integration_health_settings (
+          tenant_id text PRIMARY KEY,
+          retention_days integer NOT NULL DEFAULT 30,
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT integration_health_retention_days CHECK (retention_days BETWEEN 1 AND 365)
+        );
+      `,
+    },
   ] as const;
 }
 
@@ -396,7 +432,8 @@ export async function runMigrations(pool: Pool, schemaName = "flowpilot_app") {
         const repair = migrations(schemaName).find(
           (migration) => migration.version === 15,
         );
-        if (!repair) throw new Error("Reports schema repair migration is unavailable");
+        if (!repair)
+          throw new Error("Reports schema repair migration is unavailable");
         await client.query("BEGIN");
         try {
           await client.query(repair.sql);

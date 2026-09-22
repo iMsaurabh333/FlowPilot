@@ -98,4 +98,5 @@ After the first deployment, validate and plan assignments for the predefined `Fl
 - [Environment bootstrap and recovery](./docs/environment-bootstrap.md)
 - [Role, secret, backup, and restore interfaces](./docs/recovery-interfaces.md)
 - [Secure LLM provider configuration](./docs/llm-provider-configuration.md)
+- [Integration Health Snapshot](./docs/integration-health-snapshot.md)
 - [Architecture decisions](./docs/decisions/README.md)

@@ -22,15 +22,26 @@ import { McpToolResolver } from "./mcp/tool-resolver.js";
 import { createConfiguredMcpAuthProfileResolver } from "./mcp/technical-auth.js";
 import { PostgresReportJobRepository } from "./reports/postgres-repository.js";
 import { ReportJobService } from "./reports/service.js";
-import { resolveJobSchedulerBinding, SapJobSchedulerClient } from "./reports/job-scheduler.js";
+import {
+  resolveJobSchedulerBinding,
+  SapJobSchedulerClient,
+} from "./reports/job-scheduler.js";
 import { createSchedulerAuthentication } from "./auth.js";
-import { McpReportExecutor, reconciliationLookupTools, reportOnlyTools } from "./reports/mcp-report-executor.js";
+import {
+  McpReportExecutor,
+  reconciliationLookupTools,
+  reportOnlyTools,
+} from "./reports/mcp-report-executor.js";
 import { ReportActionPlanService } from "./reports/action-plan.js";
 import { PostgresActionPlanStore } from "./reports/action-plan-store.js";
 import { ApprovedPlanExecutor } from "./reports/approved-plan-executor.js";
 import { ReportWorkflowExecutor } from "./reports/report-workflow-executor.js";
 import { OperationLogService } from "./operation-log.js";
 import { BulkJobStore } from "./bulk-jobs.js";
+import {
+  IntegrationHealthService,
+  startIntegrationHealthCollector,
+} from "./integration-health.js";
 
 export async function createRuntime(
   environment: NodeJS.ProcessEnv = process.env,
@@ -92,21 +103,78 @@ export async function createRuntime(
     const schedulerBinding = resolveJobSchedulerBinding(environment);
     const schedulerActionUrl = environment.REPORT_SCHEDULER_ACTION_URL;
     const actionPlans = new PostgresActionPlanStore(pool);
-    const approvedPlanExecutor = new ApprovedPlanExecutor((user) => mcpTools.resolve(user));
+    const approvedPlanExecutor = new ApprovedPlanExecutor((user) =>
+      mcpTools.resolve(user),
+    );
     const reports = new ReportJobService(
       new PostgresReportJobRepository(pool),
-      new ReportWorkflowExecutor(new McpReportExecutor({
-        agent,
-        resolveTools: (user, jobId) => mcpTools.resolve(user, { surface: "report", reportJobId: jobId }),
-        operationLogs,
-      }), actionPlans, approvedPlanExecutor),
-      schedulerBinding && schedulerActionUrl ? new SapJobSchedulerClient(schedulerBinding) : undefined,
+      new ReportWorkflowExecutor(
+        new McpReportExecutor({
+          agent,
+          resolveTools: (user, jobId) =>
+            mcpTools.resolve(user, { surface: "report", reportJobId: jobId }),
+          operationLogs,
+        }),
+        actionPlans,
+        approvedPlanExecutor,
+      ),
+      schedulerBinding && schedulerActionUrl
+        ? new SapJobSchedulerClient(schedulerBinding)
+        : undefined,
       schedulerActionUrl,
+    );
+    const integrationHealth = new IntegrationHealthService(pool, (user) =>
+      mcpTools.resolve(user, { surface: "report" }),
+    );
+    const stopIntegrationHealthCollector = startIntegrationHealthCollector(
+      integrationHealth,
+      environment.INTEGRATION_HEALTH_TENANT_ID,
+      environment.INTEGRATION_HEALTH_SUBJECT ?? "integration-health-collector",
     );
 
     return {
-      app: createApp({ conversations, registry, conversationPolicy, reports, operationLogs, bulkJobs: new BulkJobStore(pool), bulkScheduler: schedulerBinding ? new SapJobSchedulerClient(schedulerBinding) : undefined, bulkSchedulerActionUrl: environment.REPORT_SCHEDULER_ACTION_URL?.replace(/\/internal\/reports\/dispatch$/u, "/internal/bulk-actions/dispatch"), reportSources: async (user) => reportOnlyTools(await mcpTools.resolve(user)).map((tool) => ({ name: tool.name, description: tool.description })), reconciliationTools: async (user) => reconciliationLookupTools(await mcpTools.resolve(user, { surface: "report" })), contentTools: async (user) => mcpTools.resolve(user, { surface: "report" }), reportPlanning: new ReportActionPlanService(agent, () => mcpTools.resolve({ tenantId: "", subject: "", scopes: ["ChatUser", "ToolOperator"] })), actionPlans, approvedPlanExecutor, ...(schedulerBinding ? { schedulerAuthentication: createSchedulerAuthentication() } : {}) }),
+      app: createApp({
+        conversations,
+        registry,
+        conversationPolicy,
+        reports,
+        operationLogs,
+        integrationHealth,
+        bulkJobs: new BulkJobStore(pool),
+        bulkScheduler: schedulerBinding
+          ? new SapJobSchedulerClient(schedulerBinding)
+          : undefined,
+        bulkSchedulerActionUrl:
+          environment.REPORT_SCHEDULER_ACTION_URL?.replace(
+            /\/internal\/reports\/dispatch$/u,
+            "/internal/bulk-actions/dispatch",
+          ),
+        reportSources: async (user) =>
+          reportOnlyTools(await mcpTools.resolve(user)).map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+          })),
+        reconciliationTools: async (user) =>
+          reconciliationLookupTools(
+            await mcpTools.resolve(user, { surface: "report" }),
+          ),
+        contentTools: async (user) =>
+          mcpTools.resolve(user, { surface: "report" }),
+        reportPlanning: new ReportActionPlanService(agent, () =>
+          mcpTools.resolve({
+            tenantId: "",
+            subject: "",
+            scopes: ["ChatUser", "ToolOperator"],
+          }),
+        ),
+        actionPlans,
+        approvedPlanExecutor,
+        ...(schedulerBinding
+          ? { schedulerAuthentication: createSchedulerAuthentication() }
+          : {}),
+      }),
       async close() {
+        stopIntegrationHealthCollector();
         await pool.end();
       },
     };

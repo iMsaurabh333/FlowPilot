@@ -107,7 +107,9 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
   const [jobName, setJobName] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
   const [activeJob, setActiveJob] = useState<SavedJob>();
+  const [editingJob, setEditingJob] = useState<SavedJob>();
   const [notice, setNotice] = useState<string>();
+  const [scheduleHelpOpen, setScheduleHelpOpen] = useState(false);
 
   useEffect(() => {
     if (client.listBulkJobs)
@@ -243,6 +245,13 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
       scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
       artifacts,
     };
+    if (editingJob && client.updateBulkJob) {
+      void client.updateBulkJob(editingJob.id, { title: local.name, artifacts: local.artifacts, scheduledFor: local.scheduledFor }).then((updated) => {
+        const saved = { id: updated.id, name: updated.title, savedAt: updated.createdAt, scheduledFor: updated.scheduledFor, artifacts: updated.artifacts as Artifact[] };
+        setJobs((items) => items.map((item) => item.id === saved.id ? saved : item)); setActiveJob(saved); setEditingJob(undefined); setMode("jobs"); setNotice(`Updated ${saved.name}.`);
+      }).catch(() => setNotice("The bulk job could not be updated."));
+      return;
+    }
     if (client.createBulkJob) {
       void client
         .createBulkJob({
@@ -336,6 +345,7 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
     persist(jobs.map((item) => (item.id === updated.id ? updated : item)));
   };
   const newJob = () => {
+    setEditingJob(undefined);
     setMode("wizard");
     setStep(1);
     setSelectedPackages([]);
@@ -344,6 +354,8 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
     setScheduledFor("");
     setNotice(undefined);
   };
+  const editJob = (job: SavedJob) => { setEditingJob(job); setArtifacts(job.artifacts.map((item) => ({ ...item, expanded: false, state: "ready" }))); setJobName(job.name); setScheduledFor(job.scheduledFor ? new Date(job.scheduledFor).toISOString().slice(0, 16) : ""); setMode("review"); };
+  const deleteJob = (job: SavedJob) => { if (!window.confirm(`Delete bulk job “${job.name}”?`)) return; if (client.deleteBulkJob) void client.deleteBulkJob(job.id).then(() => { setJobs((items) => items.filter((item) => item.id !== job.id)); setActiveJob((current) => current?.id === job.id ? undefined : current); setNotice(`Deleted ${job.name}.`); }).catch(() => setNotice("The bulk job could not be deleted.")); else persist(jobs.filter((item) => item.id !== job.id)); };
 
   if (mode === "wizard")
     return (
@@ -570,7 +582,9 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
                     <tr key={item.id}>
                       <td>
                         <strong>{item.name}</strong>
-                        <small>{item.packageName}</small>
+                      </td>
+                      <td>
+                        {item.packageName}
                       </td>
                       <td>
                         <select
@@ -610,7 +624,7 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
                         className="bulk-parameter-row"
                         key={`${item.id}-parameters`}
                       >
-                        <td colSpan={4}>
+                        <td colSpan={5}>
                           <div>
                             <strong>External parameters for {item.name}</strong>
                             {item.parameters.map((parameter, index) => (
@@ -653,36 +667,55 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
             </table>
           </div>
           <div className="bulk-save">
-            <label>
-              Job name
-              <input
-                value={jobName}
-                maxLength={120}
-                placeholder="September release deployment"
-                onChange={(event) => setJobName(event.target.value)}
-              />
-            </label>
-            <label>
-              Schedule (optional)
-              <input
-                type="datetime-local"
-                min={new Date(Date.now() + 10 * 60_000)
-                  .toISOString()
-                  .slice(0, 16)}
-                value={scheduledFor}
-                onChange={(event) => setScheduledFor(event.target.value)}
-              />
-              <small>
-                Schedule at least 10 minutes from now. Leave empty to use Run
-                job.
-              </small>
-            </label>
-            <Button design="Transparent" onClick={() => setMode("wizard")}>
-              Back
-            </Button>
-            <Button design="Emphasized" onClick={saveJob}>
-              Save job
-            </Button>
+            <div className="bulk-save-fields">
+              <div className="bulk-field">
+                <label htmlFor="bulk-job-name">Job name</label>
+                <input
+                  id="bulk-job-name"
+                  value={jobName}
+                  maxLength={120}
+                  placeholder="September release deployment"
+                  onChange={(event) => setJobName(event.target.value)}
+                />
+              </div>
+              <div className="bulk-field">
+                <div className="bulk-field-label">
+                  <label htmlFor="bulk-schedule">Schedule (optional)</label>
+                  <button
+                    type="button"
+                    className="bulk-schedule-info"
+                    aria-label="Scheduling requirement"
+                    aria-expanded={scheduleHelpOpen}
+                    aria-controls="bulk-schedule-help"
+                    onClick={() => setScheduleHelpOpen((open) => !open)}
+                  >
+                    i
+                  </button>
+                  {scheduleHelpOpen && (
+                    <span id="bulk-schedule-help" className="bulk-schedule-help" role="tooltip">
+                      Schedule at least 10 minutes from now. Leave this empty to use Run job.
+                    </span>
+                  )}
+                </div>
+                <input
+                  id="bulk-schedule"
+                  type="datetime-local"
+                  min={new Date(Date.now() + 10 * 60_000)
+                    .toISOString()
+                    .slice(0, 16)}
+                  value={scheduledFor}
+                  onChange={(event) => setScheduledFor(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="bulk-save-actions">
+              <Button design="Transparent" onClick={() => setMode("wizard")}>
+                Back
+              </Button>
+              <Button design="Emphasized" onClick={saveJob}>
+                {editingJob ? "Save changes" : "Save job"}
+              </Button>
+            </div>
           </div>
         </section>
       </main>
@@ -751,15 +784,13 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
                     <p className="section-label">Saved job</p>
                     <h2>{activeJob.name}</h2>
                   </div>
-                  <Button
-                    design="Emphasized"
-                    icon="media-play"
-                    onClick={() => void run(activeJob)}
-                  >
-                    Run job
-                  </Button>
+                  <div className="bulk-job-actions" role="group" aria-label="Saved job actions">
+                    <Button design="Emphasized" icon="media-play" accessibleName="Run job" title="Run job" onClick={() => void run(activeJob)} />
+                    <Button design="Transparent" icon="edit" accessibleName="Edit job" title="Edit job" onClick={() => editJob(activeJob)} />
+                    <Button design="Negative" icon="delete" accessibleName="Delete job" title="Delete job" onClick={() => deleteJob(activeJob)} />
+                  </div>
                 </header>
-                <table>
+                <div className="bulk-job-table-wrap"><table>
                   <thead>
                     <tr>
                       <th>Integration flow</th>
@@ -798,7 +829,7 @@ export function BulkActionsView({ client }: { client: FlowPilotApi }) {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
               </section>
             )}
           </>

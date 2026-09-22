@@ -236,7 +236,6 @@ describe("local connector-to-MCP-to-agent path", () => {
         });
         return response;
       },
-      now: () => new Date(now),
     });
     const resolvedTools = await resolver.resolve(user);
     expect(resolvedTools).toEqual([

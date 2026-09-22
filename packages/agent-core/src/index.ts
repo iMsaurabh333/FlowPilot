@@ -34,8 +34,11 @@ export interface ChatMessage {
   id: string;
   role: ChatMessageRole;
   content: string;
+  sentAt?: string;
   /** The request ended before an assistant response was persisted. */
   delivery?: "failed";
+  /** A tool call failed, so its outcome could not be shown as evidence. */
+  toolFailure?: string;
   sources?: ChatSource[];
   tables?: ChatTable[];
 }
@@ -156,6 +159,7 @@ function toChatMessage(
     id: stableMessageId(threadId, index, role, content),
     role,
     content,
+    sentAt: typeof message.additional_kwargs?.sentAt === "string" ? message.additional_kwargs.sentAt : undefined,
   };
 }
 
@@ -215,6 +219,23 @@ function messageProcessingLogsTable(
   }
 }
 
+function structuredItemsTable(content: MessageContent): ChatTable | undefined {
+  try {
+    const parsed = JSON.parse(contentAsText(content)) as { items?: unknown };
+    if (!Array.isArray(parsed.items) || parsed.items.length === 0 || !parsed.items.every((item) => typeof item === "object" && item !== null && !Array.isArray(item))) return undefined;
+    const columns = [...new Set(parsed.items.flatMap((item) => Object.keys(item as Record<string, unknown>)))].slice(0, 8);
+    if (!columns.length) return undefined;
+    return {
+      title: "Result",
+      columns,
+      rows: parsed.items.slice(0, 50).map((item) => columns.map((column) => {
+        const value = (item as Record<string, unknown>)[column];
+        return value === null || value === undefined ? null : typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : JSON.stringify(value).slice(0, 500);
+      })),
+    };
+  } catch { return undefined; }
+}
+
 export function createChatAgent(options: ChatAgentOptions): ChatAgent {
   const maxContextMessages = Math.max(2, options.maxContextMessages ?? 12);
   const systemPrompt =
@@ -255,13 +276,14 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
         const hasStructuredEvidence = recentMessages.some(
           (message) =>
             message.getType() === "tool" &&
-            Boolean(messageProcessingLogsTable(toolName(message) ?? "", message.content)),
+            Boolean(messageProcessingLogsTable(toolName(message) ?? "", message.content) ?? structuredItemsTable(message.content)),
         );
         response.content = hasStructuredEvidence
           ? ""
           : compactGuidance(contentAsText(response.content));
       }
       response.id ??= randomUUID();
+      response.additional_kwargs = { ...response.additional_kwargs, sentAt: new Date().toISOString() };
       return { messages: [response] };
     };
     const graph = new StateGraph(MessagesAnnotation)
@@ -292,15 +314,17 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
     const messages: BaseMessage[] = Array.isArray(snapshot.values.messages)
       ? (snapshot.values.messages as BaseMessage[])
       : [];
-    const pendingToolOutputs: Array<{ name: string; table?: ChatTable }> = [];
+    const pendingToolOutputs: Array<{ name: string; table?: ChatTable; failed?: boolean }> = [];
     const chatMessages: ChatMessage[] = [];
     messages.forEach((message, index) => {
       if (message.getType() === "tool") {
         const name = toolName(message);
         if (name) {
+          const content = contentAsText(message.content);
           pendingToolOutputs.push({
             name,
-            table: messageProcessingLogsTable(name, message.content),
+            table: messageProcessingLogsTable(name, message.content) ?? structuredItemsTable(message.content),
+            failed: /^Error:/iu.test(content) || /^MCP tool (?:did not return|returned no)/iu.test(content),
           });
         }
         return;
@@ -335,6 +359,9 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
           });
         chatMessage.sources = sources;
         if (tables.length > 0) chatMessage.tables = tables;
+        if (pendingToolOutputs.some((output) => output.failed)) {
+          chatMessage.toolFailure = "A tool lookup failed; no evidence was returned for it.";
+        }
         pendingToolOutputs.length = 0;
       }
       chatMessages.push(chatMessage);
@@ -343,7 +370,12 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
     // the checkpoint. Make that durable incomplete turn explicit to the UI
     // rather than rendering it as an unexplained, unanswered chat bubble.
     const latest = chatMessages.at(-1);
-    if (latest?.role === "user") latest.delivery = "failed";
+    if (latest?.role === "user") {
+      latest.delivery = "failed";
+      if (pendingToolOutputs.some((output) => output.failed)) {
+        latest.toolFailure = "A tool lookup failed before FlowPilot could reply.";
+      }
+    }
     return chatMessages;
   };
 
@@ -382,7 +414,7 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
       await invocationGraph.invoke(
         {
           messages: [
-            new HumanMessage({ id: randomUUID(), content: content.trim() }),
+            new HumanMessage({ id: randomUUID(), content: content.trim(), additional_kwargs: { sentAt: new Date().toISOString() } }),
           ],
         },
         graphConfig(threadId),

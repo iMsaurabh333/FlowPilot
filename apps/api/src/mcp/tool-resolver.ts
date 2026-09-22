@@ -3,11 +3,7 @@ import type { ChatTool } from "@flowpilot/agent-core";
 import type { AuthenticatedUser } from "../types.js";
 import type { OperationLogService } from "../operation-log.js";
 import type { McpAuthProfileResolver } from "./probe.js";
-import {
-  MCP_HEALTH_MAX_AGE_MS,
-  type McpRegistryRepository,
-  type McpServerRecord,
-} from "./registry.js";
+import { type McpRegistryRepository, type McpServerRecord } from "./registry.js";
 
 export const MCP_TOOL_OPERATOR_SCOPE = "ToolOperator";
 const MCP_TOOL_TIMEOUT_MS = 60_000;
@@ -60,12 +56,11 @@ function endpointFor(server: McpServerRecord) {
   return endpoint;
 }
 
-function isFreshHealthy(server: McpServerRecord, now: Date) {
+function isConfirmedHealthy(server: McpServerRecord) {
   return (
     server.enabled &&
     server.healthState === "healthy" &&
-    server.lastCheckedAt !== null &&
-    Date.parse(server.lastCheckedAt) + MCP_HEALTH_MAX_AGE_MS >= now.getTime()
+    server.lastCheckedAt !== null
   );
 }
 
@@ -107,20 +102,17 @@ export class McpToolResolver {
   readonly #repository: McpRegistryRepository;
   readonly #authResolver: McpAuthProfileResolver;
   readonly #fetch: typeof fetch;
-  readonly #now: () => Date;
   readonly #operationLogs: OperationLogService | undefined;
 
   constructor(options: {
     repository: McpRegistryRepository;
     authResolver: McpAuthProfileResolver;
     fetchImpl?: typeof fetch;
-    now?: () => Date;
     operationLogs?: OperationLogService;
   }) {
     this.#repository = options.repository;
     this.#authResolver = options.authResolver;
     this.#fetch = options.fetchImpl ?? fetch;
-    this.#now = options.now ?? (() => new Date());
     this.#operationLogs = options.operationLogs;
   }
 
@@ -205,9 +197,10 @@ export class McpToolResolver {
     } catch {
       return [];
     }
-    const eligible = servers.filter((server) =>
-      isFreshHealthy(server, this.#now()),
-    );
+    // A successful authenticated probe is persisted in the registry. Keep that
+    // explicit trust decision through API restarts so the collector can run
+    // immediately; a server that has never passed a probe is still excluded.
+    const eligible = servers.filter(isConfirmedHealthy);
     const groups = await Promise.all(
       eligible.map(async (server) => {
         const { response, requestHeaders } = await this.#listTools(server);
