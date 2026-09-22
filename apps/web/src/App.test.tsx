@@ -102,6 +102,36 @@ describe("FlowPilot chat interface", () => {
     expect(await screen.findByRole("heading", { name: "Check sales order" })).toBeInTheDocument();
   });
 
+  it("opens the documentation guide from the shell bar", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api()} />
+      </ThemeProvider>,
+    );
+
+    await screen.findByRole("heading", { name: /Good to see you, Test/ });
+    const documentation = document.querySelector('ui5-shellbar-item[title="Documentation"]');
+    if (!(documentation instanceof HTMLElement)) {
+      throw new Error("Expected the Documentation shell-bar action");
+    }
+    fireEvent.click(documentation);
+    expect(await screen.findByRole("heading", { name: "Work with confidence" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Check Health and performance" })).toBeInTheDocument();
+  });
+
+  it("offers processing time as a top-level Health tab", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api()} />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click((await screen.findAllByRole("button", { name: /Health/ }))[0]);
+    const processingTime = await screen.findByRole("tab", { name: "Processing time" });
+    fireEvent.click(processingTime);
+    expect(processingTime).toHaveAttribute("aria-selected", "true");
+  });
+
   it("loads the authenticated user's latest private conversation", async () => {
     renderApp(api());
 

@@ -13,12 +13,13 @@ function duration(value: number | null) {
   return value >= 60_000 ? `${(value / 60_000).toFixed(1)} min` : `${(value / 1_000).toFixed(1)} sec`;
 }
 
-export function IntegrationHealth({ client, compact = false, window = "last_completed_hour", reloadKey = 0, showTrend = !compact }: {
+export function IntegrationHealth({ client, compact = false, window = "last_completed_hour", reloadKey = 0, showTrend = !compact, detailTab = "diagnostics" }: {
   client: FlowPilotApi;
   compact?: boolean;
   window?: IntegrationHealthSummary["window"];
   reloadKey?: number;
   showTrend?: boolean;
+  detailTab?: "diagnostics" | "performance";
 }) {
   const [health, setHealth] = useState<IntegrationHealthSummary>();
   const [loading, setLoading] = useState(true);
@@ -90,7 +91,7 @@ export function IntegrationHealth({ client, compact = false, window = "last_comp
     return new Date(right.lastFailureAt ?? 0).getTime() - new Date(left.lastFailureAt ?? 0).getTime();
   });
 
-  return <section className={`integration-health${compact ? " compact" : ""}`} aria-labelledby="integration-health-title">
+  return <section className={`integration-health${compact ? " compact" : ""}${!compact ? ` health-detail-${detailTab}` : ""}`} aria-labelledby="integration-health-title">
     <header><div><p className="section-label">INTEGRATION HEALTH</p><h2 id="integration-health-title">{health.failed ? "Attention" : "Healthy"} · {window.replaceAll("_", " ")}</h2></div><div className="health-header-actions">{health.partial && <span className="health-partial">Partial collection</span>}{!compact && <button type="button" className="health-manual-run" disabled={collecting} onClick={() => void collect(true)} title="Refresh CPI health now" aria-label="Refresh CPI health now">↻</button>}</div></header>
     <div className="health-metrics"><span><strong>{health.processed.toLocaleString()}</strong> processed</span><span><strong>{health.failed.toLocaleString()}</strong> failed</span><span><strong>{percent(health.failureRate)}</strong> failure rate</span>{health.changePoints !== null && <span>{health.changePoints >= 0 ? "↑" : "↓"} {Math.abs(health.changePoints).toFixed(1)} points vs prior hour</span>}</div>
     {showTrend && <div className="health-trend" aria-label="24-hour failure-rate trend">{health.trend.map((value, index) => <i key={index} title={percent(value)} style={{ height: `${Math.max(8, Math.min(100, value * 8))}%` }} />)}</div>}
@@ -98,7 +99,7 @@ export function IntegrationHealth({ client, compact = false, window = "last_comp
     {!compact && health.flows.length > 10 && <nav className="health-flow-pagination" aria-label="Integration flow pages"><button type="button" disabled={flowPage === 0} onClick={() => setFlowPage((page) => page - 1)}>Previous</button><span>Page {flowPage + 1} of {totalFlowPages}</span><button type="button" disabled={flowPage + 1 >= totalFlowPages} onClick={() => setFlowPage((page) => page + 1)}>Next</button></nav>}
     {!compact && <p className="health-refresh-note">Auto-refreshes every {refreshMinutes} minutes. Use ↻ to refresh now.</p>}
     {!compact && <section className="health-message-table" aria-labelledby="failed-message-title"><div><div><h3 id="failed-message-title">Failed application messages</h3><span>{selectedFlow ? selectedFlow.flowName : "Select an integration flow"} · Grouped by error description</span></div><div className="health-message-controls"><input type="search" value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="Search Application Message ID" aria-label="Search Application Message ID" /><label>Sort <select value={messageSort} onChange={(event) => setMessageSort(event.target.value as typeof messageSort)}><option value="latest">Latest failure</option><option value="failed">Most failures</option><option value="id">Message ID</option></select></label></div></div><div className="health-message-table-scroll"><table><thead><tr><th>Application Message IDs</th><th>Type</th><th>Last failure</th><th>Failed</th><th>Latest error</th></tr></thead><tbody>{groupedFailedMessages.length ? groupedFailedMessages.map((group, index) => <tr key={`${selectedFlow?.flowId}-${index}`}><td>{group.ids.join(", ")}</td><td>{[...new Set(group.types)].join(", ") || "—"}</td><td>{dateTime(group.lastFailureAt)}</td><td>{group.failed.toLocaleString()}</td><td>{group.error}</td></tr>) : <tr><td colSpan={5}>No failed application messages match this flow and search.</td></tr>}</tbody></table></div></section>}
-    {!compact && slowestFlows.length > 0 && <section className="health-performance" aria-labelledby="health-performance-title"><div><h3 id="health-performance-title">Highest average processing time</h3><span>Completed and failed messages with timing data</span></div><ol>{slowestFlows.map((flow) => <li key={flow.flowId}><strong>{flow.flowName}</strong><span>{duration(flow.averageProcessingMilliseconds)}</span></li>)}</ol></section>}
+    {!compact && detailTab === "performance" && slowestFlows.length > 0 && <section className="health-performance" aria-labelledby="health-performance-title"><div><h3 id="health-performance-title">Highest average processing time</h3><span>Completed and failed messages with timing data</span></div><ol>{slowestFlows.map((flow) => <li key={flow.flowId}><strong>{flow.flowName}</strong><span>{duration(flow.averageProcessingMilliseconds)}</span></li>)}</ol></section>}
     {collectionMessage && !compact && <p className="health-collection-message" role="status">{collectionMessage}</p>}
   </section>;
 }

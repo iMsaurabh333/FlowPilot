@@ -455,6 +455,7 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
         )}
       </header>
 
+      <div className="reports-page-body">
       <ReconciliationView client={client} />
 
       {error && (
@@ -1130,6 +1131,7 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
           </section>
         </div>
       )}
+      </div>
     </main>
   );
 }

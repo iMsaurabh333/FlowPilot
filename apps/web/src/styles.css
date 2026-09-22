@@ -431,9 +431,45 @@ body {
   .home-action-card { min-height: 4.75rem; }
 }
 
-.health-page { height: 100%; overflow: auto; padding: clamp(1.5rem, 5vw, 4rem); }
+.health-page { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: clamp(1.5rem, 5vw, 4rem); box-sizing: border-box; }
 .health-page > .reports-header { display: flex; max-width: none; justify-content: space-between; align-items: end; gap: 1rem; }
+.health-page-header > .reports-header { display: flex; max-width: none; justify-content: space-between; align-items: end; gap: 1rem; }
 .health-page > .reports-header .health-window-buttons { flex-wrap: nowrap; }
+.health-page-header > .reports-header .health-window-buttons { flex-wrap: nowrap; }
+.health-detail-tabs { display: flex; gap: .25rem; margin-top: 1.5rem; border-bottom: 1px solid var(--sapList_BorderColor); }
+.health-detail-tabs button { padding: .7rem 1rem; border: 0; border-bottom: .2rem solid transparent; background: transparent; color: var(--sapContent_LabelColor); font: inherit; font-weight: 700; cursor: pointer; }
+.health-detail-tabs button:hover { color: var(--sapLinkColor); background: var(--sapList_Hover_Background); }
+.health-detail-tabs button.active { border-bottom-color: var(--sapBrandColor); color: var(--sapTextColor); }
+.integration-health.health-detail-performance .health-trend,
+.integration-health.health-detail-performance .health-flows,
+.integration-health.health-detail-performance .health-flow-pagination,
+.integration-health.health-detail-performance .health-message-table { display: none; }
+.integration-health.health-detail-performance .health-refresh-note { display: none; }
+.integration-health.health-detail-performance .health-performance { margin-top: 1.25rem; padding: 1.25rem; border: 1px solid #d5dfeb; border-top: .25rem solid var(--sapBrandColor); border-radius: .65rem; background: var(--sapGroup_ContentBackground); }
+.documentation-page { height: 100%; overflow: auto; padding: clamp(1.5rem, 5vw, 4rem); }
+.documentation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; max-width: 64rem; margin-top: 2rem; }
+.documentation-grid article { padding: 1.25rem; border: 1px solid var(--sapList_BorderColor); border-radius: var(--sapElement_BorderCornerRadius); background: var(--sapGroup_ContentBackground); }
+.documentation-grid h2 { margin: 0 0 .5rem; font-size: var(--sapFontHeader4Size); }
+.documentation-grid p { margin: 0; color: var(--sapContent_LabelColor); line-height: 1.5; }
+.documentation-intro { max-width: 52rem; }
+.documentation-section { max-width: 70rem; margin-top: 2rem; }
+.documentation-section > h2 { margin: 0 0 .5rem; color: var(--sapPageHeader_TextColor); font-size: var(--sapFontHeader3Size); }
+.documentation-section > p { max-width: 58rem; margin: 0; color: var(--sapContent_LabelColor); line-height: 1.55; }
+.documentation-section .documentation-grid { margin-top: 1rem; }
+.documentation-grid h3 { margin: 0 0 .5rem; color: var(--sapTextColor); font-size: var(--sapFontHeader4Size); }
+.documentation-workflows > div, .documentation-two-column { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.documentation-workflows article, .documentation-two-column article { padding: 1.25rem; border: 1px solid var(--sapList_BorderColor); border-radius: var(--sapElement_BorderCornerRadius); background: var(--sapGroup_ContentBackground); }
+.documentation-workflows h3 { margin: 0 0 .75rem; color: var(--sapTextColor); font-size: var(--sapFontHeader4Size); }
+.documentation-workflows ol, .documentation-two-column ol, .documentation-two-column ul { margin: 0; padding-inline-start: 1.25rem; color: var(--sapContent_LabelColor); line-height: 1.55; }
+.documentation-workflows li + li, .documentation-two-column li + li { margin-top: .45rem; }
+.documentation-workflows p { margin: 1rem 0 0; color: var(--sapContent_LabelColor); line-height: 1.5; }
+.documentation-two-column { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.documentation-two-column h2 { margin: 0 0 .75rem; color: var(--sapPageHeader_TextColor); font-size: var(--sapFontHeader4Size); }
+.shellbar-documentation.active { color: var(--sapLinkColor); }
+.health-page > .integration-health { min-width: 0; min-height: 0; max-width: none; margin-top: 1.5rem; overflow: auto; }
+.reports-page > .reports-header, .bulk-page > .bulk-header, .documentation-page > .reports-header, .settings-page > .settings-header { position: sticky; z-index: 2; top: 0; padding-block: .25rem 1rem; background: var(--sapBackgroundColor); }
+.home-page > .home-hero { position: sticky; z-index: 2; top: 0; background: var(--sapBackgroundColor); }
+@media (max-width: 48rem) { .health-page-header > .reports-header { align-items: start; flex-direction: column; } .health-page-header > .reports-header .health-window-buttons { flex-wrap: wrap; } .documentation-grid, .documentation-workflows > div, .documentation-two-column { grid-template-columns: 1fr; } }
 
 /* A selected workspace must be obvious even before reading its label. */
 .primary-nav-item.active { background: #dcecff !important; color: #102a56 !important; box-shadow: inset .22rem 0 0 #0a6ed1; }
@@ -502,11 +538,8 @@ body {
 .health-settings-card label { margin-top: 1.25rem; font-weight: 700; }
 .health-settings-card select { width: 13rem; margin: .4rem 0 .75rem; padding: .5rem .65rem; border: 1px solid #8aa2be; border-radius: .3rem; background: #fff; color: #172b4d; font: inherit; }
 
-.settings-page {
-  height: 100%;
-  overflow: auto;
-  padding: clamp(1.5rem, 5vw, 4rem);
-}
+.settings-page { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: clamp(1.5rem, 5vw, 4rem); box-sizing: border-box; }
+.settings-panel { min-height: 0; overflow: auto; }
 .settings-header h1,
 .settings-header p {
   margin: 0;
@@ -756,13 +789,8 @@ textarea {
   overflow: hidden;
 }
 
-.reports-page {
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-  padding: clamp(1.5rem, 5vw, 4rem);
-  background: var(--sapBackgroundColor);
-}
+.reports-page { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: clamp(1.5rem, 5vw, 4rem); box-sizing: border-box; background: var(--sapBackgroundColor); }
+.reports-page-body { min-height: 0; overflow: auto; padding-top: 1rem; }
 .logs-page {
   height: 100%;
   min-height: 0;

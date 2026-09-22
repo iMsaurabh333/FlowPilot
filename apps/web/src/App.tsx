@@ -4,7 +4,9 @@ import { Button } from "@ui5/webcomponents-react/Button";
 import { MessageStrip } from "@ui5/webcomponents-react/MessageStrip";
 import { Popover } from "@ui5/webcomponents-react/Popover";
 import { ShellBar } from "@ui5/webcomponents-react/ShellBar";
+import { ShellBarItem } from "@ui5/webcomponents-react/ShellBarItem";
 import { TextArea } from "@ui5/webcomponents-react/TextArea";
+import "@ui5/webcomponents-icons/dist/sys-help.js";
 import {
   useEffect,
   useMemo,
@@ -28,6 +30,7 @@ import { BulkActionsView } from "./BulkActionsView";
 import { HomeView } from "./HomeView";
 import { SettingsView } from "./SettingsView";
 import { HealthView } from "./HealthView";
+import { DocumentationView } from "./DocumentationView";
 import "./styles.css";
 
 type LoadState =
@@ -38,7 +41,7 @@ type LoadState =
 type PendingAction =
   "creating" | "sending" | "improving" | "deleting" | undefined;
 
-type AppView = "home" | "chat" | "health" | "reports" | "bulk-actions" | "settings";
+type AppView = "home" | "chat" | "health" | "reports" | "bulk-actions" | "settings" | "documentation";
 type NavigationIcon = "home" | "chat" | "health" | "bulk" | "reports" | "settings";
 
 function NavGlyph({ icon }: { icon: NavigationIcon }) {
@@ -470,7 +473,15 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
           },
         }}
         onProfileClick={() => setProfileOpen(true)}
-      />
+      >
+        <ShellBarItem
+          icon="sys-help"
+          text="Documentation"
+          title="Documentation"
+          className={activeView === "documentation" ? "shellbar-documentation active" : "shellbar-documentation"}
+          onClick={() => setActiveView("documentation")}
+        />
+      </ShellBar>
 
       <div className="app-frame">
         <aside className="primary-navigation">
@@ -922,6 +933,8 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
             <BulkActionsView client={client} />
           ) : activeView === "health" ? (
             <HealthView client={client} />
+          ) : activeView === "documentation" ? (
+            <DocumentationView />
           ) : activeView === "settings" ? (
             <SettingsView client={client} />
           ) : (
