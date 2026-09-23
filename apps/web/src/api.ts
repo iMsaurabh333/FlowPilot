@@ -94,6 +94,55 @@ export type ReportExportFormat = "html" | "markdown" | "xlsx";
 export interface ReportSource {
   name: string;
   description: string;
+  displayName?: string;
+}
+export type IdentifierTypeStatus = "Draft" | "Active" | "Retired";
+export interface IdentifierType {
+  /** Immutable persistence/audit reference. Never derived from the business key. */
+  id: string;
+  systemId: string;
+  systemName: string;
+  friendlyName: string;
+  entity: string;
+  field: string;
+  /** Stable business key in the form System:Entity:Field. */
+  compositeKey: string;
+  status: IdentifierTypeStatus;
+  retrieval: {
+    serverId: string;
+    toolName: string;
+    parameters: Record<string, string>;
+    headers: Record<string, string>;
+    requestBody: string;
+    requestFormat: "json" | "xml" | "none";
+    responseExtractionPath: string;
+    expectedField: string;
+    expectedValue: string;
+    sampleValue?: string;
+  };
+  version: number;
+  lastTestedAt?: string;
+  lastTestResult?: "passed" | "failed";
+}
+export interface McpToolMetadata {
+  name: string;
+  description: string;
+  requiredInputs: Array<{ name: string; description: string; required: boolean }>;
+  bodyFormats: Array<"json" | "xml">;
+}
+export interface McpToolTestInput {
+  serverId: string;
+  toolName: string;
+  parameters: Record<string, string>;
+  headers: Record<string, string>;
+  requestBody: string;
+  requestFormat: "json" | "xml" | "none";
+}
+export interface McpToolTestResult {
+  status: number;
+  durationMs: number;
+  format: "json" | "xml";
+  response: string;
 }
 export interface ReconciliationPreview {
   fileName: string;
@@ -104,9 +153,15 @@ export interface ReconciliationPreview {
 export interface ReconciliationResult {
   generatedAt: string;
   rows: Array<{
-    applicationMessageId: string;
+    reconciliationValue: string;
     result: "matched" | "exception" | "unavailable";
-    systems: Record<string, { status: string; fields: Record<string, string> }>;
+    systems: Record<string, {
+      status: string;
+      lookupField: string;
+      responseField: string;
+      responseValue: string;
+      fields: Record<string, string>;
+    }>;
   }>;
 }
 export interface ReportJobRun {
@@ -211,6 +266,15 @@ export interface FlowPilotApi {
   ): Promise<McpServerRecord>;
   pingMcpServer?(serverId: string): Promise<McpServerRecord>;
   listMcpServerTools?(serverId: string): Promise<string[]>;
+  /** Admin contracts are optional until the identifier persistence service is enabled. */
+  listIdentifierTypes?(): Promise<IdentifierType[]>;
+  saveIdentifierType?(input: IdentifierType): Promise<IdentifierType>;
+  setIdentifierTypeStatus?(
+    identifierTypeId: string,
+    status: IdentifierTypeStatus,
+  ): Promise<IdentifierType>;
+  listMcpToolMetadata?(serverId: string): Promise<McpToolMetadata[]>;
+  testMcpTool?(input: McpToolTestInput): Promise<McpToolTestResult>;
   getConversationPolicy?(): Promise<ConversationPolicy>;
   updateConversationPolicy?(
     input: ConversationPolicy,
@@ -263,6 +327,10 @@ export interface FlowPilotApi {
   runReconciliation?(input: {
     ids: string[];
     sourceToolNames: string[];
+    identifierSelections: Array<{
+      lookupIdentifierTypeId: string;
+      responseIdentifierTypeId: string;
+    }>;
     fields: string[];
   }): Promise<ReconciliationResult>;
   downloadReconciliationReport?(result: ReconciliationResult): Promise<void>;
@@ -488,6 +556,38 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
         `/api/admin/mcp-servers/${encodeURIComponent(serverId)}/tools`,
       );
       return payload.tools;
+    },
+    testMcpTool(input) {
+      return request<McpToolTestResult>(
+        `/api/admin/mcp-servers/${encodeURIComponent(input.serverId)}/tools/${encodeURIComponent(input.toolName)}/test`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parameters: input.parameters }),
+        },
+      );
+    },
+    async listIdentifierTypes() {
+      return (await request<{ identifierTypes: IdentifierType[] }>(
+        "/api/admin/identifier-types",
+      )).identifierTypes;
+    },
+    saveIdentifierType(input) {
+      return request<IdentifierType>("/api/admin/identifier-types", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    },
+    setIdentifierTypeStatus(identifierTypeId, status) {
+      return request<IdentifierType>(
+        `/api/admin/identifier-types/${encodeURIComponent(identifierTypeId)}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        },
+      );
     },
     getConversationPolicy() {
       return request<ConversationPolicy>("/api/admin/conversation-policy");

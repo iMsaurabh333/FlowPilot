@@ -132,6 +132,20 @@ describe("FlowPilot chat interface", () => {
     expect(processingTime).toHaveAttribute("aria-selected", "true");
   });
 
+  it("offers MCP Configuration only to App Admins", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api({ loadCurrentUser: vi.fn().mockResolvedValue(adminUser) })} />
+      </ThemeProvider>,
+    );
+
+    const navigation = await screen.findByRole("navigation", { name: "Primary navigation" });
+    fireEvent.click(screen.getByRole("button", { name: /MCP Configuration/ }));
+    expect(navigation).toHaveTextContent("MCP Configuration");
+    expect(await screen.findByRole("heading", { name: "MCP Configuration" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "MCP Test Client" })).toBeInTheDocument();
+  });
+
   it("loads the authenticated user's latest private conversation", async () => {
     renderApp(api());
 

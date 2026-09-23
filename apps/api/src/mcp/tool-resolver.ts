@@ -9,6 +9,7 @@ export const MCP_TOOL_OPERATOR_SCOPE = "ToolOperator";
 const MCP_TOOL_TIMEOUT_MS = 60_000;
 const CONTENT_TOOL_TIMEOUT_MS = 120_000;
 const MCP_TOOL_MAX_RESPONSE_BYTES = 128 * 1_024;
+const IDENTIFIER_FIELD = /(?:id|identifier|number)$/iu;
 
 interface JsonRpcResponse {
   result?: Record<string, unknown>;
@@ -28,6 +29,24 @@ interface AdvertisedTool {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Canonicalize typographic dash variants only in identifier-valued arguments.
+ * This handles IDs copied from rich text (for example CPI‑611889) without
+ * rewriting free-form search text or other tool parameters.
+ */
+function normalizeToolArguments(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, argument]) => [
+      key,
+      typeof argument === "string" && IDENTIFIER_FIELD.test(key)
+        ? argument.replace(/[\u2010-\u2015\u2212]/gu, "-")
+        : argument,
+    ]),
+  );
 }
 
 function parseJsonRpcBody(body: string): JsonRpcResponse | undefined {
@@ -220,20 +239,22 @@ export class McpToolResolver {
               name: `${server.serverId}__${name}`,
               description: advertisedTool.description,
               inputSchema: advertisedTool.inputSchema,
+              systemName: server.displayName,
               invoke: async (arguments_: Record<string, unknown>) => {
                 const startedAt = Date.now();
+                const normalizedArguments = normalizeToolArguments(arguments_);
                 const response = await this.#request(
                   server,
                   "tools/call",
                   2,
-                  { name, arguments: arguments_ },
+                  { name, arguments: normalizedArguments },
                   requestHeaders,
                 );
                 const result = safeToolResult(response.payload);
                 void this.#operationLogs?.record(user, {
                   surface: context.surface ?? "chat", eventType: "mcp_call", title: `${server.displayName} · ${name}`,
                   reportJobId: context.reportJobId ?? null,
-                  detail: { endpoint: endpointFor(server).toString(), jsonRpcMethod: "tools/call", tool: name, arguments: arguments_, durationMs: Date.now() - startedAt, response: result },
+                  detail: { endpoint: endpointFor(server).toString(), jsonRpcMethod: "tools/call", tool: name, arguments: normalizedArguments, durationMs: Date.now() - startedAt, response: result },
                 });
                 return result;
               },

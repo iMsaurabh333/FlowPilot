@@ -391,6 +391,26 @@ function migrations(schemaName: string) {
         );
       `,
     },
+    {
+      version: 22,
+      sql: `
+        CREATE TABLE ${schema}.identifier_types (
+          tenant_id text NOT NULL,
+          id uuid NOT NULL,
+          system_id text NOT NULL,
+          composite_key text NOT NULL,
+          status text NOT NULL CHECK (status IN ('Draft', 'Active', 'Retired')),
+          version integer NOT NULL CHECK (version >= 1),
+          definition jsonb NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (tenant_id, id),
+          UNIQUE (tenant_id, composite_key)
+        );
+        CREATE INDEX identifier_types_tenant_system_idx
+          ON ${schema}.identifier_types (tenant_id, system_id, status);
+      `,
+    },
   ] as const;
 }
 

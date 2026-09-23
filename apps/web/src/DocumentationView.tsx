@@ -14,6 +14,7 @@ export function DocumentationView() {
       <p>FlowPilot brings the information you need to investigate Cloud Integration operations into one workspace. It helps you find evidence and decide the next step; it does not replace your established operational approval process.</p>
     </header>
 
+    <div className="documentation-body">
     <section className="documentation-section" aria-labelledby="guide-purpose-title">
       <h2 id="guide-purpose-title">What FlowPilot helps you do</h2>
       <p>Use FlowPilot to understand what is happening in your integrations, investigate failed messages, follow an issue across a flow, and prepare a clear next action. Your conversations and investigation history stay private to your signed-in workspace.</p>
@@ -39,5 +40,6 @@ export function DocumentationView() {
       <article><h2>What to keep in mind</h2><ul><li>Results reflect the information available through your approved connections and permissions; missing data is not proof that an event did not occur.</li><li>Health snapshots are refreshed periodically, so very recent activity may not appear immediately.</li><li>Assistant responses help you investigate; validate important conclusions against the source system and your operating procedures.</li><li>Some tools or reports may be unavailable in your environment or role.</li></ul></article>
       <article><h2>When something does not answer your question</h2><ol><li>Check the message IDs, flow name, and time window; broaden the period if the event may be outside it.</li><li>In Assistant chat, ask a narrower follow-up and add the identifier or error text you found.</li><li>Use Health to compare related failures and inspect the grouped error details.</li><li>If data is unavailable or the issue remains unclear, contact your integration support team with the flow name, timestamps, message IDs, error text, and the checks already completed.</li></ol></article>
     </section>
+    </div>
   </main>;
 }

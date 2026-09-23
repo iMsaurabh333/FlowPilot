@@ -13,13 +13,14 @@ function duration(value: number | null) {
   return value >= 60_000 ? `${(value / 60_000).toFixed(1)} min` : `${(value / 1_000).toFixed(1)} sec`;
 }
 
-export function IntegrationHealth({ client, compact = false, window = "last_completed_hour", reloadKey = 0, showTrend = !compact, detailTab = "diagnostics" }: {
+export function IntegrationHealth({ client, compact = false, window = "last_completed_hour", reloadKey = 0, showTrend = !compact, detailTab = "diagnostics", onHealthLoaded }: {
   client: FlowPilotApi;
   compact?: boolean;
   window?: IntegrationHealthSummary["window"];
   reloadKey?: number;
   showTrend?: boolean;
   detailTab?: "diagnostics" | "performance";
+  onHealthLoaded?: (health: IntegrationHealthSummary) => void;
 }) {
   const [health, setHealth] = useState<IntegrationHealthSummary>();
   const [loading, setLoading] = useState(true);
@@ -66,6 +67,9 @@ export function IntegrationHealth({ client, compact = false, window = "last_comp
     setSelectedFlowId((current) => health.flows.some((flow) => flow.flowId === current) ? current : health.flows[0]?.flowId);
     setFlowPage((page) => Math.min(page, Math.max(0, Math.ceil(health.flows.length / 10) - 1)));
   }, [health]);
+  useEffect(() => {
+    if (health) onHealthLoaded?.(health);
+  }, [health, onHealthLoaded]);
 
   if (loading) return <section className="integration-health" aria-label="Integration Health"><p>Loading integration health...</p></section>;
   if (!health) return <section className="integration-health" aria-label="Integration Health"><h2>Integration Health</h2><p>{unavailable ? "Integration Health is unavailable for this account." : "No health snapshot is available yet."}</p></section>;

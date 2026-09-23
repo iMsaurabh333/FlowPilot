@@ -7,9 +7,16 @@ reconciliation demos:
 - **XYZ TMS** (`flowpilot-mcp-xyz-tms`)
 - **Mock Jira** (`flowpilot-mcp-jira-mock`)
 
-Each advertises the compatible `get_application_message` tool. Its only
-input is `{ "applicationMessageId": "..." }`. The records are deterministic
-and intentionally small; no customer data is present.
+Each advertises the compatible `get_application_message` tool. The records are
+deterministic and intentionally small; no customer data is present. To test
+business-value mapping, use the same value with each system's preferred input:
+
+- **ABC Warehouse:** `{ "orderNumber": "861822" }`
+- **XYZ TMS:** `{ "salesOrderNumber": "861822" }`
+
+`applicationMessageId` remains accepted by both servers so existing
+configurations continue to work. The returned record exposes the corresponding
+`orderNumber` or `salesOrderNumber` field for extraction-path selection.
 
 | Application Message ID | ABC Warehouse | XYZ TMS |
 | --- | --- | --- |

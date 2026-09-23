@@ -4,9 +4,18 @@ import { AIMessage } from "@langchain/core/messages";
 import { MemorySaver } from "@langchain/langgraph";
 import { describe, expect, it } from "vitest";
 
-import { createChatAgent } from "../src/index.js";
+import { createChatAgent, DEFAULT_SYSTEM_PROMPT } from "../src/index.js";
 
 describe("FlowPilot chat graph", () => {
+  it("maps business document IDs to the CPI application message ID filter", () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      '"What is the status of sales order 112233?" means call the available Message Processing Log search tool with applicationMessageId "112233".',
+    );
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      "Do not ask for a time window or an integration-flow ID when an exact identifier is enough for the available tool.",
+    );
+  });
+
   it("persists independent message histories by server thread id", async () => {
     const agent = createChatAgent({
       checkpointer: new MemorySaver(),
@@ -148,7 +157,7 @@ describe("FlowPilot chat graph", () => {
     expect(sentences.every((sentence) => sentence.length <= 30)).toBe(true);
   });
 
-  it("does not expose empty assistant placeholders as chat messages", async () => {
+  it("replaces an empty assistant placeholder with one clear recovery response", async () => {
     const agent = createChatAgent({
       checkpointer: new MemorySaver(),
       model: new FakeListChatModel({ responses: [""] }),
@@ -158,7 +167,30 @@ describe("FlowPilot chat graph", () => {
 
     expect(messages.map(({ role, content }) => ({ role, content }))).toEqual([
       { role: "user", content: "Check logs" },
+      {
+        role: "assistant",
+        content: "I couldn’t complete that request because no assistant response was produced. Please try again.",
+      },
     ]);
+  });
+
+  it("explains an unavailable Jira lookup instead of leaving an orphaned request", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: [""] }),
+    });
+
+    const messages = await agent.sendMessage(
+      "jira-unavailable",
+      "Give me details of defect CPI-611889 in Jira",
+    );
+
+    expect(messages.at(-1)).toEqual(
+      expect.objectContaining({
+        role: "assistant",
+        content: expect.stringContaining("Jira tool could not be selected"),
+      }),
+    );
   });
 
   it("removes the oldest completed turn when retention is exceeded", async () => {

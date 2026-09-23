@@ -622,7 +622,7 @@ export function ReportsView({ client }: { client: FlowPilotApi }) {
                       }
                     />
                     <span>
-                      <strong>{source.name.replace(/^.+__/, "")}</strong>
+                      <strong>{source.displayName ?? source.name.replace(/^.+__/, "")}</strong>
                       <small>{source.description}</small>
                     </span>
                   </label>

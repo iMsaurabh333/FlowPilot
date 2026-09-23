@@ -146,7 +146,9 @@ export class ConversationService {
     let messages: ChatMessage[];
     let rolledOver = false;
     try {
-      void this.#operationLogs?.record(user, { surface: "chat", eventType: "llm_input", title: `Conversation · ${acquisition.conversation.title}`, detail: { instruction: content } });
+      // The operation record must describe this request, not the title left by
+      // the preceding turn in the same conversation.
+      void this.#operationLogs?.record(user, { surface: "chat", eventType: "llm_input", title: `Conversation · ${conversationTitle(content)}`, detail: { instruction: content } });
       messages = await this.#agent.sendMessage(
         acquisition.conversation.threadId,
         content,
@@ -170,6 +172,40 @@ export class ConversationService {
       }
     } catch (error) {
       void this.#operationLogs?.record(user, { surface: "chat", eventType: "error", title: "Chat model or tool execution failed", detail: { errorType: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : "Unknown failure" } });
+      // A graph may save the human turn before a provider or tool failure. In
+      // that case the agent can turn the otherwise orphaned request into its
+      // explicit recovery response. Return that normal conversation update,
+      // rather than making the client show a red incomplete-request marker.
+      try {
+        messages = await this.#agent.getMessages(
+          acquisition.conversation.threadId,
+        );
+        const recoveryAssistant = messages.at(-1);
+        const savedRequest = messages.at(-2);
+        if (
+          recoveryAssistant?.role === "assistant" &&
+          savedRequest?.role === "user" &&
+          savedRequest.content === content.trim()
+        ) {
+          await this.#repository.completeRun(
+            user,
+            conversationId,
+            runId,
+            conversationTitle(content),
+          );
+          const updated = await this.#repository.findOwned(user, conversationId);
+          if (!updated) throw new ConversationNotFoundError();
+          return {
+            ...summary(updated),
+            messages,
+            rolledOver: false,
+          } satisfies ConversationDetail;
+        }
+      } catch (recoveryError) {
+        // Preserve the original invocation error below. The failed recovery is
+        // separately captured in the operation log without exposing internals.
+        void this.#operationLogs?.record(user, { surface: "chat", eventType: "error", title: "Chat recovery response could not be prepared", detail: { errorType: recoveryError instanceof Error ? recoveryError.name : "UnknownError" } });
+      }
       try {
         await this.#repository.releaseRun(user, conversationId, runId);
       } catch (releaseError) {

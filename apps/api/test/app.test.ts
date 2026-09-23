@@ -137,6 +137,7 @@ class MemoryConversationRepository implements ConversationRepository {
 class FakeChatAgent implements ChatAgent {
   readonly messages = new Map<string, ChatMessage[]>();
   failNext = false;
+  recoverFailedTurn = false;
 
   async getMessages(threadId: string) {
     return this.messages.get(threadId) ?? [];
@@ -149,6 +150,16 @@ class FakeChatAgent implements ChatAgent {
   async sendMessage(threadId: string, content: string) {
     if (this.failNext) {
       this.failNext = false;
+      if (this.recoverFailedTurn) {
+        this.messages.set(threadId, [
+          { id: randomUUID(), role: "user", content },
+          {
+            id: randomUUID(),
+            role: "assistant",
+            content: "I couldn’t complete the Jira lookup because the Jira tool could not be selected for this response.",
+          },
+        ]);
+      }
       throw new Error("Synthetic model failure");
     }
     const history = this.messages.get(threadId) ?? [];
@@ -417,6 +428,22 @@ describe("FlowPilot API", () => {
     expect(failed.status).toBe(502);
     expect(failed.body).toEqual({ error: "model_unavailable" });
     expect(retried.status).toBe(200);
+  });
+
+  it("returns a recovery assistant message when a failed run already saved the user turn", async () => {
+    const created = await request(app).post("/api/conversations");
+    agent.failNext = true;
+    agent.recoverFailedTurn = true;
+
+    const recovered = await request(app)
+      .post(`/api/conversations/${created.body.id}/messages`)
+      .send({ content: "Check defect CPI-611889 in Jira" });
+
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.messages).toEqual([
+      expect.objectContaining({ role: "user", content: "Check defect CPI-611889 in Jira" }),
+      expect.objectContaining({ role: "assistant", content: expect.stringContaining("Jira tool could not be selected") }),
+    ]);
   });
 
   it("rejects concurrent runs for the same conversation", async () => {

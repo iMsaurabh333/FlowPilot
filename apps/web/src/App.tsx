@@ -31,6 +31,7 @@ import { HomeView } from "./HomeView";
 import { SettingsView } from "./SettingsView";
 import { HealthView } from "./HealthView";
 import { DocumentationView } from "./DocumentationView";
+import { McpConfigurationView } from "./McpConfigurationView";
 import "./styles.css";
 
 type LoadState =
@@ -41,8 +42,8 @@ type LoadState =
 type PendingAction =
   "creating" | "sending" | "improving" | "deleting" | undefined;
 
-type AppView = "home" | "chat" | "health" | "reports" | "bulk-actions" | "settings" | "documentation";
-type NavigationIcon = "home" | "chat" | "health" | "bulk" | "reports" | "settings";
+type AppView = "home" | "chat" | "health" | "reports" | "bulk-actions" | "settings" | "mcp-configuration" | "documentation";
+type NavigationIcon = "home" | "chat" | "health" | "bulk" | "reports" | "settings" | "mcp";
 
 function NavGlyph({ icon }: { icon: NavigationIcon }) {
   const paths: Record<NavigationIcon, ReactNode> = {
@@ -62,6 +63,7 @@ function NavGlyph({ icon }: { icon: NavigationIcon }) {
     settings: (
       <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5 .8 2.1 2.1.8 1.9-1.1 1.6 1.6-1.1 1.9.8 2.1 2.1.8v2.2l-2.1.8-.8 2.1 1.1 1.9-1.6 1.6-1.9-1.1-2.1.8L12 20.5H9.8L9 18.4l-2.1-.8-1.9 1.1-1.6-1.6 1.1-1.9-.8-2.1-2.1-.8v-2.2l2.1-.8.8-2.1-1.1-1.9 1.6-1.6 1.9 1.1 2.1-.8.8-2.1H12Z" />
     ),
+    mcp: <path d="M5 6.5h14v11H8.5L5 21V6.5Zm4 4h6m-6 3h4m7-5v7m-2-5v3m4-5v7" />,
   };
   return (
     <span className="nav-glyph" aria-hidden="true">
@@ -242,14 +244,25 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
     if (!activeConversation || detailLoading) return;
     const region = messageRegionRef.current;
     if (!region) return;
-    const scroll = () => {
+    const scrollToLatest = () => {
       region.scrollTop = region.scrollHeight;
     };
     const frame = requestAnimationFrame(() => {
-      scroll();
-      requestAnimationFrame(scroll);
+      scrollToLatest();
+      requestAnimationFrame(scrollToLatest);
     });
-    return () => cancelAnimationFrame(frame);
+    // Tool tables can expand after the initial render. Observe their layout so
+    // a conversation still opens on its most recent turn instead of its oldest.
+    const content = region.firstElementChild;
+    const observer =
+      content && "ResizeObserver" in window
+        ? new ResizeObserver(scrollToLatest)
+        : undefined;
+    if (content && observer) observer.observe(content);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
   }, [
     activeConversation?.id,
     activeConversation?.messages.length,
@@ -557,6 +570,17 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
                 <small>Scheduled and export-ready</small>
               </span>
             </button>
+            {user?.scopes.includes("ChatAdmin") && (
+              <button
+                type="button"
+                className={`primary-nav-item${activeView === "mcp-configuration" ? " active" : ""}`}
+                aria-current={activeView === "mcp-configuration" ? "page" : undefined}
+                onClick={() => setActiveView("mcp-configuration")}
+              >
+                <NavGlyph icon="mcp" />
+                <span><strong>MCP Configuration</strong><small>Identifier types and testing</small></span>
+              </button>
+            )}
             {user?.scopes.includes("ChatAdmin") && client.listMcpServers && (
               <button
                 type="button"
@@ -937,6 +961,8 @@ export function App({ client = flowPilotApi, initialView = "home" }: AppProps) {
             <DocumentationView />
           ) : activeView === "settings" ? (
             <SettingsView client={client} />
+          ) : activeView === "mcp-configuration" ? (
+            <McpConfigurationView client={client} />
           ) : (
             <ReportsView client={client} />
           )}

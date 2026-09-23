@@ -1,7 +1,8 @@
 import { Button } from "@ui5/webcomponents-react/Button";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import type {
   FlowPilotApi,
+  IdentifierType,
   ReconciliationPreview,
   ReconciliationResult,
   ReportSource,
@@ -18,7 +19,14 @@ function base64(file: File) {
   });
 }
 function title(name: string) {
-  return name.replace(/__.*/u, "").replace(/[-_]/g, " ");
+  return name.replace(/__.*/u, "").replace(/[-_]/g, " ").replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase());
+}
+function friendlyField(name: string) {
+  return name.replace(/([a-z])([A-Z])/gu, "$1 $2").replace(/[-_]/g, " ");
+}
+function lookupLabel(item: IdentifierType) {
+  const names = Object.keys(item.retrieval.parameters).map(friendlyField);
+  return names.join(", ") || item.friendlyName;
 }
 
 export function ReconciliationView({ client }: { client: FlowPilotApi }) {
@@ -26,11 +34,15 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
   const [preview, setPreview] = useState<ReconciliationPreview>();
   const [directIds, setDirectIds] = useState("");
   const [sources, setSources] = useState<ReportSource[]>([]);
+  const [identifierTypes, setIdentifierTypes] = useState<IdentifierType[]>([]);
+  const [lookupBySource, setLookupBySource] = useState<Record<string, string>>({});
+  const [responseBySource, setResponseBySource] = useState<Record<string, string>>({});
   const [column, setColumn] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [result, setResult] = useState<ReconciliationResult>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [resultQuery, setResultQuery] = useState("");
   useEffect(() => {
     if (!client.listReconciliationSources) return;
     void client
@@ -39,6 +51,10 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
       .catch(() =>
         setError("Compatible reconciliation systems could not be loaded."),
       );
+  }, [client]);
+  useEffect(() => {
+    if (!client.listIdentifierTypes) return;
+    void client.listIdentifierTypes().then(setIdentifierTypes).catch(() => undefined);
   }, [client]);
   const choose = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -80,9 +96,23 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
               .filter(Boolean),
           ),
         ];
+  const lookupForSource = (sourceName: string) => {
+    const compatible = identifierTypes.filter((item) => item.status === "Active" && item.retrieval.serverId === sourceName);
+    return compatible.find((item) => item.id === lookupBySource[sourceName]) ?? compatible[0];
+  };
+  const responseForSource = (sourceName: string, lookup = lookupForSource(sourceName)) => {
+    if (!lookup) return undefined;
+    const compatible = identifierTypes.filter((item) => item.status === "Active" && item.retrieval.serverId === sourceName && item.retrieval.toolName === lookup.retrieval.toolName);
+    return compatible.find((item) => item.id === responseBySource[sourceName]) ?? compatible[0];
+  };
   const run = async () => {
     const ids = idsToRun();
-    if (!ids.length || !selected.length || !client.runReconciliation) return;
+    const identifierSelections = selected.map((source) => {
+      const lookup = lookupForSource(source);
+      const response = responseForSource(source, lookup);
+      return lookup && response ? { lookupIdentifierTypeId: lookup.id, responseIdentifierTypeId: response.id } : undefined;
+    }).filter((selection): selection is { lookupIdentifierTypeId: string; responseIdentifierTypeId: string } => Boolean(selection));
+    if (!ids.length || !selected.length || identifierSelections.length !== selected.length || !client.runReconciliation) return;
     if (!preview && ids.length > DIRECT_LIMIT) {
       setError(
         `Enter no more than ${DIRECT_LIMIT} IDs directly. Upload Excel or CSV for larger reconciliations.`,
@@ -95,13 +125,14 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
         await client.runReconciliation({
           ids,
           sourceToolNames: selected,
+          identifierSelections,
           fields: [],
         }),
       );
       setError(undefined);
     } catch {
       setError(
-        "The reconciliation could not run. Confirm that each selected system is healthy and supports Application Message ID lookup.",
+        "The reconciliation could not run. Confirm that each selected system is healthy and that its Active identifier type has a valid lookup mapping.",
       );
     } finally {
       setBusy(false);
@@ -129,14 +160,23 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
   const systems = result
     ? [...new Set(result.rows.flatMap((row) => Object.keys(row.systems)))]
     : [];
+  const displayNameForSystem = (systemId: string) =>
+    sources.find((source) => source.name === systemId)?.displayName ??
+    identifierTypes.find((item) => item.systemId === systemId)?.systemName ??
+    title(systemId);
+  const visibleRows = useMemo(() => {
+    const term = resultQuery.trim().toLocaleLowerCase();
+    if (!result || !term) return result?.rows ?? [];
+    return result.rows.filter((row) => [row.reconciliationValue, row.result, ...Object.values(row.systems).map((system) => system.responseValue)].some((value) => value?.toLocaleLowerCase().includes(term)));
+  }, [result, resultQuery]);
   return (
     <section className="reconciliation" aria-labelledby="reconciliation-title">
       <header>
         <div>
           <p className="section-label">Manual reconciliation</p>
-          <h2 id="reconciliation-title">Reconcile application messages</h2>
+          <h2 id="reconciliation-title">Reconcile business values</h2>
           <p>
-            Enter up to 10 IDs directly, or upload an ID file for a larger
+            Enter up to 10 values directly, or upload a value file for a larger
             reconciliation.
           </p>
         </div>
@@ -160,8 +200,8 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
           <Button
             design="Transparent"
             icon="upload"
-            accessibleName="Upload application message IDs"
-            title="Upload application message IDs"
+            accessibleName="Upload reconciliation values"
+            title="Upload reconciliation values"
             loading={busy}
             onClick={() => upload.current?.click()}
           />
@@ -188,14 +228,14 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
           </section>
         ) : (
           <label>
-            Application Message IDs (up to 10)
+            Values to reconcile (up to 10)
             <textarea value={directIds} rows={3} placeholder="611889, 173470" onChange={(event) => { setDirectIds(event.target.value); setResult(undefined); }} />
             <small>{directCount}/{DIRECT_LIMIT} direct IDs. Separate IDs with commas, spaces, or new lines.</small>
           </label>
         )}
         {preview && (
           <label>
-            Application Message ID column
+            Reconciliation value column
             <select
               value={column}
               onChange={(event) => setColumn(event.target.value)}
@@ -204,7 +244,7 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
                 <option key={header}>{header}</option>
               ))}
             </select>
-            <small>Select the column containing application message IDs.</small>
+            <small>Select the column containing the value shared across the selected systems.</small>
           </label>
         )}
         <Button
@@ -216,6 +256,7 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
           disabled={
             !idsToRun().length ||
             !selected.length ||
+            selected.some((source) => !lookupForSource(source) || !responseForSource(source)) ||
             (!preview && directCount > DIRECT_LIMIT)
           }
           loading={busy}
@@ -224,30 +265,27 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
           Run reconciliation
         </Button>
         <fieldset className="report-source-picker reconciliation-source-picker">
-          <legend>Systems to reconcile</legend>
-          {sources.length ? (
-            sources.map((source) => (
-              <label key={source.name}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(source.name)}
-                  onChange={(event) =>
-                    setSelected((current) =>
-                      event.target.checked
-                        ? [...current, source.name].slice(0, 3)
-                        : current.filter((name) => name !== source.name),
-                    )
-                  }
-                />
-                <span><strong>{title(source.name)}</strong></span>
-              </label>
-            ))
-          ) : (
-            <p>
-              No compatible systems are currently healthy. Ask an administrator
-              to Ping and enable one.
-            </p>
-          )}
+          <legend>Choose reconciliation systems</legend>
+          <div className="reconciliation-picker-intro">
+            <p>Select up to three systems for this run. FlowPilot sends the entered value using the lookup identifier, then returns the selected response field in the report.</p>
+            <strong aria-live="polite">{selected.length}/3 systems selected</strong>
+          </div>
+          {sources.length ? <div className="reconciliation-system-table" role="group" aria-label="Reconciliation system selection">
+            <div className="reconciliation-system-heading"><span>Use in this run</span><span>Lookup identifier</span><span>Response field</span></div>
+            {sources.map((source) => {
+              // A server becomes selectable when an App Admin has saved and activated
+              // at least one tested identifier definition for that server.
+              const compatible = identifierTypes.filter((item) => item.status === "Active" && item.retrieval.serverId === source.name);
+              const lookup = compatible.find((item) => item.id === lookupBySource[source.name]) ?? compatible[0];
+              const responseChoices = lookup ? compatible.filter((item) => item.retrieval.toolName === lookup.retrieval.toolName) : [];
+              const response = responseChoices.find((item) => item.id === responseBySource[source.name]) ?? responseChoices[0];
+              return <div className="reconciliation-system-row" key={source.name}>
+                <label><input type="checkbox" disabled={!lookup || !response || (!selected.includes(source.name) && selected.length >= 3)} checked={selected.includes(source.name)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, source.name] : current.filter((name) => name !== source.name))} /><span>{lookup?.systemName ?? title(source.name)}</span></label>
+                <select aria-label={`Lookup identifier for ${title(source.name)}`} value={lookup?.id ?? ""} disabled={!selected.includes(source.name)} onChange={(event) => { const nextLookup = compatible.find((item) => item.id === event.target.value); setLookupBySource((current) => ({ ...current, [source.name]: event.target.value })); if (nextLookup && !compatible.some((item) => item.id === responseBySource[source.name] && item.retrieval.toolName === nextLookup.retrieval.toolName)) setResponseBySource((current) => ({ ...current, [source.name]: nextLookup.id })); }}>{compatible.map((item) => <option key={item.id} value={item.id}>{lookupLabel(item)}</option>)}</select>
+                <select aria-label={`Response field for ${title(source.name)}`} value={response?.id ?? ""} disabled={!selected.includes(source.name) || !lookup} onChange={(event) => setResponseBySource((current) => ({ ...current, [source.name]: event.target.value }))}>{responseChoices.map((item) => <option key={item.id} value={item.id}>{item.friendlyName}</option>)}</select>
+              </div>;
+            })}
+          </div> : <p>No compatible systems are currently healthy. Ask an administrator to enable a system and an Active identifier type.</p>}
         </fieldset>
       </div>
       {result && (
@@ -257,32 +295,32 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
               <p className="section-label">Result</p>
               <h3>Reconciliation report</h3>
             </div>
-            <Button
+            <div className="reconciliation-result-actions"><label className="reconciliation-search"><span>Search report</span><input type="search" value={resultQuery} onChange={(event) => setResultQuery(event.target.value)} placeholder="Search report" aria-label="Search report" /></label><output aria-live="polite">{visibleRows.length} {visibleRows.length === 1 ? "result" : "results"}</output><Button
               design="Transparent"
               icon="download"
               accessibleName="Download reconciliation report as Excel"
               title="Download Excel report"
               loading={busy}
               onClick={() => void download()}
-            />
+            /></div>
           </header>
           <div className="reconciliation-table">
             <table>
               <thead>
                 <tr>
-                  <th>Application Message ID</th>
+                  <th>Reconciliation value</th>
                   {systems.map((system) => (
-                    <th key={system}>{title(system)}</th>
+                    <th key={system}>{displayNameForSystem(system)}<small>{responseForSource(system)?.friendlyName ?? "Selected response field"}</small></th>
                   ))}
                   <th>Result</th>
                 </tr>
               </thead>
               <tbody>
-                {result.rows.map((row) => (
-                  <tr key={row.applicationMessageId}>
-                    <td>{row.applicationMessageId}</td>
+                {visibleRows.map((row) => (
+                  <tr key={row.reconciliationValue}>
+                    <td>{row.reconciliationValue}</td>
                     {systems.map((system) => (
-                      <td key={system}>{row.systems[system]?.status ?? "—"}</td>
+                      <td key={system}>{row.systems[system]?.responseValue || "—"}</td>
                     ))}
                     <td>
                       <span className={`reconciliation-status ${row.result}`}>
@@ -290,7 +328,7 @@ export function ReconciliationView({ client }: { client: FlowPilotApi }) {
                       </span>
                     </td>
                   </tr>
-                ))}
+                ))}{!visibleRows.length && <tr><td colSpan={systems.length + 2}>No report rows match this search.</td></tr>}
               </tbody>
             </table>
           </div>

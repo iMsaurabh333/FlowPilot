@@ -42,6 +42,7 @@ import {
   IntegrationHealthService,
   startIntegrationHealthCollector,
 } from "./integration-health.js";
+import { PostgresIdentifierTypeService } from "./identifier-types.js";
 
 export async function createRuntime(
   environment: NodeJS.ProcessEnv = process.env,
@@ -81,6 +82,7 @@ export async function createRuntime(
     });
     const repository = new PostgresConversationRepository(pool);
     const conversationPolicy = new PostgresConversationPolicyService(pool);
+    const identifierTypes = new PostgresIdentifierTypeService(pool);
     const mcpRepository = new PostgresMcpRegistryRepository(pool);
     const operationLogs = new OperationLogService(pool);
     const mcpAuth = createConfiguredMcpAuthProfileResolver(environment);
@@ -137,6 +139,7 @@ export async function createRuntime(
         conversations,
         registry,
         conversationPolicy,
+        identifierTypes,
         reports,
         operationLogs,
         integrationHealth,
@@ -153,6 +156,7 @@ export async function createRuntime(
           reportOnlyTools(await mcpTools.resolve(user)).map((tool) => ({
             name: tool.name,
             description: tool.description,
+            displayName: tool.systemName,
           })),
         reconciliationTools: async (user) =>
           reconciliationLookupTools(
@@ -160,6 +164,8 @@ export async function createRuntime(
           ),
         contentTools: async (user) =>
           mcpTools.resolve(user, { surface: "report" }),
+        mcpTestTools: async (user) =>
+          mcpTools.resolve(user, { surface: "chat" }),
         reportPlanning: new ReportActionPlanService(agent, () =>
           mcpTools.resolve({
             tenantId: "",

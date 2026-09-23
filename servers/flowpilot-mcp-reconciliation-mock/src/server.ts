@@ -26,8 +26,10 @@ async function main(): Promise<void> {
       });
       return server;
     }
-    server.registerTool("get_application_message", { title: "Get application message", description: `Look up one ${config.system} record by application message ID.`, inputSchema: fromJsonSchema({ type: "object", additionalProperties: false, required: ["applicationMessageId"], properties: { applicationMessageId: { type: "string", minLength: 1, maxLength: 256 } } }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => {
-      const record = findRecord(config.system, (args as { applicationMessageId: string }).applicationMessageId);
+    const identifierField = config.system === "abc-warehouse" ? "orderNumber" : "salesOrderNumber";
+    server.registerTool("get_application_message", { title: "Get application message", description: `Look up one ${config.system} record by its business identifier. ${identifierField} is the preferred input; applicationMessageId remains available for existing configurations.`, inputSchema: fromJsonSchema({ type: "object", additionalProperties: false, properties: { [identifierField]: { type: "string", minLength: 1, maxLength: 256 }, applicationMessageId: { type: "string", minLength: 1, maxLength: 256 } } }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async (args) => {
+      const input = args as Record<string, string>;
+      const record = findRecord(config.system, input[identifierField] ?? input.applicationMessageId ?? "");
       return { content: [{ type: "text", text: JSON.stringify({ items: record ? [record] : [], count: record ? 1 : 0 }) }], structuredContent: { items: record ? [record] : [], count: record ? 1 : 0 } };
     });
     return server;

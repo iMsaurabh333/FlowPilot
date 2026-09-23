@@ -159,6 +159,39 @@ describe("MCP tool resolution", () => {
     });
   });
 
+  it("normalizes copied Unicode dashes in identifier fields for every MCP tool", async () => {
+    const repository = new MemoryMcpRegistryRepository();
+    await repository.save(server({ allowedToolNames: ["get_record"] }));
+    const fetchImpl = vi.fn(async (_request: Request | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { method: string };
+      return body.method === "tools/list"
+        ? response({ jsonrpc: "2.0", result: { tools: [{ name: "get_record", inputSchema: { type: "object" } }] } })
+        : response({ jsonrpc: "2.0", result: { content: [{ type: "text", text: "record" }] } });
+    });
+    const resolver = new McpToolResolver({
+      repository,
+      authResolver: { resolve: async () => ({}) },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    const [tool] = await resolver.resolve({
+      subject: "operator",
+      tenantId: "tenant",
+      scopes: ["ChatUser", "ToolOperator"],
+    });
+    await tool.invoke({ defectId: "CPI‑611889", query: "Keep‑this text unchanged" });
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[1][1]?.body))).toMatchObject({
+      params: {
+        name: "get_record",
+        arguments: {
+          defectId: "CPI-611889",
+          query: "Keep‑this text unchanged",
+        },
+      },
+    });
+  });
+
   it("uses the session negotiated by a stateful legacy MCP server", async () => {
     const repository = new MemoryMcpRegistryRepository();
     await repository.save(server({ protocolVersion: "2025-11-25" }));

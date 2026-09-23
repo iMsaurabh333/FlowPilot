@@ -52,6 +52,7 @@ import type {
   HealthSummary,
 } from "./integration-health.js";
 import { IntegrationHealthSourceError } from "./integration-health.js";
+import { PostgresIdentifierTypeService } from "./identifier-types.js";
 import "./types.js";
 
 export interface AppOptions {
@@ -74,6 +75,10 @@ export interface AppOptions {
   contentTools?: (
     user: ReturnType<typeof authenticatedUser>,
   ) => Promise<ChatTool[]>;
+  mcpTestTools?: (
+    user: ReturnType<typeof authenticatedUser>,
+  ) => Promise<ChatTool[]>;
+  identifierTypes?: PostgresIdentifierTypeService;
   bulkJobs?: BulkJobStore;
   bulkScheduler?: JobSchedulerClient;
   bulkSchedulerActionUrl?: string;
@@ -100,6 +105,39 @@ const mcpServerInputSchema = z
   .strict();
 
 const serverIdSchema = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,62})$/u);
+const mcpToolTestSchema = z.object({
+  serverId: serverIdSchema,
+  toolName: z.string().trim().min(1).max(256),
+  parameters: z.record(z.string().max(256), z.string().max(10_000)).default({}),
+}).strict();
+const identifierTypeSchema = z.object({
+  id: z.string().uuid(),
+  systemId: serverIdSchema,
+  systemName: z.string().trim().min(1).max(120),
+  friendlyName: z.string().trim().min(1).max(120),
+  entity: z.string().trim().min(1).max(120),
+  field: z.string().trim().min(1).max(120),
+  compositeKey: z.string().trim().min(1).max(400),
+  status: z.enum(["Draft", "Active", "Retired"]),
+  version: z.number().int().min(1),
+  retrieval: z.object({
+    serverId: serverIdSchema,
+    toolName: z.string().trim().min(1).max(256),
+    parameters: z.record(z.string(), z.string()).default({}),
+    headers: z.record(z.string(), z.string()).default({}),
+    requestBody: z.string().max(100_000),
+    requestFormat: z.enum(["json", "xml", "none"]),
+    responseExtractionPath: z.string().trim().min(1).max(1_000),
+    expectedField: z.string().trim().min(1).max(1_000),
+    expectedValue: z.string().max(1_000),
+    sampleValue: z.string().max(10_000).optional(),
+  }).strict(),
+  lastTestedAt: z.string().datetime({ offset: true }).optional(),
+  lastTestResult: z.enum(["passed", "failed"]).optional(),
+}).strict();
+const identifierTypeStatusSchema = z.object({
+  status: z.enum(["Draft", "Active", "Retired"]),
+}).strict();
 const conversationPolicySchema = z
   .object({
     maxConversationsPerUser: z.number().int().min(1).max(1_000),
@@ -132,6 +170,10 @@ const reconciliationRunSchema = z
   .object({
     ids: z.array(z.string().trim().min(1).max(256)).min(1).max(60),
     sourceToolNames: z.array(z.string().trim().min(1).max(200)).min(1).max(3),
+    identifierSelections: z.array(z.object({
+      lookupIdentifierTypeId: z.string().uuid(),
+      responseIdentifierTypeId: z.string().uuid(),
+    }).strict()).min(1).max(3),
     fields: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
   })
   .strict();
@@ -141,12 +183,15 @@ const reconciliationExportSchema = z
     rows: z
       .array(
         z.object({
-          applicationMessageId: z.string().trim().min(1).max(256),
+          reconciliationValue: z.string().trim().min(1).max(256),
           result: z.enum(["matched", "exception", "unavailable"]),
           systems: z.record(
             z.string(),
             z.object({
               status: z.string(),
+              lookupField: z.string(),
+              responseField: z.string(),
+              responseValue: z.string(),
               fields: z.record(z.string(), z.string()),
             }),
           ),
@@ -536,12 +581,74 @@ export function createApp(options: AppOptions) {
       try { response.status(200).json({ retentionDays: await options.integrationHealth.retentionDays(authenticatedUser(request)) }); } catch (error) { next(error); }
     },
   );
+  app.post(
+    "/api/admin/mcp-servers/:serverId/tools/:toolName/test",
+    adminRegistry,
+    async (request, response, next) => {
+      if (!options.mcpTestTools) {
+        response.status(503).json({ error: "mcp_test_unavailable" });
+        return;
+      }
+      try {
+        const input = mcpToolTestSchema.parse({
+          ...request.body,
+          serverId: request.params.serverId,
+          toolName: request.params.toolName,
+        });
+        const expectedName = `${input.serverId}__${input.toolName}`;
+        const tool = (await options.mcpTestTools(authenticatedUser(request)))
+          .find((candidate) => candidate.name === expectedName);
+        if (!tool) {
+          response.status(404).json({ error: "tool_not_available" });
+          return;
+        }
+        const startedAt = Date.now();
+        const result = await tool.invoke(input.parameters);
+        response.status(200).json({
+          status: 200,
+          durationMs: Date.now() - startedAt,
+          format: "json",
+          response: result,
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
   app.put(
     "/api/admin/integration-health-settings",
     adminRegistry,
     async (request, response, next) => {
       if (!options.integrationHealth) return response.status(503).json({ error: "integration_health_unavailable" });
       try { response.status(200).json(await options.integrationHealth.updateRetentionDays(authenticatedUser(request), integrationHealthSettingsSchema.parse(request.body).retentionDays)); } catch (error) { next(error); }
+    },
+  );
+  app.get(
+    "/api/admin/identifier-types",
+    adminRegistry,
+    async (request, response, next) => {
+      if (!options.identifierTypes) return response.status(503).json({ error: "identifier_types_unavailable" });
+      try { response.status(200).json({ identifierTypes: await options.identifierTypes.list(authenticatedUser(request)) }); } catch (error) { next(error); }
+    },
+  );
+  app.post(
+    "/api/admin/identifier-types",
+    adminRegistry,
+    async (request, response, next) => {
+      if (!options.identifierTypes) return response.status(503).json({ error: "identifier_types_unavailable" });
+      try { response.status(201).json(await options.identifierTypes.save(authenticatedUser(request), identifierTypeSchema.parse(request.body))); } catch (error) { next(error); }
+    },
+  );
+  app.patch(
+    "/api/admin/identifier-types/:identifierTypeId/status",
+    adminRegistry,
+    async (request, response, next) => {
+      if (!options.identifierTypes) return response.status(503).json({ error: "identifier_types_unavailable" });
+      try {
+        const updated = await options.identifierTypes.setStatus(authenticatedUser(request), z.string().uuid().parse(request.params.identifierTypeId), identifierTypeStatusSchema.parse(request.body).status);
+        if (!updated) return response.status(404).json({ error: "not_found" });
+        response.status(200).json(updated);
+      } catch (error) { next(error); }
     },
   );
   app.get(
@@ -612,7 +719,7 @@ export function createApp(options: AppOptions) {
     "/api/reconciliations/sources",
     reportOperator,
     async (request, response, next) => {
-      if (!options.reconciliationTools) {
+      if (!options.reconciliationTools || !options.identifierTypes) {
         response.status(503).json({ error: "reports_unavailable" });
         return;
       }
@@ -620,13 +727,20 @@ export function createApp(options: AppOptions) {
         const tools = await options.reconciliationTools(
           authenticatedUser(request),
         );
+        const sources = [...new Map(
+          tools.map((tool) => {
+            const serverId = tool.name.split("__", 1)[0] ?? tool.name;
+              return [serverId, {
+                name: serverId,
+                description: tool.description,
+                displayName: tool.systemName,
+              }] as const;
+          }),
+        ).values()];
         response
           .status(200)
           .json({
-            sources: tools.map((tool) => ({
-              name: tool.name,
-              description: tool.description,
-            })),
+            sources,
           });
       } catch (error) {
         next(error);
@@ -898,19 +1012,21 @@ export function createApp(options: AppOptions) {
     "/api/reconciliations/run",
     reportOperator,
     async (request, response, next) => {
-      if (!options.reconciliationTools) {
+      if (!options.reconciliationTools || !options.identifierTypes) {
         response.status(503).json({ error: "reports_unavailable" });
         return;
       }
       try {
         const body = reconciliationRunSchema.parse(request.body);
+        const user = authenticatedUser(request);
         response
           .status(200)
           .json(
             await runReconciliation({
               ...body,
-              user: authenticatedUser(request),
+              user,
               resolveTools: options.reconciliationTools,
+              identifierTypes: await options.identifierTypes.list(user),
             }),
           );
       } catch (error) {

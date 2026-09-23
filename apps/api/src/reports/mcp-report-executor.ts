@@ -13,6 +13,7 @@ const forbiddenToolName =
 export interface ReportSource {
   name: string;
   description: string;
+  displayName?: string;
 }
 export function reportOnlyTools(tools: ChatTool[]) {
   return tools.filter(
@@ -21,19 +22,17 @@ export function reportOnlyTools(tools: ChatTool[]) {
   );
 }
 
-/** Read-only tools that can be invoked deterministically by reconciliation. */
+/**
+ * Read-only tools that can be invoked through an Active Identifier Type.
+ * The identifier definition supplies the business-value-to-tool-parameter
+ * mapping, so tools are not limited to a literal applicationMessageId input.
+ */
 export function reconciliationLookupTools(tools: ChatTool[]) {
-  return reportOnlyTools(tools).filter((tool) => {
-    const schema = tool.inputSchema;
-    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return false;
-    const required = (schema as { required?: unknown }).required;
-    const properties = (schema as { properties?: unknown }).properties;
-    if (typeof properties !== "object" || properties === null || !("applicationMessageId" in properties)) return false;
-    // A compatible source may make the ID optional (for example, monitoring
-    // search supports other filters too), but it must be callable with this
-    // ID alone. Do not expose tools that require any additional input.
-    return !Array.isArray(required) || required.every((field) => field === "applicationMessageId");
-  });
+  // An App Admin explicitly tests and activates the tool used by an Identifier
+  // Type. Do not restrict reconciliation to a small set of name prefixes:
+  // every configured MCP server can participate when it has a safe, callable
+  // tool and an Active identifier definition.
+  return tools.filter((tool) => !forbiddenToolName.test(tool.name));
 }
 
 function escapeHtml(value: string) {

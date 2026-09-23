@@ -17,6 +17,7 @@ import {
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import type { BaseCheckpointSaver } from "@langchain/langgraph-checkpoint";
 import { tool } from "@langchain/core/tools";
+import { FLOWPILOT_PROMPT_GUIDELINES } from "./prompt-guidelines.js";
 
 export type ChatMessageRole = "user" | "assistant";
 
@@ -58,6 +59,8 @@ export interface ChatTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** Configured system display name for user-facing source labels. */
+  systemName?: string;
   invoke(input: Record<string, unknown>): Promise<string>;
 }
 
@@ -70,9 +73,17 @@ export interface ChatAgentOptions {
   compactResponses?: boolean;
 }
 
-const defaultSystemPrompt = `You are FlowPilot, a concise operational troubleshooting assistant.
+export const DEFAULT_SYSTEM_PROMPT = `You are FlowPilot, a concise operational troubleshooting assistant.
 State uncertainty clearly. Do not claim to have checked a system unless a tool result is present.
-Do not invent transaction status, identifiers, logs, or remediation results.`;
+Do not invent transaction status, identifiers, logs, or remediation results.
+Tool-routing policy:
+- Treat requests to look up, find, check, show, explain, or give details for an identifier as a lookup request, even when the user uses conversational wording.
+- When a relevant read-only tool is available, invoke the tool before replying. Choose it from its name and description, using any named system (for example Jira, CPI, warehouse, or TMS) as a routing hint.
+- Preserve identifiers exactly as supplied. Do not ask the user to restate an identifier that is already present.
+- Examples: “check defect ID CPI-611889”, “give me details of defect ID CPI-611889 in Jira” are all lookup requests and must use the matching available tool.
+- If no relevant tool is available, say that the requested system is unavailable; do not infer the result from the wording alone.
+
+${FLOWPILOT_PROMPT_GUIDELINES}`;
 
 const compactResponsePrompt = `
 When a tool returns structured evidence, return no narrative text: FlowPilot renders the evidence itself.
@@ -240,7 +251,7 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
   const maxContextMessages = Math.max(2, options.maxContextMessages ?? 12);
   const systemPrompt =
     options.systemPrompt ??
-    `${defaultSystemPrompt}${options.compactResponses ? compactResponsePrompt : ""}`;
+    `${DEFAULT_SYSTEM_PROMPT}${options.compactResponses ? compactResponsePrompt : ""}`;
 
   const createGraph = (chatTools: ChatTool[] = []) => {
     const langChainTools = chatTools.map((chatTool) =>
@@ -309,8 +320,8 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
     configurable: { thread_id: threadId },
   });
 
-  const readMessages = async (threadId: string) => {
-    const snapshot = await graph.getState(graphConfig(threadId));
+  const readMessages = async (threadId: string, sourceGraph = graph) => {
+    const snapshot = await sourceGraph.getState(graphConfig(threadId));
     const messages: BaseMessage[] = Array.isArray(snapshot.values.messages)
       ? (snapshot.values.messages as BaseMessage[])
       : [];
@@ -366,15 +377,45 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
       }
       chatMessages.push(chatMessage);
     });
+    // Some tool-capable models stop immediately after a successful tool call
+    // when the compact-response policy tells them that no prose is needed.
+    // Preserve the evidence as a real assistant turn instead of presenting a
+    // successful lookup as an incomplete user request.
+    if (pendingToolOutputs.length > 0) {
+      const sources = pendingToolOutputs.map(({ name }) => toolSource(name));
+      const uniqueSources = sources.filter(
+        ({ label }, index) => sources.findIndex((source) => source.label === label) === index,
+      );
+      const tables = pendingToolOutputs.flatMap(({ table }) => (table ? [table] : []));
+      const failed = pendingToolOutputs.some((output) => output.failed);
+      const index = messages.length;
+      chatMessages.push({
+        id: stableMessageId(threadId, index, "assistant", tables.length ? "" : failed ? "Tool result unavailable." : "No matching records were returned."),
+        role: "assistant",
+        content: tables.length ? "" : failed ? "Tool result unavailable." : "No matching records were returned.",
+        sentAt: new Date().toISOString(),
+        sources: uniqueSources,
+        ...(tables.length ? { tables } : {}),
+        ...(failed ? { toolFailure: "A tool lookup failed; no evidence was returned for it." } : {}),
+      });
+      pendingToolOutputs.length = 0;
+    }
     // A failed model or MCP call can occur after the human message is saved in
-    // the checkpoint. Make that durable incomplete turn explicit to the UI
-    // rather than rendering it as an unexplained, unanswered chat bubble.
+    // the checkpoint. Always supply an assistant turn for that case. This is
+    // deliberately reconstructed at read time so it also repairs existing
+    // conversations that contain an orphaned user message.
     const latest = chatMessages.at(-1);
     if (latest?.role === "user") {
-      latest.delivery = "failed";
-      if (pendingToolOutputs.some((output) => output.failed)) {
-        latest.toolFailure = "A tool lookup failed before FlowPilot could reply.";
-      }
+      const asksForJira = /\bjira\b/iu.test(latest.content);
+      const content = asksForJira
+        ? "I couldn’t complete the Jira lookup because the Jira tool could not be selected for this response. Check that Mock Jira is enabled and healthy, then try again."
+        : "I couldn’t complete that request because no assistant response was produced. Please try again.";
+      chatMessages.push({
+        id: stableMessageId(threadId, messages.length, "assistant", content),
+        role: "assistant",
+        content,
+        sentAt: latest.sentAt,
+      });
     }
     return chatMessages;
   };
@@ -419,7 +460,10 @@ export function createChatAgent(options: ChatAgentOptions): ChatAgent {
         },
         graphConfig(threadId),
       );
-      return readMessages(threadId);
+      // The tool set is request-specific. Read the checkpoint through the
+      // same compiled graph that executed this request so its tool outputs
+      // and the following assistant turn are available to the conversation.
+      return readMessages(threadId, invocationGraph);
     },
   };
 }

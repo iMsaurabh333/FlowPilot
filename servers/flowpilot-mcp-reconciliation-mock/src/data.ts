@@ -42,7 +42,23 @@ const defects: DefectRecord[] = [
 ];
 
 export function findRecord(system: MockSystem, applicationMessageId: string) {
-  return (system === "abc-warehouse" ? abcWarehouse : xyzTms).find((record) => record.applicationMessageId === applicationMessageId);
+  const record = (system === "abc-warehouse" ? abcWarehouse : xyzTms).find((item) => item.applicationMessageId === applicationMessageId);
+  if (!record) return undefined;
+  // The same reconciliation value can use different business field names in
+  // each system. These explicit fields make that mapping testable end-to-end.
+  return system === "abc-warehouse"
+    ? { ...record, orderNumber: record.applicationMessageId }
+    : { ...record, salesOrderNumber: record.applicationMessageId };
 }
 
-export function findDefect(defectId: string) { return defects.find((defect) => defect.defectId === defectId); }
+function normalizedDefectId(defectId: string) {
+  // Defect IDs are commonly copied from rich text, where the separator may be
+  // a non-breaking hyphen or another Unicode dash instead of an ASCII hyphen.
+  // The identifier remains the same business value in each representation.
+  return defectId.trim().replace(/[\u2010-\u2015\u2212]/gu, "-");
+}
+
+export function findDefect(defectId: string) {
+  const normalized = normalizedDefectId(defectId);
+  return defects.find((defect) => defect.defectId === normalized);
+}
