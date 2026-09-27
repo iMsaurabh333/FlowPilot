@@ -498,6 +498,23 @@ export function createApp(options: AppOptions) {
     },
   );
 
+  app.delete(
+    "/api/admin/mcp-servers/:serverId",
+    adminRegistry,
+    async (request, response, next) => {
+      if (!options.registry) {
+        response.status(503).json({ error: "registry_unavailable" });
+        return;
+      }
+      try {
+        await options.registry.delete(serverIdSchema.parse(request.params.serverId));
+        response.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   app.post(
     "/api/admin/mcp-servers/:serverId/ping",
     adminRegistry,

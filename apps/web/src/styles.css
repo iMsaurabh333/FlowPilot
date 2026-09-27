@@ -2521,12 +2521,17 @@ textarea {
   border-block-end: var(--sapList_BorderWidth) solid var(--sapList_BorderColor);
 }
 
+.server-browser-heading {
+  display: grid;
+  gap: 0.2rem;
+}
+
 .server-browser h2 {
   font-family: var(--sapFontHeaderFamily);
   font-size: var(--sapFontHeader5Size);
 }
 
-.server-browser > header > span,
+.server-browser-heading > span,
 .draft-badge,
 .preset-badge,
 .health-pill {
@@ -2535,11 +2540,40 @@ textarea {
   font-size: var(--sapFontSmallSize);
 }
 
-.server-browser > header > span,
+.server-browser-heading > span,
 .draft-badge,
 .preset-badge {
   color: var(--sapContent_LabelColor);
   background: var(--sapNeutralBackground);
+}
+
+.add-server-button {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--sapButton_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  color: var(--sapButton_TextColor);
+  background: var(--sapButton_Background);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.add-server-button:hover:not(:disabled) {
+  color: var(--sapButton_Hover_TextColor);
+  background: var(--sapButton_Hover_Background);
+}
+
+.add-server-button:focus-visible {
+  outline: 2px solid var(--sapContent_FocusColor);
+  outline-offset: 2px;
+}
+
+.add-server-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .server-list {

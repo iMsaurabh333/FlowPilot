@@ -239,6 +239,33 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
     }
   };
 
+  const deleteServer = async (draft: AdminDraft) => {
+    if (!client.deleteMcpServer || !draft.server) return;
+    const serverName = draft.displayName || draft.server.serverId;
+    if (
+      !window.confirm(
+        `Delete MCP server “${serverName}”? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setPending(`${draft.key}:delete`);
+    setError(undefined);
+    try {
+      await client.deleteMcpServer(draft.server.serverId);
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[draft.key];
+        return next;
+      });
+      setSelectedKey(servers.find((server) => server.key !== draft.key)?.key);
+    } catch (caught) {
+      setError(visibleAdminError(caught));
+    } finally {
+      setPending(undefined);
+    }
+  };
+
   const discoverTools = async (draft: AdminDraft) => {
     if (!client.listMcpServerTools || !draft.server) return;
     setPending(`${draft.key}:tools`);
@@ -291,13 +318,6 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
             enter FlowPilot.
           </p>
         </div>
-        <Button
-          design="Emphasized"
-          disabled={Boolean(pending)}
-          onClick={addServer}
-        >
-          Register server
-        </Button>
       </header>
 
       <section className="registry-metrics" aria-label="Registry summary">
@@ -384,8 +404,20 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
       <div className="registry-workspace">
         <aside className="server-browser" aria-labelledby="registered-title">
           <header>
-            <h2 id="registered-title">Registered servers</h2>
-            <span>{servers.length}</span>
+            <div className="server-browser-heading">
+              <h2 id="registered-title">Registered servers</h2>
+              <span>{servers.length} registered</span>
+            </div>
+            <button
+              className="add-server-button"
+              type="button"
+              aria-label="Add MCP server"
+              title="Add MCP server"
+              disabled={Boolean(pending)}
+              onClick={addServer}
+            >
+              +
+            </button>
           </header>
           {loading ? (
             <div className="registry-loading" role="status">
@@ -396,7 +428,6 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
             <div className="registry-empty">
               <strong>No servers yet</strong>
               <span>Add a trusted MCP endpoint to get started.</span>
-              <Button onClick={addServer}>Register server</Button>
             </div>
           ) : (
             <nav className="server-list" aria-label="Server registrations">
@@ -466,7 +497,7 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                     loading={pending === `${selectedDraft.key}:ping`}
                     onClick={() => void pingServer(selectedDraft)}
                   >
-                    Ping server
+                    Ping
                   </Button>
                 )}
                 <Button
@@ -476,8 +507,19 @@ export function McpRegistryView({ client }: McpRegistryViewProps) {
                   loading={pending === `${selectedDraft.key}:save`}
                   onClick={() => void saveServer(selectedDraft)}
                 >
-                  Save registration
+                  Save
                 </Button>
+                {selectedDraft.server && (
+                  <Button
+                    type="Button"
+                    design="Negative"
+                    disabled={Boolean(pending) || !client.deleteMcpServer}
+                    loading={pending === `${selectedDraft.key}:delete`}
+                    onClick={() => void deleteServer(selectedDraft)}
+                  >
+                    Delete
+                  </Button>
+                )}
               </div>
             </header>
 

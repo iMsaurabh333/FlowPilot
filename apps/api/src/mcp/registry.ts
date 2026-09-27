@@ -92,6 +92,7 @@ export interface McpRegistryRepository {
   list(): Promise<McpServerRecord[]>;
   find(serverId: string): Promise<McpServerRecord | undefined>;
   save(server: McpServerRecord): Promise<void>;
+  delete(serverId: string): Promise<void>;
 }
 
 export class McpRegistryError extends Error {
@@ -414,6 +415,14 @@ export class PostgresMcpRegistryRepository implements McpRegistryRepository {
       ),
     );
   }
+
+  async delete(serverId: string) {
+    await this.#withAdmin((client) =>
+      client.query(`DELETE FROM ${this.#schema}.mcp_servers WHERE server_id = $1`, [
+        serverId,
+      ]),
+    );
+  }
 }
 
 export class MemoryMcpRegistryRepository implements McpRegistryRepository {
@@ -433,6 +442,10 @@ export class MemoryMcpRegistryRepository implements McpRegistryRepository {
 
   async save(server: McpServerRecord) {
     this.records.set(server.serverId, server);
+  }
+
+  async delete(serverId: string) {
+    this.records.delete(serverId);
   }
 }
 
@@ -561,6 +574,17 @@ export class McpRegistryService {
     }
   }
 
+  async #deleteRecord(serverId: string) {
+    try {
+      await this.#repository.delete(serverId);
+    } catch {
+      throw new McpRegistryError(
+        "registry_unavailable",
+        "MCP registry storage is unavailable",
+      );
+    }
+  }
+
   async #probeRecord(server: McpServerRecord): Promise<McpProbeResult> {
     try {
       return await this.#probe.ping(server);
@@ -645,6 +669,14 @@ export class McpRegistryService {
     const checked = applyProbe(existing, await this.#probeRecord(existing));
     await this.#saveRecord(checked);
     return checked;
+  }
+
+  async delete(serverId: string) {
+    validateServerId(serverId);
+    if (!(await this.#findRecord(serverId))) {
+      throw new McpRegistryError("not_found", "MCP server not found");
+    }
+    await this.#deleteRecord(serverId);
   }
 
   async listTools(serverId: string) {

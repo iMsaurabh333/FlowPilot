@@ -358,11 +358,13 @@ describe("FlowPilot chat interface", () => {
     };
     const pingMcpServer = vi.fn().mockResolvedValue(server);
     const upsertMcpServer = vi.fn().mockResolvedValue(server);
+    const deleteMcpServer = vi.fn().mockResolvedValue(undefined);
     const client = api({
       loadCurrentUser: vi.fn().mockResolvedValue(adminUser),
       listMcpServers: vi.fn().mockResolvedValue([server]),
       pingMcpServer,
       upsertMcpServer,
+      deleteMcpServer,
     });
 
     const { container } = renderApp(client);
@@ -376,6 +378,18 @@ describe("FlowPilot chat interface", () => {
     expect(screen.getByText("healthy")).toBeInTheDocument();
     expect(screen.getByText("Ping server")).toBeInTheDocument();
     expect(screen.getByText("Save registration")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add MCP server" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "New MCP server" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(
+      await screen.findByRole("heading", {
+        name: "Cloud Integration monitoring",
+      }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("switch", {
         name: "Enable Cloud Integration monitoring",
@@ -396,6 +410,12 @@ describe("FlowPilot chat interface", () => {
           enabled: false,
         }),
       ),
+    );
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByText("Delete server"));
+    await waitFor(() =>
+      expect(deleteMcpServer).toHaveBeenCalledWith(server.serverId),
     );
 
     const results = await axe.run(container, {

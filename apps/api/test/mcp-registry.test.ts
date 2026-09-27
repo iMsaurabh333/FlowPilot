@@ -166,6 +166,19 @@ describe("MCP registry administration", () => {
     expect(
       listed.body.servers.map((server: McpServerRecord) => server.serverId),
     ).toEqual(["cloud-integration-a", "cloud-integration-b"]);
+
+    await request(app)
+      .delete("/api/admin/mcp-servers/cloud-integration-a")
+      .set("x-test-role", "admin")
+      .expect(204);
+
+    const afterDelete = await request(app)
+      .get("/api/admin/mcp-servers")
+      .set("x-test-role", "admin")
+      .expect(200);
+    expect(afterDelete.body.servers).toEqual([
+      expect.objectContaining({ serverId: "cloud-integration-b" }),
+    ]);
   });
 
   it("requires a healthy Ping before enabling and records safe health metadata", async () => {

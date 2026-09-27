@@ -264,6 +264,7 @@ export interface FlowPilotApi {
     serverId: string,
     input: McpServerInput,
   ): Promise<McpServerRecord>;
+  deleteMcpServer?(serverId: string): Promise<void>;
   pingMcpServer?(serverId: string): Promise<McpServerRecord>;
   listMcpServerTools?(serverId: string): Promise<string[]>;
   /** Admin contracts are optional until the identifier persistence service is enabled. */
@@ -543,6 +544,12 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(input),
         },
+      );
+    },
+    deleteMcpServer(serverId) {
+      return request<void>(
+        `/api/admin/mcp-servers/${encodeURIComponent(serverId)}`,
+        { method: "DELETE" },
       );
     },
     pingMcpServer(serverId) {
