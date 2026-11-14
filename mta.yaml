@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.21
+version: 0.1.22
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -229,6 +229,7 @@ modules:
 resources:
   - name: flowpilot-auth
     type: org.cloudfoundry.managed-service
+    processed-after: [flowpilot-jobscheduler]
     requires:
       - name: flowpilot-approuter-binding
     parameters:
