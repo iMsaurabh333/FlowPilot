@@ -32,6 +32,7 @@ modules:
       MODEL_TIMEOUT_MS: "30000"
       MODEL_MAX_RETRIES: "2"
       REPORT_SCHEDULER_ACTION_URL: ${default-url}/internal/reports/dispatch
+      INTEGRATION_HEALTH_TIME_ZONE: Asia/Kolkata
     provides:
       - name: flowpilot-api-binding
         properties:

@@ -51,7 +51,7 @@ export function IntegrationHealth({ client, compact = false, window = "last_comp
     setCollecting(true);
     try {
       const result = await client.collectIntegrationHealth();
-      if (manual) setCollectionMessage(result.flows ? `Updated ${result.flows} flow${result.flows === 1 ? "" : "s"} from CPI.` : "CPI returned no messages for the last completed UTC hour.");
+      if (manual) setCollectionMessage(result.flows ? `Updated ${result.flows} flow${result.flows === 1 ? "" : "s"} from CPI (${result.timeZone}).` : `CPI returned no messages for the last completed hour in ${result.timeZone}.`);
       await load();
     } catch (error) {
       if (manual) setCollectionMessage(error instanceof ApiError ? `CPI collection failed: ${error.code.replace(/^integration_health_source_/u, "").replaceAll("_", " ")}.` : "CPI collection failed. Check the Cloud Integration MCP server connection, destination, and health status, then try again.");

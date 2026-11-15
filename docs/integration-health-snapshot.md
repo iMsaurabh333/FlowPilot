@@ -13,8 +13,12 @@ configured.
 
 ## Data and collection
 
-- Collect shortly after each UTC hour closes (for example, `HH:05`) for the
-  preceding complete hour.
+- Align collection buckets and Today/Yesterday reporting windows to the
+  configured CPI tenant timezone, then convert those boundaries to UTC for the
+  Message Processing Logs API. The application defaults to `Asia/Kolkata` and
+  accepts an IANA timezone override through `INTEGRATION_HEALTH_TIME_ZONE`.
+- Collect shortly after each CPI-local hour closes (for example, `HH:05`) for
+  the preceding complete hour.
 - Store only compact metrics per iFlow: bucket, ID/name, status counts, failure
   rate, and completeness. Store application-message and bounded error details
   only for attention-worthy failures.
@@ -24,7 +28,8 @@ configured.
   storage, or token usage.
 - Enable automatic collection by setting `INTEGRATION_HEALTH_TENANT_ID` for the
   deployed tenant (and optionally `INTEGRATION_HEALTH_SUBJECT`). The collector
-  runs between `HH:05` and `HH:09` UTC and records a bucket once.
+  runs between local `HH:05` and `HH:09` in the configured CPI timezone and
+  records a bucket once.
 
 ## Health rules and experience
 
@@ -34,7 +39,7 @@ configured.
   recurring failure patterns without inferring business correlation.
 - If CPI application headers are absent, state: "Business message
   identifier/type not supplied by this iFlow."
-- The homepage shows the latest completed hour, comparison with the prior hour,
+- The homepage shows the latest completed CPI-local hour, comparison with the prior hour,
   a 24-hour trend, and attention flows. A flow opens a focused health detail
   panel with application-message breakdown, bounded collapsible error details,
   and a CPI link.

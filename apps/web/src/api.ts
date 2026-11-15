@@ -209,6 +209,7 @@ export interface IntegrationHealthFlow {
 }
 export interface IntegrationHealthSummary {
   window: "last_completed_hour" | "today" | "yesterday" | "last_24_hours";
+  timeZone: string;
   from: string;
   to: string;
   partial: boolean;
@@ -318,6 +319,7 @@ export interface FlowPilotApi {
   ): Promise<IntegrationHealthSummary>;
   collectIntegrationHealth?(hours?: number): Promise<{
     bucketStart: string;
+    timeZone: string;
     partial: boolean;
     flows: number;
   }>;
@@ -623,7 +625,7 @@ export function createApiClient(fetcher: typeof fetch = fetch): FlowPilotApi {
       );
     },
     collectIntegrationHealth(hours = 1) {
-      return request<{ bucketStart: string; partial: boolean; flows: number }>(
+      return request<{ bucketStart: string; timeZone: string; partial: boolean; flows: number }>(
         `/api/integration-health/collect?hours=${encodeURIComponent(hours)}`,
         { method: "POST" },
       );

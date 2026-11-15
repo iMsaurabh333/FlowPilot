@@ -58,6 +58,7 @@ export interface HealthFlow {
 }
 export interface HealthSummary {
   window: "last_completed_hour" | "today" | "yesterday" | "last_24_hours";
+  timeZone: string;
   from: string;
   to: string;
   partial: boolean;
@@ -88,26 +89,128 @@ function total(values: Record<string, number>) {
 function failureRate(processed: number, failed: number) {
   return processed === 0 ? 0 : (failed / processed) * 100;
 }
-function hour(value: Date) {
-  const result = new Date(value);
-  result.setUTCMinutes(0, 0, 0);
-  return result;
+export const DEFAULT_INTEGRATION_HEALTH_TIME_ZONE = "Asia/Kolkata";
+
+interface LocalDateTime {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function localDateTime(value: Date, timeZone: string): LocalDateTime {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((entry) => entry.type === type)?.value);
+  return {
+    year: part("year"),
+    month: part("month"),
+    day: part("day"),
+    hour: part("hour"),
+    minute: part("minute"),
+    second: part("second"),
+  };
+}
+
+function localDateTimeToUtc(target: LocalDateTime, timeZone: string, at = new Date()): Date {
+  // Resolve the requested wall-clock time using offsets around the target date.
+  // Considering nearby offsets also handles the repeated hour at DST fall-back.
+  const targetAsUtc = Date.UTC(
+    target.year,
+    target.month - 1,
+    target.day,
+    target.hour,
+    target.minute,
+    target.second,
+  );
+  const offsets = new Set<number>();
+  for (let hours = -36; hours <= 36; hours += 6) {
+    const sample = new Date(at.getTime() + hours * 60 * 60 * 1000);
+    const local = localDateTime(sample, timeZone);
+    offsets.add(
+      Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, local.second) -
+        Math.floor(sample.getTime() / 1000) * 1000,
+    );
+  }
+  const matches = [...offsets]
+    .map((offset) => new Date(targetAsUtc - offset))
+    .filter((candidate) => {
+      const actual = localDateTime(candidate, timeZone);
+      return (
+        actual.year === target.year &&
+        actual.month === target.month &&
+        actual.day === target.day &&
+        actual.hour === target.hour &&
+        actual.minute === target.minute &&
+        actual.second === target.second &&
+        candidate.getTime() <= at.getTime()
+      );
+    })
+    .sort((left, right) => right.getTime() - left.getTime());
+  if (matches[0]) return matches[0];
+
+  // If a timezone skips a wall-clock instant during a DST change, iteratively
+  // converge to the first representable instant for that local boundary.
+  let guess = targetAsUtc;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const local = localDateTime(new Date(guess), timeZone);
+    const representedAsUtc = Date.UTC(
+      local.year,
+      local.month - 1,
+      local.day,
+      local.hour,
+      local.minute,
+      local.second,
+    );
+    const offset = representedAsUtc - guess;
+    const next = targetAsUtc - offset;
+    if (next === guess) break;
+    guess = next;
+  }
+  return new Date(guess);
+}
+
+function hour(value: Date, timeZone: string) {
+  const local = localDateTime(value, timeZone);
+  return localDateTimeToUtc({ ...local, minute: 0, second: 0 }, timeZone, value);
 }
 function iso(value: Date) {
   return value.toISOString();
 }
-function range(window: HealthSummary["window"], now = new Date()) {
-  const end = hour(now);
+function range(window: HealthSummary["window"], now = new Date(), timeZone = DEFAULT_INTEGRATION_HEALTH_TIME_ZONE) {
+  const end = hour(now, timeZone);
   const start = new Date(end);
   if (window === "last_completed_hour")
-    start.setUTCHours(start.getUTCHours() - 1);
+    start.setTime(start.getTime() - 60 * 60 * 1000);
   else if (window === "last_24_hours")
-    start.setUTCHours(start.getUTCHours() - 24);
-  else if (window === "today") start.setUTCHours(0, 0, 0, 0);
+    start.setTime(start.getTime() - 24 * 60 * 60 * 1000);
+  else if (window === "today") {
+    const local = localDateTime(end, timeZone);
+    start.setTime(localDateTimeToUtc({ ...local, hour: 0, minute: 0, second: 0 }, timeZone, end).getTime());
+  }
   else {
-    end.setUTCHours(0, 0, 0, 0);
-    start.setTime(end.getTime());
-    start.setUTCDate(start.getUTCDate() - 1);
+    const local = localDateTime(end, timeZone);
+    const previousDate = new Date(Date.UTC(local.year, local.month - 1, local.day - 1));
+    start.setTime(localDateTimeToUtc({
+      year: previousDate.getUTCFullYear(),
+      month: previousDate.getUTCMonth() + 1,
+      day: previousDate.getUTCDate(),
+      hour: 0,
+      minute: 0,
+      second: 0,
+    }, timeZone, end).getTime());
+    end.setTime(localDateTimeToUtc({ ...local, hour: 0, minute: 0, second: 0 }, timeZone, end).getTime());
   }
   return { start, end };
 }
@@ -166,17 +269,23 @@ export function calculateHealth(
 }
 
 export class IntegrationHealthService {
+  readonly timeZone: string;
+
   constructor(
     private readonly pool: Pool,
     private readonly resolveTools: (
       user: AuthenticatedUser,
     ) => Promise<ChatTool[]>,
     private readonly now: () => Date = () => new Date(),
-  ) {}
+    timeZone = DEFAULT_INTEGRATION_HEALTH_TIME_ZONE,
+  ) {
+    // Intl validates the IANA timezone name and fails fast on a bad deployment setting.
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    this.timeZone = timeZone;
+  }
 
   async collect(user: AuthenticatedUser, at = this.now()) {
-    const end = hour(at);
-    const start = new Date(end.getTime() - 60 * 60 * 1000);
+    const { start, end } = range("last_completed_hour", at, this.timeZone);
     const tool = (await this.resolveTools(user)).find((candidate) =>
       candidate.name.endsWith("__search_message_processing_logs"),
     );
@@ -279,6 +388,7 @@ export class IntegrationHealthService {
     } finally { client.release(); }
     return {
       bucketStart: iso(start),
+      timeZone: this.timeZone,
       partial: result.hasMore === true,
       flows: snapshots.length,
     };
@@ -286,7 +396,7 @@ export class IntegrationHealthService {
 
   async collectRecent(user: AuthenticatedUser, hours: number) {
     const boundedHours = Math.min(Math.max(Math.trunc(hours), 1), 24);
-    const end = hour(this.now());
+    const end = hour(this.now(), this.timeZone);
     let flows = 0;
     let partial = false;
     for (let offset = boundedHours; offset >= 1; offset -= 1) {
@@ -294,7 +404,7 @@ export class IntegrationHealthService {
       flows += collected.flows;
       partial ||= collected.partial;
     }
-    return { bucketStart: iso(new Date(end.getTime() - 60 * 60 * 1000)), partial, flows };
+    return { bucketStart: iso(new Date(end.getTime() - 60 * 60 * 1000)), timeZone: this.timeZone, partial, flows };
   }
 
   async retentionDays(user: AuthenticatedUser) {
@@ -317,14 +427,14 @@ export class IntegrationHealthService {
     user: AuthenticatedUser,
     window: HealthSummary["window"] = "last_completed_hour",
   ): Promise<HealthSummary> {
-    const current = range(window, this.now());
+    const current = range(window, this.now(), this.timeZone);
     const result = await this.pool.query<HealthSnapshotRow>(
       "SELECT bucket_start, flow_id, flow_name, status_counts, business_messages, representative_error, partial FROM " +
         SCHEMA +
         ".integration_health_snapshots WHERE tenant_id=$1 AND bucket_start >= $2 AND bucket_start < $3 ORDER BY bucket_start",
       [user.tenantId, current.start, current.end],
     );
-    const previous = range("last_completed_hour", current.start);
+    const previous = range("last_completed_hour", current.start, this.timeZone);
     const prior = await this.pool.query<HealthSnapshotRow>(
       "SELECT status_counts FROM " +
         SCHEMA +
@@ -429,6 +539,7 @@ export class IntegrationHealthService {
     const partial = result.rows.some((row) => row.partial);
     return {
       window,
+      timeZone: this.timeZone,
       from: iso(current.start),
       to: iso(current.end),
       partial,
@@ -458,8 +569,9 @@ export function startIntegrationHealthCollector(
   let collectedBucket = "";
   const tick = () => {
     const now = new Date();
-    if (now.getUTCMinutes() < 5 || now.getUTCMinutes() > 9) return;
-    const bucket = iso(hour(new Date(now.getTime() - 60 * 60 * 1000)));
+    const local = localDateTime(now, service.timeZone);
+    if (local.minute < 5 || local.minute > 9) return;
+    const bucket = iso(hour(now, service.timeZone));
     if (bucket === collectedBucket) return;
     collectedBucket = bucket;
     void service

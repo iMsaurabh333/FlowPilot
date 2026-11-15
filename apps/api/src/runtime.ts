@@ -39,6 +39,7 @@ import { ReportWorkflowExecutor } from "./reports/report-workflow-executor.js";
 import { OperationLogService } from "./operation-log.js";
 import { BulkJobStore } from "./bulk-jobs.js";
 import {
+  DEFAULT_INTEGRATION_HEALTH_TIME_ZONE,
   IntegrationHealthService,
   startIntegrationHealthCollector,
 } from "./integration-health.js";
@@ -127,6 +128,8 @@ export async function createRuntime(
     );
     const integrationHealth = new IntegrationHealthService(pool, (user) =>
       mcpTools.resolve(user, { surface: "report" }),
+      undefined,
+      environment.INTEGRATION_HEALTH_TIME_ZONE ?? DEFAULT_INTEGRATION_HEALTH_TIME_ZONE,
     );
     const stopIntegrationHealthCollector = startIntegrationHealthCollector(
       integrationHealth,
