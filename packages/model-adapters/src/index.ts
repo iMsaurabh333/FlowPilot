@@ -41,7 +41,7 @@ export class ModelConfigurationError extends Error {
 
 function defaultModel(provider: ModelProvider) {
   if (provider === "groq") {
-    return "llama-3.3-70b-versatile";
+    return "openai/gpt-oss-120b";
   }
 
   if (provider === "openai") {
@@ -122,8 +122,8 @@ export function createChatModel(
         ...common,
         ...(isOpenAIReasoningModel(config.model)
           ? {
-              reasoning: { effort: config.reasoningEffort },
-            }
+            reasoning: { effort: config.reasoningEffort },
+          }
           : { temperature: config.temperature }),
         verbosity: config.verbosity,
         apiKey,

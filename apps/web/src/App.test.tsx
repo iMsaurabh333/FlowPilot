@@ -376,8 +376,8 @@ describe("FlowPilot chat interface", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Generic secure MCP")).toBeInTheDocument();
     expect(screen.getByText("healthy")).toBeInTheDocument();
-    expect(screen.getByText("Ping server")).toBeInTheDocument();
-    expect(screen.getByText("Save registration")).toBeInTheDocument();
+    expect(screen.getByText("Ping")).toBeInTheDocument();
+    expect(screen.getByText("Save")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Add MCP server" }),
     );
@@ -396,12 +396,12 @@ describe("FlowPilot chat interface", () => {
       }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Ping server"));
+    fireEvent.click(screen.getByText("Ping"));
     await waitFor(() =>
       expect(pingMcpServer).toHaveBeenCalledWith(server.serverId),
     );
 
-    fireEvent.click(screen.getByText("Save registration"));
+    fireEvent.click(screen.getByText("Save"));
     await waitFor(() =>
       expect(upsertMcpServer).toHaveBeenCalledWith(
         server.serverId,
@@ -413,7 +413,7 @@ describe("FlowPilot chat interface", () => {
     );
 
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    fireEvent.click(screen.getByText("Delete server"));
+    fireEvent.click(screen.getByText("Delete"));
     await waitFor(() =>
       expect(deleteMcpServer).toHaveBeenCalledWith(server.serverId),
     );
