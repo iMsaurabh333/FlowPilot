@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatAgent, ChatMessage } from "@flowpilot/agent-core";
+import type { ChatAgent, ChatMessage, ChatTool } from "@flowpilot/agent-core";
 
 import type { AuthenticatedUser } from "../types.js";
+import type { ConversationPolicyService } from "../conversation-policy.js";
 import type { ConversationRecord, ConversationRepository } from "./types.js";
+import type { OperationLogService } from "../operation-log.js";
 
 export class ConversationNotFoundError extends Error {
   constructor() {
@@ -16,6 +18,13 @@ export class ConversationBusyError extends Error {
   constructor() {
     super("Conversation already has an active run");
     this.name = "ConversationBusyError";
+  }
+}
+
+export class ConversationLimitError extends Error {
+  constructor() {
+    super("The configured conversation limit has been reached");
+    this.name = "ConversationLimitError";
   }
 }
 
@@ -35,6 +44,7 @@ export interface ConversationSummary {
 
 export interface ConversationDetail extends ConversationSummary {
   messages: ChatMessage[];
+  rolledOver?: boolean;
 }
 
 function summary(record: ConversationRecord): ConversationSummary {
@@ -54,18 +64,54 @@ function conversationTitle(content: string) {
 export class ConversationService {
   readonly #repository: ConversationRepository;
   readonly #agent: ChatAgent;
+  readonly #tools:
+    { resolve(user: AuthenticatedUser): Promise<ChatTool[]> } | undefined;
+  readonly #policy: ConversationPolicyService | undefined;
+  readonly #operationLogs: OperationLogService | undefined;
 
-  constructor(repository: ConversationRepository, agent: ChatAgent) {
+  constructor(
+    repository: ConversationRepository,
+    agent: ChatAgent,
+    tools?: { resolve(user: AuthenticatedUser): Promise<ChatTool[]> },
+    policy?: ConversationPolicyService,
+    operationLogs?: OperationLogService,
+  ) {
     this.#repository = repository;
     this.#agent = agent;
+    this.#tools = tools;
+    this.#policy = policy;
+    this.#operationLogs = operationLogs;
   }
 
   async create(user: AuthenticatedUser) {
-    return summary(await this.#repository.create(user));
+    const limit = (await this.#policy?.get())?.maxConversationsPerUser ?? 50;
+    const record = await this.#repository.create(user, limit);
+    if (!record) throw new ConversationLimitError();
+    return summary(record);
   }
 
   async list(user: AuthenticatedUser) {
     return (await this.#repository.list(user)).map(summary);
+  }
+
+  async delete(user: AuthenticatedUser, conversationId: string) {
+    const result = await this.#repository.delete(user, conversationId);
+    if (result === "not_found") throw new ConversationNotFoundError();
+    if (result === "busy") throw new ConversationBusyError();
+  }
+
+  async improvePrompt(content: string) {
+    try {
+      const improvePrompt = (
+        this.#agent as ChatAgent & {
+          improvePrompt?: (draft: string) => Promise<string>;
+        }
+      ).improvePrompt;
+      if (!improvePrompt) throw new Error("Prompt assistance is unavailable");
+      return await improvePrompt.call(this.#agent, content);
+    } catch (error) {
+      throw new ModelInvocationError({ cause: error });
+    }
   }
 
   async get(user: AuthenticatedUser, conversationId: string) {
@@ -98,12 +144,68 @@ export class ConversationService {
     }
 
     let messages: ChatMessage[];
+    let rolledOver = false;
     try {
+      // The operation record must describe this request, not the title left by
+      // the preceding turn in the same conversation.
+      void this.#operationLogs?.record(user, { surface: "chat", eventType: "llm_input", title: `Conversation · ${conversationTitle(content)}`, detail: { instruction: content } });
       messages = await this.#agent.sendMessage(
         acquisition.conversation.threadId,
         content,
+        await this.#tools?.resolve(user),
       );
+      const maxTurns = (await this.#policy?.get())?.maxRetainedTurns ?? 40;
+      const trimOldestTurn = (
+        this.#agent as ChatAgent & {
+          trimOldestTurn?: (threadId: string, limit: number) => Promise<boolean>;
+        }
+      ).trimOldestTurn;
+      rolledOver = trimOldestTurn
+        ? await trimOldestTurn.call(
+            this.#agent,
+            acquisition.conversation.threadId,
+            maxTurns,
+          )
+        : false;
+      if (rolledOver) {
+        messages = await this.#agent.getMessages(acquisition.conversation.threadId);
+      }
     } catch (error) {
+      void this.#operationLogs?.record(user, { surface: "chat", eventType: "error", title: "Chat model or tool execution failed", detail: { errorType: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : "Unknown failure" } });
+      // A graph may save the human turn before a provider or tool failure. In
+      // that case the agent can turn the otherwise orphaned request into its
+      // explicit recovery response. Return that normal conversation update,
+      // rather than making the client show a red incomplete-request marker.
+      try {
+        messages = await this.#agent.getMessages(
+          acquisition.conversation.threadId,
+        );
+        const recoveryAssistant = messages.at(-1);
+        const savedRequest = messages.at(-2);
+        if (
+          recoveryAssistant?.role === "assistant" &&
+          savedRequest?.role === "user" &&
+          savedRequest.content === content.trim()
+        ) {
+          await this.#repository.completeRun(
+            user,
+            conversationId,
+            runId,
+            conversationTitle(content),
+          );
+          const updated = await this.#repository.findOwned(user, conversationId);
+          if (!updated) throw new ConversationNotFoundError();
+          return {
+            ...summary(updated),
+            messages,
+            rolledOver: false,
+          } satisfies ConversationDetail;
+        }
+      } catch (recoveryError) {
+        // Preserve the original invocation error below. The failed recovery is
+        // separately captured in the operation log without exposing internals.
+        void this.#operationLogs?.record(user, { surface: "chat", eventType: "error", title: "Chat recovery response could not be prepared", detail: { errorType: recoveryError instanceof Error ? recoveryError.name : "UnknownError" } });
+      }
       try {
         await this.#repository.releaseRun(user, conversationId, runId);
       } catch (releaseError) {
@@ -125,6 +227,6 @@ export class ConversationService {
     if (!updated) {
       throw new ConversationNotFoundError();
     }
-    return { ...summary(updated), messages } satisfies ConversationDetail;
+    return { ...summary(updated), messages, rolledOver } satisfies ConversationDetail;
   }
 }

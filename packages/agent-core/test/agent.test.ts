@@ -1,10 +1,25 @@
 import { FakeListChatModel } from "@langchain/core/utils/testing";
+import { fakeModel } from "@langchain/core/testing";
+import { AIMessage } from "@langchain/core/messages";
 import { MemorySaver } from "@langchain/langgraph";
 import { describe, expect, it, vi } from "vitest";
 
-import { createChatAgent, estimateMessagesTokens } from "../src/index.js";
+import {
+  createChatAgent,
+  DEFAULT_SYSTEM_PROMPT,
+  estimateMessagesTokens,
+} from "../src/index.js";
 
 describe("FlowPilot chat graph", () => {
+  it("maps business document IDs to the CPI application message ID filter", () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      '"What is the status of sales order 112233?" means call the available Message Processing Log search tool with applicationMessageId "112233".',
+    );
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      "Do not ask for a time window or an integration-flow ID when an exact identifier is enough for the available tool.",
+    );
+  });
+
   it("persists independent message histories by server thread id", async () => {
     const agent = createChatAgent({
       checkpointer: new MemorySaver(),
@@ -93,5 +108,173 @@ describe("FlowPilot chat graph", () => {
     });
     expect(events[0]).not.toHaveProperty("prompt");
     expect(events[0]).not.toHaveProperty("response");
+  });
+
+  it("runs only the per-request registered namespaced tools", async () => {
+    const invoked: Record<string, unknown>[] = [];
+    const model = fakeModel()
+      .respondWithTools([
+        { name: "monitoring__search_logs", args: { query: "failed" } },
+      ])
+      .respond(
+        new AIMessage("The approved monitoring tool found no failures."),
+      );
+    const agent = createChatAgent({ checkpointer: new MemorySaver(), model, compactResponses: true });
+
+    const messages = await agent.sendMessage("operator-thread", "Check logs", [
+      {
+        name: "monitoring__search_logs",
+        description: "Search approved monitoring logs.",
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+        async invoke(input) {
+          invoked.push(input);
+          return "No failures";
+        },
+      },
+    ]);
+
+    expect(invoked).toEqual([{ query: "failed" }]);
+    expect(messages.at(-1)).toEqual(
+      expect.objectContaining({
+        role: "assistant",
+        content: "The approved monitoring tool.",
+      }),
+    );
+  });
+
+  it("attaches a business-friendly source and MPL table to a tool-grounded answer", async () => {
+    const model = fakeModel()
+      .respondWithTools([
+        {
+          name: "cloud-integration__search_message_processing_logs",
+          args: { status: "FAILED" },
+        },
+      ])
+      .respond(new AIMessage("One failed message was found."));
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model,
+      compactResponses: true,
+    });
+
+    const messages = await agent.sendMessage("mpl-thread", "Find failures", [
+      {
+        name: "cloud-integration__search_message_processing_logs",
+        description: "Search MPLs.",
+        inputSchema: { type: "object" },
+        async invoke() {
+          return JSON.stringify({
+            items: [
+              {
+                messageId: "message-1",
+                status: "FAILED",
+                integrationFlowName: "Orders",
+                startedAt: "2026-09-08T10:00:00.000Z",
+              },
+            ],
+          });
+        },
+      },
+    ]);
+
+    expect(messages.at(-1)).toMatchObject({
+      role: "assistant",
+      content: "",
+      sources: [
+        { label: "Cloud Integration monitoring · Message Processing Logs" },
+      ],
+      tables: [
+        {
+          title: "Message Processing Logs",
+          columns: ["Message ID", "Status", "Integration flow", "Started"],
+          rows: [["message-1", "FAILED", "Orders", "2026-09-08T10:00:00.000Z"]],
+        },
+      ],
+    });
+  });
+
+  it("caps unstructured guidance to two short sentences", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      compactResponses: true,
+      model: new FakeListChatModel({
+        responses: [
+          "This lookup did not return any records in the requested period. Check the identifier and search a wider time range. Ask an administrator for additional diagnostics.",
+        ],
+      }),
+    });
+
+    const messages = await agent.sendMessage("compact-guidance", "Check message");
+    const guidance = messages.at(-1)?.content ?? "";
+    const sentences = guidance.split(/(?<=[.!?])\s+/u);
+    expect(sentences).toHaveLength(2);
+    expect(sentences.every((sentence) => sentence.length <= 30)).toBe(true);
+  });
+
+  it("replaces an empty assistant placeholder with one clear recovery response", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: [""] }),
+    });
+
+    const messages = await agent.sendMessage("empty-response", "Check logs");
+
+    expect(messages.map(({ role, content }) => ({ role, content }))).toEqual([
+      { role: "user", content: "Check logs" },
+      {
+        role: "assistant",
+        content: "I couldn’t complete that request because no assistant response was produced. Please try again.",
+      },
+    ]);
+  });
+
+  it("explains an unavailable Jira lookup instead of leaving an orphaned request", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: [""] }),
+    });
+
+    const messages = await agent.sendMessage(
+      "jira-unavailable",
+      "Give me details of defect CPI-611889 in Jira",
+    );
+
+    expect(messages.at(-1)).toEqual(
+      expect.objectContaining({
+        role: "assistant",
+        content: expect.stringContaining("Jira tool could not be selected"),
+      }),
+    );
+  });
+
+  it("removes the oldest completed turn when retention is exceeded", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: ["one", "two", "three"] }),
+    });
+    await agent.sendMessage("rolling-thread", "first");
+    await agent.sendMessage("rolling-thread", "second");
+    await agent.sendMessage("rolling-thread", "third");
+
+    expect(await agent.trimOldestTurn("rolling-thread", 2)).toBe(true);
+    expect((await agent.getMessages("rolling-thread")).map(({ content }) => content)).toEqual([
+      "second", "two", "third", "three",
+    ]);
+  });
+
+  it("rewrites a draft without adding it to chat history", async () => {
+    const agent = createChatAgent({
+      checkpointer: new MemorySaver(),
+      model: new FakeListChatModel({ responses: ["Check order 42 and report its current status."] }),
+    });
+
+    await expect(agent.improvePrompt("order 42 status")).resolves.toBe(
+      "Check order 42 and report its current status.",
+    );
+    await expect(agent.getMessages("unused-thread")).resolves.toEqual([]);
   });
 });

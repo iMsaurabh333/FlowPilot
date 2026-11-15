@@ -1,6 +1,6 @@
 _schema-version: "3.3"
 ID: flowpilot
-version: 0.1.5
+version: 0.1.22
 description: Secure operational assistant for SAP BTP
 
 parameters:
@@ -35,16 +35,20 @@ modules:
       MODEL_VERBOSITY: low
       MODEL_TIMEOUT_MS: "30000"
       MODEL_MAX_RETRIES: "2"
+      REPORT_SCHEDULER_ACTION_URL: ${default-url}/internal/reports/dispatch
+      INTEGRATION_HEALTH_TIME_ZONE: Asia/Kolkata
     provides:
       - name: flowpilot-api-binding
         properties:
           srv-url: ${default-url}
     requires:
       - name: flowpilot-auth
+      - name: flowpilot-mcp-auth
       - name: flowpilot-destination
       - name: flowpilot-logs
       - name: flowpilot-postgres
       - name: flowpilot-credentials
+      - name: flowpilot-jobscheduler
     build-parameters:
       builder: custom
       commands:
@@ -96,9 +100,141 @@ modules:
             - "*"
           target-path: resources
 
+  - name: flowpilot-mcp-cloud-integration
+    type: nodejs
+    path: servers/flowpilot-mcp-cloud-integration
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    provides:
+      - name: flowpilot-mcp-binding
+        properties:
+          mcp-url: ${default-url}
+    requires:
+      - name: flowpilot-mcp-auth
+      - name: flowpilot-destination
+      - name: flowpilot-logs
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-cloud-integration-content
+    type: nodejs
+    path: servers/flowpilot-mcp-cloud-integration
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_TOOLSET: content
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+      - name: flowpilot-destination
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-abc-warehouse
+    type: nodejs
+    path: servers/flowpilot-mcp-reconciliation-mock
+    parameters:
+      memory: 128M
+      disk-quota: 256M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_MOCK_SYSTEM: abc-warehouse
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-xyz-tms
+    type: nodejs
+    path: servers/flowpilot-mcp-reconciliation-mock
+    parameters:
+      memory: 128M
+      disk-quota: 256M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_MOCK_SYSTEM: xyz-tms
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
+  - name: flowpilot-mcp-jira-mock
+    type: nodejs
+    path: servers/flowpilot-mcp-reconciliation-mock
+    parameters:
+      memory: 128M
+      disk-quota: 256M
+      buildpack: nodejs_buildpack
+      health-check-type: port
+    properties:
+      NODE_ENV: production
+      MCP_AUTH_MODE: xsuaa
+      MCP_MOCK_SYSTEM: mock-jira
+      MCP_HOST: 0.0.0.0
+      MCP_PUBLIC_URL: ${default-url}/mcp
+      MCP_ALLOWED_HOSTS: ${default-host}.${default-domain}
+      MCP_ALLOWED_ORIGINS: ${default-host}.${default-domain}
+    requires:
+      - name: flowpilot-mcp-auth
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - npm prune --omit=dev
+
 resources:
   - name: flowpilot-auth
     type: org.cloudfoundry.managed-service
+    processed-after: [flowpilot-jobscheduler]
     requires:
       - name: flowpilot-approuter-binding
     parameters:
@@ -133,3 +269,18 @@ resources:
     parameters:
       service: credstore
       service-plan: trial
+
+  - name: flowpilot-jobscheduler
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: jobscheduler
+      service-plan: free
+      config:
+        authentication: xsuaa
+
+  - name: flowpilot-mcp-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security-mcp.json

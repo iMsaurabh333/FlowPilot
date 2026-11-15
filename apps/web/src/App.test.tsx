@@ -13,6 +13,13 @@ const user = {
   scopes: ["ChatUser"],
 };
 
+const adminUser = {
+  subject: "admin-123",
+  tenantId: "tenant-456",
+  displayName: "FlowPilot Admin",
+  scopes: ["ChatUser", "ChatAdmin"],
+};
+
 const summary = {
   id: "11111111-1111-4111-8111-111111111111",
   title: "Check sales order",
@@ -32,13 +39,33 @@ const detail = {
   ],
 };
 
+const toolDetail = {
+  ...detail,
+  messages: [
+    ...detail.messages,
+    {
+      id: "message-3",
+      role: "assistant" as const,
+      content: "One failed message was found.",
+      sources: [{ label: "Cloud Integration monitoring · Message Processing Logs" }],
+      tables: [{
+        title: "Message Processing Logs",
+        columns: ["Message ID", "Status", "Integration flow", "Started"],
+        rows: [["message-1", "FAILED", "Orders", "2026-09-08T10:00:00.000Z"]],
+      }],
+    },
+  ],
+};
+
 function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
   return {
     loadCurrentUser: vi.fn().mockResolvedValue(user),
     listConversations: vi.fn().mockResolvedValue([summary]),
     createConversation: vi.fn().mockResolvedValue(summary),
+    deleteConversation: vi.fn().mockResolvedValue(undefined),
     loadConversation: vi.fn().mockResolvedValue(detail),
     sendMessage: vi.fn().mockResolvedValue(detail),
+    improvePrompt: vi.fn().mockResolvedValue("Improved prompt"),
     ...overrides,
   };
 }
@@ -46,7 +73,7 @@ function api(overrides: Partial<FlowPilotApi> = {}): FlowPilotApi {
 function renderApp(client: FlowPilotApi) {
   return render(
     <ThemeProvider>
-      <App client={client} />
+      <App client={client} initialView="chat" />
     </ThemeProvider>,
   );
 }
@@ -60,10 +87,71 @@ function composer() {
 }
 
 describe("FlowPilot chat interface", () => {
+  it("opens on a home workspace and can collapse navigation", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api()} />
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /Good to see you, Test/ })).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Collapse navigation" });
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Expand navigation" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /Assistant chat/ })[0]);
+    expect(await screen.findByRole("heading", { name: "Check sales order" })).toBeInTheDocument();
+  });
+
+  it("opens the documentation guide from the shell bar", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api()} />
+      </ThemeProvider>,
+    );
+
+    await screen.findByRole("heading", { name: /Good to see you, Test/ });
+    const documentation = document.querySelector('ui5-shellbar-item[title="Documentation"]');
+    if (!(documentation instanceof HTMLElement)) {
+      throw new Error("Expected the Documentation shell-bar action");
+    }
+    fireEvent.click(documentation);
+    expect(await screen.findByRole("heading", { name: "Work with confidence" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Check Health and performance" })).toBeInTheDocument();
+  });
+
+  it("offers processing time as a top-level Health tab", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api()} />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click((await screen.findAllByRole("button", { name: /Health/ }))[0]);
+    const processingTime = await screen.findByRole("tab", { name: "Processing time" });
+    fireEvent.click(processingTime);
+    expect(processingTime).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("offers MCP Configuration only to App Admins", async () => {
+    render(
+      <ThemeProvider>
+        <App client={api({ loadCurrentUser: vi.fn().mockResolvedValue(adminUser) })} />
+      </ThemeProvider>,
+    );
+
+    const navigation = await screen.findByRole("navigation", { name: "Primary navigation" });
+    fireEvent.click(screen.getByRole("button", { name: /MCP Configuration/ }));
+    expect(navigation).toHaveTextContent("MCP Configuration");
+    expect(await screen.findByRole("heading", { name: "MCP Configuration" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "MCP Test Client" })).toBeInTheDocument();
+  });
+
   it("loads the authenticated user's latest private conversation", async () => {
     renderApp(api());
 
-    expect(await screen.findByText("Check sales order")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Check sales order" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Check order 42")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -73,7 +161,15 @@ describe("FlowPilot chat interface", () => {
     expect(
       screen.getByRole("navigation", { name: "Conversation history" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Primary navigation" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Assistant chat/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getAllByText("Test User").length).toBeGreaterThan(0);
+    expect(document.querySelector(".flowpilot-logo svg")).toBeInTheDocument();
   });
 
   it("creates the first conversation and enables the composer", async () => {
@@ -82,7 +178,7 @@ describe("FlowPilot chat interface", () => {
       listConversations: vi.fn().mockResolvedValue([]),
       createConversation,
     });
-    renderApp(client);
+    const { container } = renderApp(client);
 
     const start = await screen.findByText("Start a conversation");
     fireEvent.click(start);
@@ -94,7 +190,29 @@ describe("FlowPilot chat interface", () => {
     expect(composer()).not.toHaveAttribute("disabled");
   });
 
-  it("sends a trimmed message with the documented keyboard shortcut", async () => {
+  it("copies a starter prompt into a new conversation draft without sending", async () => {
+    const createConversation = vi.fn().mockResolvedValue(summary);
+    const sendMessage = vi.fn();
+    renderApp(
+      api({
+        listConversations: vi.fn().mockResolvedValue([]),
+        createConversation,
+        sendMessage,
+      }),
+    );
+
+    fireEvent.click(await screen.findByText("Start a conversation"));
+    await screen.findByRole("group", { name: "Starter prompts" });
+    fireEvent.click(screen.getByText("Investigate a failed message"));
+
+    expect(composer()).toHaveProperty(
+      "value",
+      "Investigate a failed message. I can provide its correlation ID, integration flow ID, or application message ID.",
+    );
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends a trimmed message when Enter is pressed", async () => {
     const response = {
       ...detail,
       messages: [
@@ -107,16 +225,36 @@ describe("FlowPilot chat interface", () => {
     renderApp(api({ sendMessage }));
 
     await screen.findByText("Check order 42");
+    const messageRegion = screen.getByRole("region", { name: "Chat content" });
+    Object.defineProperty(messageRegion, "scrollHeight", {
+      configurable: true,
+      value: 480,
+    });
+    messageRegion.scrollTop = 0;
     const input = composer();
     Object.assign(input, { value: "  Check delivery  " });
     fireEvent.input(input);
-    fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() =>
       expect(sendMessage).toHaveBeenCalledWith(summary.id, "Check delivery"),
     );
     expect(await screen.findByText("Checking.")).toBeInTheDocument();
     expect(input).toHaveProperty("value", "");
+    expect(messageRegion.scrollTop).toBe(480);
+  });
+
+  it("keeps Shift+Enter available for a newline without sending", async () => {
+    const sendMessage = vi.fn();
+    renderApp(api({ sendMessage }));
+
+    await screen.findByText("Check order 42");
+    const input = composer();
+    Object.assign(input, { value: "First line" });
+    fireEvent.input(input);
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it("keeps the draft and presents a safe provider failure", async () => {
@@ -135,6 +273,45 @@ describe("FlowPilot chat interface", () => {
       await screen.findByText(/assistant is temporarily unavailable/i),
     ).toBeInTheDocument();
     expect(input).toHaveProperty("value", "Retryable message");
+  });
+
+  it("shows the MCP source and an accessible MPL result table", async () => {
+    renderApp(api({ loadConversation: vi.fn().mockResolvedValue(toolDetail) }));
+
+    expect(await screen.findByText(/Source: Cloud Integration monitoring/)).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Message Processing Logs" });
+    expect(table).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "FAILED" })).toBeInTheDocument();
+  });
+
+  it("asks for confirmation before deleting the active conversation", async () => {
+    const deleteConversation = vi.fn().mockResolvedValue(undefined);
+    renderApp(api({ deleteConversation }));
+
+    await screen.findByText("Check order 42");
+    const deleteButton = document.querySelector(".conversation-delete");
+    if (!(deleteButton instanceof HTMLElement)) {
+      throw new Error("Expected the conversation delete button");
+    }
+    fireEvent.click(deleteButton);
+
+    expect(
+      screen.getByRole("alertdialog", { name: "Delete this conversation?" }),
+    ).toBeInTheDocument();
+    expect(deleteConversation).not.toHaveBeenCalled();
+
+    const confirmButton = screen
+      .getByRole("alertdialog")
+      .querySelectorAll("ui5-button")[1];
+    if (!(confirmButton instanceof HTMLElement)) {
+      throw new Error("Expected the deletion confirmation button");
+    }
+    fireEvent.click(confirmButton);
+    await waitFor(() =>
+      expect(deleteConversation).toHaveBeenCalledWith(summary.id),
+    );
+    expect(screen.getByText("Start a focused troubleshooting session")).toBeInTheDocument();
   });
 
   it("exposes landmarks and has no serious automated accessibility violations", async () => {
@@ -156,5 +333,113 @@ describe("FlowPilot chat interface", () => {
       ({ impact }) => impact === "serious" || impact === "critical",
     );
     expect(seriousViolations).toEqual([]);
+  });
+
+  it("shows admin registry controls and invokes Ping and Save", async () => {
+    const server = {
+      serverId: "cloud-integration",
+      policyPresetId: "generic" as const,
+      displayName: "Cloud Integration monitoring",
+      endpointUrl: "https://mcp.example.test",
+      mcpPath: "/mcp",
+      externalPort: null,
+      authProfileRef: "destination:FLOWPILOT_CLOUD_INTEGRATION_MPL",
+      allowedToolNames: ["search_message_processing_logs"],
+      requiredScopes: ["McpInvoke"],
+      enabled: false,
+      healthState: "healthy" as const,
+      lastCheckedAt: "2026-09-05T12:00:00.000Z",
+      latencyMs: 12,
+      protocolVersion: "2026-07-28" as const,
+      discoveredToolCount: 1,
+      lastErrorCategory: null,
+      createdAt: "2026-09-05T11:00:00.000Z",
+      updatedAt: "2026-09-05T12:00:00.000Z",
+    };
+    const pingMcpServer = vi.fn().mockResolvedValue(server);
+    const upsertMcpServer = vi.fn().mockResolvedValue(server);
+    const deleteMcpServer = vi.fn().mockResolvedValue(undefined);
+    const client = api({
+      loadCurrentUser: vi.fn().mockResolvedValue(adminUser),
+      listMcpServers: vi.fn().mockResolvedValue([server]),
+      pingMcpServer,
+      upsertMcpServer,
+      deleteMcpServer,
+    });
+
+    const { container } = renderApp(client);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Settings/ }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "MCP servers" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Generic secure MCP")).toBeInTheDocument();
+    expect(screen.getByText("healthy")).toBeInTheDocument();
+    expect(screen.getByText("Ping server")).toBeInTheDocument();
+    expect(screen.getByText("Save registration")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add MCP server" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "New MCP server" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(
+      await screen.findByRole("heading", {
+        name: "Cloud Integration monitoring",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", {
+        name: "Enable Cloud Integration monitoring",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Ping server"));
+    await waitFor(() =>
+      expect(pingMcpServer).toHaveBeenCalledWith(server.serverId),
+    );
+
+    fireEvent.click(screen.getByText("Save registration"));
+    await waitFor(() =>
+      expect(upsertMcpServer).toHaveBeenCalledWith(
+        server.serverId,
+        expect.objectContaining({
+          policyPresetId: "generic",
+          enabled: false,
+        }),
+      ),
+    );
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByText("Delete server"));
+    await waitFor(() =>
+      expect(deleteMcpServer).toHaveBeenCalledWith(server.serverId),
+    );
+
+    const results = await axe.run(container, {
+      rules: { "color-contrast": { enabled: false } },
+    });
+    expect(
+      results.violations.filter(
+        ({ impact }) => impact === "serious" || impact === "critical",
+      ),
+    ).toEqual([]);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Logs" }));
+    expect(await screen.findByRole("heading", { name: "Logs" })).toBeInTheDocument();
+  });
+
+  it("opens the report-job workspace", async () => {
+    renderApp(api({ listReportJobs: vi.fn().mockResolvedValue([]) }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Reports/ }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Reports" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("No report jobs yet")).toBeInTheDocument();
+    expect(document.querySelector('ui5-button[accessible-name="Schedule report job"]')).not.toBeInTheDocument();
   });
 });

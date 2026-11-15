@@ -6,6 +6,7 @@ import { quoteIdentifier } from "../db/migrations.js";
 import type { AuthenticatedUser } from "../types.js";
 import type {
   ConversationRecord,
+  ConversationDeletion,
   ConversationRepository,
   RunAcquisition,
 } from "./types.js";
@@ -61,8 +62,17 @@ export class PostgresConversationRepository implements ConversationRepository {
     }
   }
 
-  async create(user: AuthenticatedUser) {
+  async create(user: AuthenticatedUser, maxConversations: number) {
     return this.#withIdentity(user, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        JSON.stringify([user.tenantId, user.subject]),
+      ]);
+      const count = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${this.#table}`,
+      );
+      if (Number(count.rows[0]?.count ?? 0) >= maxConversations) {
+        return undefined;
+      }
       const result = await client.query<ConversationRow>(
         `INSERT INTO ${this.#table}
           (id, thread_id, tenant_id, subject_id, title)
@@ -100,6 +110,28 @@ export class PostgresConversationRepository implements ConversationRepository {
         [conversationId],
       );
       return result.rows[0] ? toRecord(result.rows[0]) : undefined;
+    });
+  }
+
+  async delete(
+    user: AuthenticatedUser,
+    conversationId: string,
+  ): Promise<ConversationDeletion> {
+    return this.#withIdentity(user, async (client) => {
+      const deleted = await client.query(
+        `DELETE FROM ${this.#table}
+          WHERE id = $1 AND active_run_id IS NULL
+          RETURNING id`,
+        [conversationId],
+      );
+      if (deleted.rowCount) return "deleted";
+
+      const existing = await client.query<{ active_run_id: string | null }>(
+        `SELECT active_run_id FROM ${this.#table} WHERE id = $1`,
+        [conversationId],
+      );
+      if (!existing.rowCount) return "not_found";
+      return "busy";
     });
   }
 

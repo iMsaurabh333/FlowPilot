@@ -1,0 +1,12 @@
+{
+  "xsappname": "flowpilot-mcp",
+  "tenant-mode": "dedicated",
+  "description": "FlowPilot MCP technical-client security",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.McpInvoke",
+      "description": "Invoke the FlowPilot MCP service",
+      "grant-as-authority-to-apps": ["$XSAPPNAME(application,flowpilot)"]
+    }
+  ]
+}

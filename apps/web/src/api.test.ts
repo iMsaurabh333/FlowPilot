@@ -145,4 +145,19 @@ describe("loadCurrentUser", () => {
     expect(path).toBe("/api/conversations/id%2Fwith%20spaces/messages");
     expect(options?.body).toBe(JSON.stringify({ content: "Check 42" }));
   });
+
+  it("deletes an encoded conversation identifier", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({}, 200, { "X-CSRF-Token": "csrf-123" }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await createApiClient(fetcher).deleteConversation("id/with spaces");
+
+    const [path, options] = fetcher.mock.calls[1];
+    expect(path).toBe("/api/conversations/id%2Fwith%20spaces");
+    expect(options?.method).toBe("DELETE");
+  });
 });

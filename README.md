@@ -82,7 +82,7 @@ Checkpoint 3A also provides `--mode verify` for read-only tool, target, Terrafor
 
 ```powershell
 npm run mta:build
-cf deploy mta_archives/flowpilot_0.1.5.mtar
+cf deploy mta_archives/flowpilot_0.1.6.mtar
 ```
 
 Deployment commands will be run only against the explicitly selected Cloud Foundry org and space. Environment-specific credentials and service keys must never be committed.
@@ -98,4 +98,5 @@ After the first deployment, validate and plan assignments for the predefined `Fl
 - [Environment bootstrap and recovery](./docs/environment-bootstrap.md)
 - [Role, secret, backup, and restore interfaces](./docs/recovery-interfaces.md)
 - [Secure LLM provider configuration](./docs/llm-provider-configuration.md)
+- [Integration Health Snapshot](./docs/integration-health-snapshot.md)
 - [Architecture decisions](./docs/decisions/README.md)

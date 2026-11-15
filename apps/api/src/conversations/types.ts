@@ -13,13 +13,22 @@ export type RunAcquisition =
   | { status: "busy" }
   | { status: "not_found" };
 
+export type ConversationDeletion = "deleted" | "busy" | "not_found";
+
 export interface ConversationRepository {
-  create(user: AuthenticatedUser): Promise<ConversationRecord>;
+  create(
+    user: AuthenticatedUser,
+    maxConversations: number,
+  ): Promise<ConversationRecord | undefined>;
   list(user: AuthenticatedUser): Promise<ConversationRecord[]>;
   findOwned(
     user: AuthenticatedUser,
     conversationId: string,
   ): Promise<ConversationRecord | undefined>;
+  delete(
+    user: AuthenticatedUser,
+    conversationId: string,
+  ): Promise<ConversationDeletion>;
   acquireRun(
     user: AuthenticatedUser,
     conversationId: string,

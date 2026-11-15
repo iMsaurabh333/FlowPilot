@@ -9,6 +9,7 @@ import https from "node:https";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { SimpleChatModel } from "@langchain/core/language_models/chat_models";
 import type { BaseMessage } from "@langchain/core/messages";
+import { RunnableLambda } from "@langchain/core/runnables";
 import {
   loadEnvironmentCredentials,
   type ModelCredentials,
@@ -498,6 +499,23 @@ class LazyCredentialChatModel extends SimpleChatModel {
     const model = await this.#createModel();
     const response = await model.invoke(messages, options);
     return messageContent(response.content);
+  }
+
+  bindTools(
+    tools: Parameters<NonNullable<BaseChatModel["bindTools"]>>[0],
+    kwargs?: Parameters<NonNullable<BaseChatModel["bindTools"]>>[1],
+  ) {
+    return RunnableLambda.from(async (input, config) => {
+      const model = await this.#createModel();
+      const boundModel = model.bindTools?.(tools, kwargs);
+      if (!boundModel) {
+        throw new Error("Configured model does not support tool invocation");
+      }
+      return boundModel.invoke(
+        input as Parameters<typeof boundModel.invoke>[0],
+        config,
+      );
+    });
   }
 }
 

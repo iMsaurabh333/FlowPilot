@@ -8,8 +8,12 @@ import {
 } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { AIMessage, HumanMessage } from "@langchain/core/messages";
+import { RunnableLambda } from "@langchain/core/runnables";
 
 import {
+  createLazyCredentialChatModel,
   createProviderCredentialResolver,
   parseCredentialStoreBinding,
   type CredentialStoreRequestOptions,
@@ -212,5 +216,45 @@ describe("Credential Store provider resolver", () => {
     expect(calls[0].headers.Authorization).toBeUndefined();
     expect(calls[0].certificate).toContain("BEGIN CERTIFICATE");
     expect(calls[0].key).toContain("BEGIN PRIVATE KEY");
+  });
+});
+
+describe("Lazy credential chat model", () => {
+  it("forwards bound tools to the resolved provider model", async () => {
+    const toolCalls: unknown[][] = [];
+    const expected = new AIMessage({
+      content: "",
+      tool_calls: [
+        {
+          id: "call-1",
+          name: "cloud-integration__search_message_processing_logs",
+          args: {
+            fromUtc: "2026-09-07T00:00:00Z",
+            toUtc: "2026-09-07T01:00:00Z",
+          },
+        },
+      ],
+    });
+    const provider = {
+      bindTools(tools: unknown[]) {
+        toolCalls.push(tools);
+        return RunnableLambda.from(async () => expected);
+      },
+    } as unknown as BaseChatModel;
+    const model = createLazyCredentialChatModel(async () => provider);
+    const tools = [
+      {
+        name: "cloud-integration__search_message_processing_logs",
+        description: "Search bounded message processing logs",
+        schema: { type: "object", properties: {} },
+      },
+    ];
+
+    const bound = model.bindTools?.(tools);
+    expect(bound).toBeDefined();
+    await expect(bound!.invoke([new HumanMessage("Find the latest message")])).resolves.toBe(
+      expected,
+    );
+    expect(toolCalls).toEqual([tools]);
   });
 });
